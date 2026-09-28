@@ -46,3 +46,19 @@ pytest
 `backend/apps/ingest/parsers/` has one parser per Free Fire observer file type.
 They are plain Python (no Django), never raise on bad content, and report what they
 could not parse. See the module docstrings for the exact line formats.
+
+## Accounts and roles
+
+- **Super Admin**: a Django superuser. Manages staff at `/api/v1/admin/staff`.
+- **League Staff / Analyst**: upload matches and manage teams, players, aliases, rosters
+  and game UID claims (`/api/v1/admin/...`).
+- **Team Manager / Team Player**: members of a team. Managers invite players
+  (`/api/v1/teams/{slug}/invites`); only staff can invite or promote managers.
+- **Plans and features**: pages are gated by feature codes (`rotations.view`,
+  `zone_analysis`, ...). League teams get the `league_team` plan with every feature;
+  a paid plan for outside teams is just another plan with fewer features.
+
+Sign-in uses JWT in httpOnly cookies. The website calls `GET /api/v1/auth/csrf` once,
+then sends the `csrftoken` cookie value in the `X-CSRFToken` header on every write
+(`/auth/login`, `/auth/refresh`, `/auth/logout`, `/auth/password-reset[/confirm]`).
+Players ask to link their game UID with `POST /api/v1/me/link-uid`; staff approve it.
