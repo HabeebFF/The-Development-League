@@ -109,6 +109,7 @@ export type GameMap = {
   areas: MapArea[];
   calibration_error?: number | null;
   calibrated_at?: string | null;
+  has_default_image?: boolean;
 };
 
 export type Zone = {
