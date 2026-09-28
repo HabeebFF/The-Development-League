@@ -27,6 +27,9 @@ def images(tmp_path, monkeypatch):
     )
     Image.new("RGB", (640, 640), "green").save(tmp_path / "bermuda.webp")
     monkeypatch.setattr(bundled, "DEFAULT_IMAGES_DIR", tmp_path)
+    # migrate already installed the real bundled images; start from blank maps.
+    CalibrationPoint.objects.all().delete()
+    Map.objects.update(image="", image_width=None, image_height=None, transform=None)
     return tmp_path
 
 
@@ -75,9 +78,25 @@ def test_super_admin_can_put_the_built_in_image_back(images):
     assert staff.post("/api/v1/admin/maps/purgatory/use-default-image").status_code == 403
 
 
+def test_every_seeded_map_ships_with_an_image():
+    for map_ in Map.objects.all():
+        found = bundled.find(map_.slug)
+        assert found is not None, map_.slug
+
+
 def test_migrate_hook_never_raises(monkeypatch):
     def boom(**kwargs):
         raise OSError("storage down")
 
     monkeypatch.setattr(bundled, "install_all", boom)
     bundled.install_missing()
+
+
+def test_export_writes_points_that_install_reads_back(images):
+    bundled.install_all()
+    (images / "purgatory.json").unlink()
+    call_command("export_map_calibration", "purgatory")
+    Map.objects.filter(slug="purgatory").update(image="")
+    CalibrationPoint.objects.all().delete()
+    assert bundled.install_all() == ["purgatory"]
+    assert Map.objects.get(slug="purgatory").calibration_points.count() == 2

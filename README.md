@@ -99,6 +99,8 @@ Map images can ship with the site: `backend/apps/maps/default_images/<slug>.png`
 optional `<slug>.json` of calibration points) is set on every map that has no image after
 `migrate`, already lined up. `python manage.py load_map_images --force` replaces images
 already set, and `POST /api/v1/admin/maps/{slug}/use-default-image` puts one map back.
+After calibrating a bundled image in the tool, `python manage.py export_map_calibration`
+writes its points to `<slug>.json` so the next install ships lined up.
 
 Every uploaded match gets an auto-drafted rotation per team: a suggested drop (its
 fights before the first zone shrinks), one point per zone phase (the median of where
