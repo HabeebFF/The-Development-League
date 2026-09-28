@@ -2,6 +2,7 @@ import math
 
 from rest_framework import serializers
 
+from . import bundled
 from .models import CalibrationPoint, Map, MapArea
 
 MAX_POLYGON_POINTS = 200
@@ -81,6 +82,7 @@ class MapSerializer(serializers.ModelSerializer):
 
 class MapAdminSerializer(MapSerializer):
     image = serializers.ImageField(required=False, allow_null=True)
+    has_default_image = serializers.SerializerMethodField()
 
     class Meta(MapSerializer.Meta):
         fields = [
@@ -88,6 +90,7 @@ class MapAdminSerializer(MapSerializer):
             "is_active",
             "calibration_error",
             "calibrated_at",
+            "has_default_image",
         ]
         read_only_fields = [
             "image_width",
@@ -96,6 +99,9 @@ class MapAdminSerializer(MapSerializer):
             "calibration_error",
             "calibrated_at",
         ]
+
+    def get_has_default_image(self, map_: Map) -> bool:
+        return bundled.find(map_.slug) is not None
 
 
 class CalibrationPointSerializer(serializers.ModelSerializer):

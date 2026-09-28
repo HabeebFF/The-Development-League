@@ -95,6 +95,13 @@ error per point shows a bad click. The Super Admin uploads images and calibrates
 `/admin/maps/{slug}/reference-points` lists where fights happened on that map, to line
 the image up against. Public: `/api/v1/maps`, `/maps/{slug}`.
 
+Map images can ship with the site: `backend/apps/maps/default_images/<slug>.png` (plus an
+optional `<slug>.json` of calibration points) is set on every map that has no image after
+`migrate`, already lined up. `python manage.py load_map_images --force` replaces images
+already set, and `POST /api/v1/admin/maps/{slug}/use-default-image` puts one map back.
+After calibrating a bundled image in the tool, `python manage.py export_map_calibration`
+writes its points to `<slug>.json` so the next install ships lined up.
+
 Every uploaded match gets an auto-drafted rotation per team: a suggested drop (its
 fights before the first zone shrinks), one point per zone phase (the median of where
 its players got kills, died, respawned or teleported) and its final or elimination

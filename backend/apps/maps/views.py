@@ -11,7 +11,7 @@ from rest_framework.response import Response
 from apps.results.models import MatchEvent
 from common.permissions import IsSuperAdmin
 
-from . import calibration
+from . import bundled, calibration
 from .models import CalibrationPoint, Map, MapArea
 from .serializers import (
     CalibrationPointSerializer,
@@ -51,6 +51,16 @@ class MapAdminViewSet(
             # Old clicks were on the old image; start calibration again.
             map_.calibration_points.all().delete()
             map_.recalibrate()
+
+    @action(detail=True, methods=["post"], url_path="use-default-image")
+    def use_default_image(self, request, slug=None):
+        """Put the bundled image (and its calibration) back on this map."""
+        map_ = self.get_object()
+        if not bundled.install(map_, force=True):
+            return Response(
+                {"detail": "No built-in image for this map."}, status=status.HTTP_404_NOT_FOUND
+            )
+        return Response(self.get_serializer(map_).data)
 
     @action(detail=True, url_path="reference-points")
     def reference_points(self, request, slug=None):

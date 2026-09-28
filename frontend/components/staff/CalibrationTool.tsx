@@ -100,6 +100,13 @@ export default function CalibrationTool({ slug }: { slug: string }) {
       setNotice({ text: "Image uploaded. Now line the dots up with the map." });
     });
 
+  const restoreBuiltIn = () =>
+    run(async () => {
+      await api(`/admin/maps/${slug}/use-default-image`, { method: "POST" });
+      await load();
+      setNotice({ text: "Built-in image restored with its calibration." });
+    });
+
   const saveOverlay = () =>
     run(async () => {
       // Three anchors spread over the image pin the lined-up transform down exactly.
@@ -211,6 +218,11 @@ export default function CalibrationTool({ slug }: { slug: string }) {
             onChange={(e) => e.target.files?.[0] && upload(e.target.files[0])}
           />
         </label>
+        {map.has_default_image && (
+          <button className="btn mt-2 w-full" disabled={busy} onClick={restoreBuiltIn}>
+            Use built-in image
+          </button>
+        )}
         {map.image && (
           <p className="mt-1 text-xs text-muted">Replacing the image clears its calibration.</p>
         )}
