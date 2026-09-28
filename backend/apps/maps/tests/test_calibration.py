@@ -193,3 +193,10 @@ def test_areas_and_permissions(boss):
     assert staff.get("/api/v1/admin/maps").status_code == 403
     assert APIClient().get("/api/v1/admin/maps/bermuda/calibration-points").status_code == 401
     assert boss.get("/api/v1/admin/maps/nowhere/areas").status_code == 404
+
+
+@pytest.mark.django_db
+def test_image_url_is_not_rewritten_to_the_api_host(boss):
+    boss.patch("/api/v1/admin/maps/kalahari", {"image": png(64, 64)}, format="multipart")
+    image = APIClient().get("/api/v1/maps/kalahari").json()["image"]
+    assert image.startswith("/media/maps/")  # same origin as the website in development

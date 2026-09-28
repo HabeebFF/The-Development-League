@@ -71,6 +71,13 @@ class MapSerializer(serializers.ModelSerializer):
     def get_is_calibrated(self, map_: Map) -> bool:
         return bool(map_.transform and map_.image)
 
+    def to_representation(self, map_: Map):
+        data = super().to_representation(map_)
+        # The storage URL as is: "/media/..." locally (same origin as the site, which
+        # the map canvas needs) or the S3 URL in production.
+        data["image"] = map_.image.url if map_.image else None
+        return data
+
 
 class MapAdminSerializer(MapSerializer):
     image = serializers.ImageField(required=False, allow_null=True)
