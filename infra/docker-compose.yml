@@ -1,0 +1,45 @@
+# Local development: Postgres, Redis, the Django API and a Celery worker.
+#   docker compose -f infra/docker-compose.yml up --build
+#   docker compose -f infra/docker-compose.yml exec web python manage.py createsuperuser
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: tdl
+      POSTGRES_USER: tdl
+      POSTGRES_PASSWORD: tdl
+    volumes: [pgdata:/var/lib/postgresql/data]
+    ports: ["5432:5432"]
+
+  redis:
+    image: redis:7
+    ports: ["6379:6379"]
+
+  web:
+    build: ../backend
+    command: sh -c "python manage.py migrate && python manage.py runserver 0.0.0.0:8000"
+    env_file: ../.env
+    environment:
+      DJANGO_SETTINGS_MODULE: config.settings.dev
+      DATABASE_URL: postgres://tdl:tdl@db:5432/tdl
+      REDIS_URL: redis://redis:6379/0
+      MEDIA_ROOT: /data/media
+    volumes: [media:/data/media]
+    ports: ["8000:8000"]
+    depends_on: [db, redis]
+
+  worker:
+    build: ../backend
+    command: celery -A config worker -l info
+    env_file: ../.env
+    environment:
+      DJANGO_SETTINGS_MODULE: config.settings.dev
+      DATABASE_URL: postgres://tdl:tdl@db:5432/tdl
+      REDIS_URL: redis://redis:6379/0
+      MEDIA_ROOT: /data/media
+    volumes: [media:/data/media]
+    depends_on: [db, redis]
+
+volumes:
+  pgdata:
+  media:
