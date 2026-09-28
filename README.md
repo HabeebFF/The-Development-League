@@ -82,3 +82,27 @@ Public reads: `/api/v1/seasons`, `/seasons/{slug}` (stages, groups, scoring),
 `/seasons/{slug}/standings?stage=&group=&match_day=`, `/seasons/{slug}/fixtures?upcoming=true`,
 `/match-days/{id}` (matches plus that day's table) and `/matches?season=&match_day=&map=&team=`,
 `/matches/{id}` (full results with players). Unpublished matches are not shown.
+
+## Maps, calibration and rotations
+
+All positions are stored in game world coordinates (x, z). A map image is lined up with
+the world by calibration points (a world position and where it is on the image):
+2 points give a scale and offset per axis, 3 or more a full least-squares fit. The fit
+error per point shows a bad click. The Super Admin uploads images and calibrates at
+`/api/v1/admin/maps/{slug}` (multipart `image`), `/admin/maps/{slug}/calibration-points`
+(`PUT` replaces all) and names places at `/admin/maps/{slug}/areas` (world polygons).
+`/admin/maps/{slug}/reference-points` lists where fights happened on that map, to line
+the image up against. Public: `/api/v1/maps`, `/maps/{slug}`.
+
+Every uploaded match gets an auto-drafted rotation per team: a suggested drop (its
+fights before the first zone shrinks), one point per zone phase (the median of where
+its players got kills, died, respawned or teleported) and its final or elimination
+spot. Staff correct it in the plotting tool:
+
+- `GET, PUT /api/v1/matches/{id}/rotations/{team_slug}`: read or save all points
+  (full replace). Points sent back unchanged keep their auto source.
+- `POST .../confirm` and `POST .../reset` (back to the auto draft).
+- `POST /api/v1/matches/{id}/redraft-rotations` redrafts teams still on auto.
+
+Teams whose plan has `rotations.view` read `GET /matches/{id}/rotations` and
+`GET /matches/{id}/zones`.

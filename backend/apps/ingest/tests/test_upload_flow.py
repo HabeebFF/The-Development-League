@@ -358,3 +358,17 @@ def test_confirm_rebuilds_standings(upload, confirm, match_day):
     top = table["rows"][0]
     assert top["team"]["name"] == "NOOBZ ESPORTS"
     assert (top["rank"], top["total_points"], top["booyahs"], top["kills"]) == (1, 29, 1, 17)
+
+
+def test_confirm_drafts_rotations(upload, confirm, match_day):
+    from apps.rotations.models import RotationPoint, TeamRotation
+
+    batch = upload(all_files())
+    confirm(batch["id"], [{"game_match_id": str(MATCH_ID), "match_day": match_day.pk, "number": 1}])
+    match = Match.objects.get(game_match_id=MATCH_ID)
+    assert TeamRotation.objects.filter(match=match, status="AUTO").count() == 13
+    noobz = TeamRotation.objects.get(match=match, team__name="NOOBZ ESPORTS")
+    assert [p.checkpoint for p in noobz.points.all()][-1] == "FINAL"
+    points = RotationPoint.objects.filter(rotation__match=match)
+    assert points.filter(checkpoint="ELIMINATED").count() == 12
+    assert points.filter(checkpoint="DROP").count() >= 10

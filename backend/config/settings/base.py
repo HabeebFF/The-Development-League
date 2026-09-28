@@ -41,6 +41,7 @@ INSTALLED_APPS = [
     "apps.maps",
     "apps.results",
     "apps.ingest",
+    "apps.rotations",
 ]
 
 MIDDLEWARE = [
