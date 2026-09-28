@@ -16,6 +16,9 @@ map is lined up with the game straight away:
 }
 ```
 
+Bermuda, NeXTerra, Purgatory and Solara ship calibrated (fitted to logged kill positions, game
+x to the right and z up). Kalahari needs more matches first.
+
 Slugs: `bermuda`, `purgatory`, `kalahari`, `nexterra`, `solara`. After calibrating one in the
 tool, `python manage.py export_map_calibration <slug>` writes its `<slug>.json`. The map art
 belongs to Garena.

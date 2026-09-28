@@ -100,3 +100,20 @@ def test_export_writes_points_that_install_reads_back(images):
     CalibrationPoint.objects.all().delete()
     assert bundled.install_all() == ["purgatory"]
     assert Map.objects.get(slug="purgatory").calibration_points.count() == 2
+
+
+def test_bundled_calibrations_are_clean_fits():
+    from apps.maps.calibration import Point, fit
+
+    for map_ in Map.objects.all():
+        found = bundled.find(map_.slug)
+        if not found.calibration_points:
+            continue
+        result = fit(
+            [
+                Point(p["world_x"], p["world_z"], p["pixel_x"], p["pixel_y"])
+                for p in found.calibration_points
+            ]
+        )
+        assert result.rms_error < 1, map_.slug
+        assert result.transform.a > 0 and result.transform.e < 0, map_.slug  # x right, z up
