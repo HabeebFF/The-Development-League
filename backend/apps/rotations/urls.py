@@ -5,6 +5,7 @@ from . import views
 urlpatterns = [
     path("matches/<int:pk>/zones", views.MatchZonesView.as_view(), name="match-zones"),
     path("matches/<int:pk>/rotations", views.MatchRotationsView.as_view(), name="match-rotations"),
+    path("matches/<int:pk>/replay", views.MatchReplayView.as_view(), name="match-replay"),
     path(
         "matches/<int:pk>/redraft-rotations",
         views.MatchRedraftView.as_view(),

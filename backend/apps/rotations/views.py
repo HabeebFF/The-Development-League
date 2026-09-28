@@ -1,6 +1,7 @@
 """Rotation API: team accounts with rotations.view read; staff plot and confirm."""
 
 from django.db import transaction
+from django.db.models import Q
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import status
@@ -10,11 +11,11 @@ from rest_framework.views import APIView
 
 from apps.league.models import Match, Team
 from apps.maps.models import MapArea
-from apps.results.models import TeamMatchResult, ZonePhase
+from apps.results.models import MatchEvent, PlayerMatchResult, TeamMatchResult, ZonePhase
 from common.permissions import HasFeature, IsStaff
 
 from .auto import draft_rotations
-from .models import RotationPoint, TeamRotation
+from .models import PlayerTrack, RotationPoint, TeamRotation
 from .serializers import RotationSaveSerializer, TeamRotationSerializer, ZonePhaseSerializer
 
 
@@ -65,6 +66,95 @@ class MatchRotationsView(APIView):
             rotations, many=True, context={"request": request, "placements": placements}
         ).data
         return Response({"match": match.pk, "map": _map_info(match), "rotations": data})
+
+
+class MatchReplayView(APIView):
+    """Everything the live replay plays back: player tracks, zones, kills and knocks.
+
+    ``?team=<slug>`` (repeatable) limits tracks and events to those teams; without it,
+    every team is included. Tracks are ``[x, z]`` in world decimetres every ``step_s``.
+    """
+
+    permission_classes = [HasFeature("rotations.view")]
+    EVENT_KINDS = [MatchEvent.Kind.KILL, MatchEvent.Kind.KNOCK]
+
+    def get(self, request, pk: int):
+        match = _match(request, pk)
+        results = list(
+            TeamMatchResult.objects.filter(match=match)
+            .select_related("team")
+            .order_by("placement", "team__name")
+        )
+        wanted = set(request.query_params.getlist("team"))
+        known = {r.team.slug for r in results}
+        if wanted - known:
+            raise ValidationError(
+                {"team": f"Not in this match: {', '.join(sorted(wanted - known))}"}
+            )
+        chosen = wanted or known
+
+        tracks = PlayerTrack.objects.filter(match=match, team__slug__in=chosen).select_related(
+            "player", "team"
+        )
+        names = dict(
+            PlayerMatchResult.objects.filter(match=match).values_list("entity_id", "display_name")
+        )
+        players = [
+            {
+                "entity_id": t.entity_id,
+                "name": names.get(t.entity_id)
+                or (t.player.display_name if t.player else str(t.entity_id)),
+                "team": t.team.slug,
+                "start_s": t.start_s,
+                "points": t.points,
+            }
+            for t in tracks
+        ]
+        step = tracks[0].step_s if players else None
+        events = MatchEvent.objects.filter(
+            match=match, kind__in=self.EVENT_KINDS, game_time_s__isnull=False
+        )
+        if wanted:
+            events = events.filter(Q(actor_team__slug__in=chosen) | Q(target_team__slug__in=chosen))
+        teams_with_tracks = set(
+            PlayerTrack.objects.filter(match=match).values_list("team__slug", flat=True)
+        )
+        zones = ZonePhase.objects.filter(match=match).order_by("stage_index", "game_time_s")
+        return Response(
+            {
+                "match": match.pk,
+                "map": _map_info(match),
+                "duration_s": match.duration_s,
+                "step_s": step,
+                "teams": [
+                    {
+                        "slug": r.team.slug,
+                        "name": r.team.name,
+                        "tag": r.team.tag,
+                        "color": r.team.primary_color or None,
+                        "placement": r.placement,
+                        "has_tracks": r.team.slug in teams_with_tracks,
+                    }
+                    for r in results
+                ],
+                "players": players,
+                "zones": ZonePhaseSerializer(zones, many=True).data,
+                "events": [
+                    {
+                        "kind": e.kind,
+                        "t": e.game_time_s,
+                        "actor": e.actor_entity,
+                        "target": e.target_entity,
+                        "headshot": e.headshot,
+                        "x": e.x,
+                        "z": e.z,
+                        "tx": e.tx,
+                        "tz": e.tz,
+                    }
+                    for e in events.order_by("game_time_s", "id")
+                ],
+            }
+        )
 
 
 class TeamRotationView(APIView):
