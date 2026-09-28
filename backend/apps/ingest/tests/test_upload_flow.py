@@ -348,3 +348,13 @@ def test_log_times_are_read_in_log_time_zone(settings, upload):
     batch = upload([SimpleUploadedFile(MATCH_RESULT_NAME, fixture_bytes(MATCH_RESULT_NAME))])
     stamp = batch["files"][0]["file_timestamp"]
     assert datetime.fromisoformat(stamp.replace("Z", "+00:00")).hour == 23  # 00:05 Lagos
+
+
+def test_confirm_rebuilds_standings(upload, confirm, match_day):
+    batch = upload(all_files())
+    confirm(batch["id"], [{"game_match_id": str(MATCH_ID), "match_day": match_day.pk, "number": 1}])
+    table = APIClient().get("/api/v1/seasons/season-1/standings").json()
+    assert len(table["rows"]) == 13
+    top = table["rows"][0]
+    assert top["team"]["name"] == "NOOBZ ESPORTS"
+    assert (top["rank"], top["total_points"], top["booyahs"], top["kills"]) == (1, 29, 1, 17)

@@ -23,6 +23,7 @@ from django.utils import timezone
 from apps.league.models import Match, MatchDay, Player, Team, TeamAlias
 from apps.maps.models import Map
 from apps.results.models import MatchEvent, PlayerMatchResult, TeamMatchResult, ZonePhase
+from apps.results.standings import schedule_rebuild
 
 from ..models import DebuggerBlock, ParseRun, UploadBatch, UploadedFile
 from ..parsers import debugger, match_result, replay_info
@@ -100,6 +101,7 @@ def assemble(assignment: Assignment, *, batch: UploadBatch | None = None, user=N
             status=Match.Status.PROCESSING,
         )
     run = ParseRun.objects.create(match=match, batch=batch, triggered_by=user)
+    old_season_id = match.match_day.stage.season_id
     try:
         with transaction.atomic():
             counts, warnings = _build(match, assignment, run)
@@ -117,6 +119,8 @@ def assemble(assignment: Assignment, *, batch: UploadBatch | None = None, user=N
     run.warnings = warnings[:200]
     run.finished_at = timezone.now()
     run.save()
+    # The match may have moved to another match day (and season): rebuild both tables.
+    schedule_rebuild(old_season_id, match.match_day.stage.season_id)
     return run
 
 
