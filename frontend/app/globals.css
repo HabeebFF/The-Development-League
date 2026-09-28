@@ -1,0 +1,52 @@
+@import "tailwindcss";
+
+/* Dark esports look: near-black, one accent, bold display type. */
+:root {
+  --bg: #0b0b0f;
+  --panel: #14141b;
+  --panel-2: #1c1c26;
+  --line: #2a2a37;
+  --text: #ededf2;
+  --muted: #8b8b9c;
+  --accent: #ff2e63;
+  --accent-2: #ffb800;
+  --ok: #22c55e;
+  --bad: #ef4444;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-panel: var(--panel);
+  --color-panel-2: var(--panel-2);
+  --color-line: var(--line);
+  --color-text: var(--text);
+  --color-muted: var(--muted);
+  --color-accent: var(--accent);
+  --color-accent-2: var(--accent-2);
+  --color-ok: var(--ok);
+  --color-bad: var(--bad);
+  --font-sans: var(--font-body);
+  --font-display: var(--font-display);
+}
+
+html {
+  color-scheme: dark;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+}
+
+.btn {
+  @apply inline-flex items-center justify-center gap-2 rounded-md border border-line bg-panel-2 px-3 py-2 text-sm font-medium transition hover:border-muted disabled:opacity-50;
+}
+.btn-primary {
+  @apply border-accent bg-accent text-white hover:brightness-110;
+}
+.input {
+  @apply w-full rounded-md border border-line bg-panel px-3 py-2 text-sm outline-none focus:border-accent;
+}
+.kbd {
+  @apply rounded border border-line bg-panel-2 px-1.5 py-0.5 font-mono text-xs text-muted;
+}

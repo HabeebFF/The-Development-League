@@ -1,4 +1,4 @@
-# Local development: Postgres, Redis, the Django API and a Celery worker.
+# Local development: Postgres, Redis, the Django API, a Celery worker and the website.
 #   docker compose -f infra/docker-compose.yml up --build
 #   docker compose -f infra/docker-compose.yml exec web python manage.py createsuperuser
 services:
@@ -24,6 +24,8 @@ services:
       DATABASE_URL: postgres://tdl:tdl@db:5432/tdl
       REDIS_URL: redis://redis:6379/0
       MEDIA_ROOT: /data/media
+      DJANGO_ALLOWED_HOSTS: localhost,127.0.0.1,web
+      DJANGO_CSRF_TRUSTED_ORIGINS: http://localhost:3000
     volumes: [media:/data/media]
     ports: ["8000:8000"]
     depends_on: [db, redis]
@@ -39,6 +41,13 @@ services:
       MEDIA_ROOT: /data/media
     volumes: [media:/data/media]
     depends_on: [db, redis]
+
+  frontend:
+    build:
+      context: ../frontend
+      args: { API_URL: "http://web:8000" }
+    ports: ["3000:3000"]
+    depends_on: [web]
 
 volumes:
   pgdata:

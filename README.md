@@ -6,18 +6,19 @@ results, player stats and, above all, team rotation study.
 Monorepo layout (grows step by step):
 
 - `backend/` Django + DRF + Celery (Python 3.11+)
-- `frontend/` Next.js + Tailwind (coming later)
-- `infra/` Docker and deployment (coming later)
+- `frontend/` Next.js + Tailwind website (see `frontend/README.md`)
+- `infra/` Docker Compose for local development
 
 ## Backend: running locally
 
 ```bash
 cp .env.example .env
-docker compose -f infra/docker-compose.yml up --build      # Postgres, Redis, API, worker
+docker compose -f infra/docker-compose.yml up --build      # Postgres, Redis, API, worker, website
 docker compose -f infra/docker-compose.yml exec web python manage.py createsuperuser
 ```
 
-The API is on http://localhost:8000/api/v1 and Django admin on http://localhost:8000/admin
+The website is on http://localhost:3000, the API on http://localhost:8000/api/v1 and Django
+admin on http://localhost:8000/admin
 (create a season, stage and match day there before confirming uploads).
 
 ## Backend: running the tests
