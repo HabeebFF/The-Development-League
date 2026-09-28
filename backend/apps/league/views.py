@@ -395,7 +395,9 @@ class MatchAdminViewSet(RebuildStandingsMixin, viewsets.ModelViewSet):
     serializer_class = MatchAdminSerializer
 
     def get_queryset(self):
-        qs = Match.objects.select_related("map", "match_day")
+        qs = Match.objects.select_related("map", "match_day__stage__season").prefetch_related(
+            "rotations"
+        )
         params = self.request.query_params
         match_day = _int_param(self.request, "match_day")
         if match_day:

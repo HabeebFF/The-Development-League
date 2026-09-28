@@ -521,11 +521,14 @@ class MatchAdminSerializer(serializers.ModelSerializer):
     )
     game_match_id = serializers.CharField(read_only=True)
     has_results = serializers.SerializerMethodField()
+    label = serializers.CharField(source="__str__", read_only=True)
+    rotations = serializers.SerializerMethodField()
 
     class Meta:
         model = Match
         fields = [
             "id",
+            "label",
             "match_day",
             "number",
             "map",
@@ -537,12 +540,20 @@ class MatchAdminSerializer(serializers.ModelSerializer):
             "started_at",
             "duration_s",
             "has_results",
+            "rotations",
         ]
         read_only_fields = ["started_at", "duration_s"]
         validators = []
 
     def get_has_results(self, match: Match) -> bool:
         return match.team_results.exists()
+
+    def get_rotations(self, match: Match) -> dict[str, int]:
+        """How far plotting has got: rotations per status (AUTO, DRAFT, CONFIRMED)."""
+        counts = {"AUTO": 0, "DRAFT": 0, "CONFIRMED": 0}
+        for rotation in match.rotations.all():
+            counts[rotation.status] += 1
+        return counts
 
     def validate_status(self, value: str) -> str:
         allowed = {Match.Status.DRAFT, Match.Status.NEEDS_REVIEW, Match.Status.PUBLISHED}

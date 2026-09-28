@@ -263,3 +263,11 @@ def test_redraft_endpoint_and_area_relabel(match, staff):
     ]
     boss.delete(f"/api/v1/admin/maps/purgatory/areas/{area['id']}")
     assert not RotationPoint.objects.filter(area__isnull=False).exists()
+
+
+def test_admin_match_list_shows_plotting_progress(match, staff):
+    draft_rotations(match)
+    staff.post(f"/api/v1/matches/{match.pk}/rotations/alpha/confirm")
+    row = staff.get("/api/v1/admin/matches").json()["results"][0]
+    assert row["rotations"] == {"AUTO": 1, "DRAFT": 0, "CONFIRMED": 1}
+    assert row["label"] == str(match)
