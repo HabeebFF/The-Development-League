@@ -286,7 +286,7 @@ def test_confirm_validation(upload, confirm, match_day, client):
 
 def test_permissions(client, staff, django_user_model):
     anon = APIClient()
-    assert anon.get("/api/v1/uploads/batches").status_code == 403
+    assert anon.get("/api/v1/uploads/batches").status_code == 401
     player = django_user_model.objects.create_user(email="p@tdl.test", password="x-long-password")
     other = APIClient()
     other.force_authenticate(player)

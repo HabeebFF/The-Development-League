@@ -3,8 +3,8 @@ from django.core.exceptions import ImproperlyConfigured
 from .base import *  # noqa: F403
 from .base import SECRET_KEY, env_bool
 
-if not SECRET_KEY:
-    raise ImproperlyConfigured("DJANGO_SECRET_KEY must be set in production")
+if len(SECRET_KEY or "") < 50:
+    raise ImproperlyConfigured("DJANGO_SECRET_KEY must be set (50+ characters) in production")
 
 DEBUG = False
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")

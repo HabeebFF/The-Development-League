@@ -1,7 +1,7 @@
 from .base import *  # noqa: F403
 from .base import BASE_DIR
 
-SECRET_KEY = "test-only-not-secret"
+SECRET_KEY = "test-only-not-secret-but-long-enough-for-hs256"
 DEBUG = False
 CELERY_TASK_ALWAYS_EAGER = True
 CELERY_TASK_EAGER_PROPAGATES = True
@@ -12,3 +12,7 @@ STORAGES = {
 }
 MEDIA_ROOT = BASE_DIR / "test-media"
 PASSWORD_HASHERS = ["django.contrib.auth.hashers.MD5PasswordHasher"]
+
+AUTH_COOKIE_SECURE = False
+EMAIL_BACKEND = "django.core.mail.backends.locmem.EmailBackend"
+SIMPLE_JWT = {**SIMPLE_JWT, "SIGNING_KEY": SECRET_KEY}  # noqa: F405

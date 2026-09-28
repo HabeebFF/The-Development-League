@@ -1,6 +1,7 @@
 """Settings shared by every environment. Secrets and hosts come from env variables."""
 
 import os
+from datetime import timedelta
 from pathlib import Path
 
 import dj_database_url
@@ -34,6 +35,7 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "rest_framework",
+    "rest_framework_simplejwt.token_blacklist",
     "apps.accounts",
     "apps.league",
     "apps.maps",
@@ -125,12 +127,45 @@ FILE_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024
 
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
+        "common.authentication.CookieJWTAuthentication",
         "rest_framework.authentication.SessionAuthentication",
     ],
     "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.IsAuthenticated"],
     "DEFAULT_PAGINATION_CLASS": "common.pagination.DefaultPagination",
     "PAGE_SIZE": 25,
+    "DEFAULT_THROTTLE_RATES": {
+        "login": env("THROTTLE_LOGIN", "10/min"),
+        "password_reset": env("THROTTLE_PASSWORD_RESET", "5/hour"),
+        "invite_accept": env("THROTTLE_INVITE_ACCEPT", "20/hour"),
+    },
 }
+
+# Sign-in: short-lived access token + rotating refresh token, both in httpOnly cookies.
+SIMPLE_JWT = {
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=int(env("JWT_ACCESS_MINUTES", "15"))),
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=int(env("JWT_REFRESH_DAYS", "14"))),
+    "ROTATE_REFRESH_TOKENS": True,
+    "BLACKLIST_AFTER_ROTATION": True,
+    "UPDATE_LAST_LOGIN": True,
+    "SIGNING_KEY": env("JWT_SIGNING_KEY") or SECRET_KEY,
+}
+AUTH_COOKIE_ACCESS = "tdl_access"
+AUTH_COOKIE_REFRESH = "tdl_refresh"
+AUTH_COOKIE_SECURE = env_bool("AUTH_COOKIE_SECURE", True)
+AUTH_COOKIE_SAMESITE = env("AUTH_COOKIE_SAMESITE", "Lax")
+AUTH_COOKIE_DOMAIN = env("AUTH_COOKIE_DOMAIN") or None
+CSRF_COOKIE_SAMESITE = AUTH_COOKIE_SAMESITE
+CSRF_COOKIE_DOMAIN = AUTH_COOKIE_DOMAIN
+
+# Links in emails (invites, password reset) point at the website.
+FRONTEND_URL = env("FRONTEND_URL", "http://localhost:3000").rstrip("/")
+EMAIL_BACKEND = env("EMAIL_BACKEND", "django.core.mail.backends.console.EmailBackend")
+EMAIL_HOST = env("EMAIL_HOST", "localhost")
+EMAIL_PORT = int(env("EMAIL_PORT", "587"))
+EMAIL_HOST_USER = env("EMAIL_HOST_USER", "")
+EMAIL_HOST_PASSWORD = env("EMAIL_HOST_PASSWORD", "")
+EMAIL_USE_TLS = env_bool("EMAIL_USE_TLS", True)
+DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", "The Development League <no-reply@localhost>")
 
 REDIS_URL = env("REDIS_URL", "redis://localhost:6379/0")
 CELERY_BROKER_URL = env("CELERY_BROKER_URL", REDIS_URL)

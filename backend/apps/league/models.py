@@ -115,6 +115,14 @@ class Team(TimeStampedModel):
     secondary_color = models.CharField(max_length=7, blank=True, help_text="#RRGGBB")
     socials = models.JSONField(default=dict, blank=True)
     is_league_member = models.BooleanField(default=True)
+    plan = models.ForeignKey(
+        "accounts.Plan",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="teams",
+        help_text="League teams get the league_team plan automatically",
+    )
 
     class Meta:
         ordering = ["name"]
@@ -125,6 +133,10 @@ class Team(TimeStampedModel):
     def save(self, *args, **kwargs):
         if not self.slug:
             self.slug = unique_slug(Team, self.name)
+        if self.plan_id is None and self.is_league_member:
+            from apps.accounts.models import Plan
+
+            self.plan = Plan.objects.filter(code=Plan.LEAGUE_TEAM).first()
         super().save(*args, **kwargs)
 
 
@@ -212,6 +224,14 @@ class Player(TimeStampedModel):
     current_team = models.ForeignKey(
         Team, on_delete=models.SET_NULL, null=True, blank=True, related_name="players"
     )
+    user = models.OneToOneField(
+        "accounts.User",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="player",
+        help_text="The site account linked to this game UID",
+    )
     country = models.CharField(max_length=2, blank=True)
 
     class Meta:
@@ -219,6 +239,30 @@ class Player(TimeStampedModel):
 
     def __str__(self) -> str:
         return f"{self.display_name} ({self.game_uid})"
+
+
+class RosterEntry(TimeStampedModel):
+    """A player on a team for a season."""
+
+    player = models.ForeignKey(Player, on_delete=models.CASCADE, related_name="roster_entries")
+    team = models.ForeignKey(Team, on_delete=models.CASCADE, related_name="roster_entries")
+    season = models.ForeignKey(Season, on_delete=models.CASCADE, related_name="roster_entries")
+    role = models.CharField(max_length=40, blank=True, help_text="IGL, rusher, sniper...")
+    joined_on = models.DateField(null=True, blank=True)
+    left_on = models.DateField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["season", "team", "player__display_name"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["player", "season"],
+                condition=models.Q(left_on__isnull=True),
+                name="one_active_roster_entry_per_season",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.player} - {self.team} ({self.season})"
 
 
 class Match(TimeStampedModel):

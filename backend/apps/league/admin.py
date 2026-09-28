@@ -1,6 +1,17 @@
 from django.contrib import admin
 
-from .models import Group, Match, MatchDay, Player, ScoringRule, Season, Stage, Team, TeamAlias
+from .models import (
+    Group,
+    Match,
+    MatchDay,
+    Player,
+    RosterEntry,
+    ScoringRule,
+    Season,
+    Stage,
+    Team,
+    TeamAlias,
+)
 
 
 @admin.register(ScoringRule)
@@ -47,7 +58,7 @@ class TeamAdmin(admin.ModelAdmin):
 
 @admin.register(Player)
 class PlayerAdmin(admin.ModelAdmin):
-    list_display = ["display_name", "game_uid", "current_team"]
+    list_display = ["display_name", "game_uid", "current_team", "user"]
     search_fields = ["display_name", "search_name", "game_uid"]
 
 
@@ -56,3 +67,10 @@ class MatchAdmin(admin.ModelAdmin):
     list_display = ["__str__", "game_match_id", "map", "status", "started_at"]
     list_filter = ["status", "match_day__stage__season", "map"]
     search_fields = ["game_match_id", "room_name"]
+
+
+@admin.register(RosterEntry)
+class RosterEntryAdmin(admin.ModelAdmin):
+    list_display = ["player", "team", "season", "role", "joined_on", "left_on"]
+    list_filter = ["season", "team"]
+    search_fields = ["player__display_name", "player__game_uid"]
