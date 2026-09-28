@@ -1,0 +1,26 @@
+{
+  "source": "Fitted to ReplayInfo kill positions (x right, z up) using the map sizes Habeeb gave; checked by eye 2026-09-28.",
+  "calibration_points": [
+    {
+      "label": "Fit north-west",
+      "world_x": -482.81,
+      "world_z": 486.49,
+      "pixel_x": 153.6,
+      "pixel_y": 153.6
+    },
+    {
+      "label": "Fit north-east",
+      "world_x": 486.42,
+      "world_z": 486.49,
+      "pixel_x": 870.4,
+      "pixel_y": 153.6
+    },
+    {
+      "label": "Fit south-west",
+      "world_x": -482.81,
+      "world_z": -482.74,
+      "pixel_x": 153.6,
+      "pixel_y": 870.4
+    }
+  ]
+}
