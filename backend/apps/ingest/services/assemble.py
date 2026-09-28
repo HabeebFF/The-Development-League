@@ -24,6 +24,7 @@ from apps.league.models import Match, MatchDay, Player, Team, TeamAlias
 from apps.maps.models import Map
 from apps.results.models import MatchEvent, PlayerMatchResult, TeamMatchResult, ZonePhase
 from apps.results.standings import schedule_rebuild
+from apps.rotations.auto import draft_rotations
 
 from ..models import DebuggerBlock, ParseRun, UploadBatch, UploadedFile
 from ..parsers import debugger, match_result, replay_info
@@ -284,6 +285,7 @@ def _build(match: Match, assignment: Assignment, run: ParseRun) -> tuple[dict[st
     MatchEvent.objects.bulk_create(events, batch_size=500)
     zones = _zones(match, block, timeline)
     ZonePhase.objects.bulk_create(zones)
+    draft_rotations(match)
 
     # -- consistency checks ----------------------------------------------------------------------
     result_kills = sum(p.kills for p in mr.players)

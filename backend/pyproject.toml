@@ -13,6 +13,7 @@ dependencies = [
     "dj-database-url>=2.2",
     "psycopg[binary]>=3.2",
     "gunicorn>=22",
+    "Pillow>=10",
 ]
 
 [project.optional-dependencies]
