@@ -1,7 +1,6 @@
 """League structure: seasons > stages/groups > match days > matches, plus teams and players.
 
-Step (b) needs these so uploads have somewhere to land. Fixtures, standings and their
-API come in step (d); rosters and account links in step (c).
+Standings live in ``results`` (they are computed from match results).
 """
 
 from __future__ import annotations
@@ -80,6 +79,13 @@ class Season(TimeStampedModel):
 
     def __str__(self) -> str:
         return self.name
+
+    def save(self, *args, **kwargs):
+        if not self.slug:
+            self.slug = unique_slug(Season, self.name)
+        super().save(*args, **kwargs)
+        if self.is_active:  # one current season: the one the site shows by default
+            Season.objects.filter(is_active=True).exclude(pk=self.pk).update(is_active=False)
 
     def clean(self) -> None:
         bad = [t for t in self.tiebreakers or [] if t not in TIEBREAKER_CHOICES]
@@ -303,7 +309,7 @@ class Match(TimeStampedModel):
 
 
 def unique_slug(model: type[models.Model], text: str, max_length: int = 80) -> str:
-    base = slugify(text, allow_unicode=False)[:max_length] or "team"
+    base = slugify(text, allow_unicode=False)[:max_length] or model._meta.model_name
     slug, n = base, 2
     while model.objects.filter(slug=slug).exists():
         slug = f"{base}-{n}"

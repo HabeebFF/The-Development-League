@@ -62,3 +62,23 @@ Sign-in uses JWT in httpOnly cookies. The website calls `GET /api/v1/auth/csrf` 
 then sends the `csrftoken` cookie value in the `X-CSRFToken` header on every write
 (`/auth/login`, `/auth/refresh`, `/auth/logout`, `/auth/password-reset[/confirm]`).
 Players ask to link their game UID with `POST /api/v1/me/link-uid`; staff approve it.
+
+## Seasons, fixtures and standings
+
+Staff build the league with `/api/v1/admin/seasons`, `/admin/stages`, `/admin/groups`
+(teams by slug), `/admin/match-days` and `/admin/matches` (fixtures: number, map,
+scheduled time). Results only come from uploads. Setting a match back to `NEEDS_REVIEW`
+hides it from standings; `PUBLISHED` brings it back. The Super Admin edits scoring at
+`/api/v1/admin/scoring-rules`.
+
+Standings are stored tables, rebuilt in the background whenever a match is uploaded,
+published, hidden, moved or deleted, or the scoring rule or tiebreakers change. Each
+season has a table for the whole season, each stage, each group and each match day.
+Past matches are re-scored with the season's current rule on every rebuild. Teams
+level on every tiebreaker share a rank. Staff can force a rebuild with
+`POST /api/v1/admin/seasons/{slug}/rebuild-standings`.
+
+Public reads: `/api/v1/seasons`, `/seasons/{slug}` (stages, groups, scoring),
+`/seasons/{slug}/standings?stage=&group=&match_day=`, `/seasons/{slug}/fixtures?upcoming=true`,
+`/match-days/{id}` (matches plus that day's table) and `/matches?season=&match_day=&map=&team=`,
+`/matches/{id}` (full results with players). Unpublished matches are not shown.

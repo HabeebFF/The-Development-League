@@ -145,3 +145,47 @@ class ZonePhase(models.Model):
 
     def __str__(self) -> str:
         return f"{self.match}: zone {self.stage_index} {self.state}"
+
+
+class StandingRow(TimeStampedModel):
+    """One team's line in a standings table (materialised; rebuilt, never edited).
+
+    A table is a *scope*: the whole season, one stage, one group or one match day.
+    ``scope`` is a string key ("season", "stage:3", "group:5", "day:7") so each table is
+    unique per team without relying on NULL comparisons.
+    """
+
+    season = models.ForeignKey("league.Season", on_delete=models.CASCADE, related_name="standings")
+    scope = models.CharField(max_length=24)
+    stage = models.ForeignKey(
+        "league.Stage", on_delete=models.CASCADE, null=True, blank=True, related_name="+"
+    )
+    group = models.ForeignKey(
+        "league.Group", on_delete=models.CASCADE, null=True, blank=True, related_name="+"
+    )
+    match_day = models.ForeignKey(
+        "league.MatchDay", on_delete=models.CASCADE, null=True, blank=True, related_name="+"
+    )
+    team = models.ForeignKey("league.Team", on_delete=models.CASCADE, related_name="standings")
+    rank = models.PositiveSmallIntegerField()
+    matches_played = models.PositiveSmallIntegerField(default=0)
+    booyahs = models.PositiveSmallIntegerField(default=0)
+    kills = models.PositiveIntegerField(default=0)
+    placement_points = models.IntegerField(default=0)
+    kill_points = models.IntegerField(default=0)
+    total_points = models.IntegerField(default=0)
+    avg_placement = models.FloatField(null=True, blank=True)
+    last_match_points = models.IntegerField(null=True, blank=True)
+    form = models.JSONField(
+        default=list, blank=True, help_text="Placements in the last five matches, oldest first"
+    )
+
+    class Meta:
+        ordering = ["season", "scope", "rank", "team__name"]
+        constraints = [
+            models.UniqueConstraint(fields=["season", "scope", "team"], name="unique_standing")
+        ]
+        indexes = [models.Index(fields=["season", "scope", "rank"])]
+
+    def __str__(self) -> str:
+        return f"{self.season} [{self.scope}] #{self.rank} {self.team}"
