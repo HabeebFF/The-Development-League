@@ -372,3 +372,43 @@ def test_confirm_drafts_rotations(upload, confirm, match_day):
     points = RotationPoint.objects.filter(rotation__match=match)
     assert points.filter(checkpoint="ELIMINATED").count() == 12
     assert points.filter(checkpoint="DROP").count() >= 10
+
+
+def test_replay_bin_builds_live_tracks(upload, confirm, match_day, client, django_user_model):
+    from apps.rotations.models import PlayerTrack
+    from apps.rotations.tests.replay_bin_factory import build
+
+    valsi, other = 167772182, 16777217  # NOOBZ and another team
+    path = [(60.0 + i * 0.2, 100.0 + i, 20.0, -50.0 - i) for i in range(50)]
+    data = build({valsi: path, other: [(60.0, 0.0, 10.0, 0.0), (61.0, 5.0, 10.0, 5.0)]})
+    files = [f for f in all_files() if f.name != REPLAY_BIN_NAME]
+    batch = upload([*files, SimpleUploadedFile(REPLAY_BIN_NAME, data)])
+    confirm(batch["id"], [{"game_match_id": str(MATCH_ID), "match_day": match_day.pk, "number": 1}])
+    match = Match.objects.get(game_match_id=MATCH_ID)
+    assert ParseRun.objects.get(match=match).counts["tracks"] == 2
+
+    track = PlayerTrack.objects.get(match=match, entity_id=valsi)
+    assert track.player.game_uid == 2063288734 and track.team.name == "NOOBZ ESPORTS"
+    assert (track.start_s, track.step_s) == (60.0, 0.5)
+    assert track.points[0] == [1000, -500] and track.points[5] == [1125, -625]
+
+    noobz = track.team.slug
+    body = client.get(f"/api/v1/matches/{match.pk}/replay?team={noobz}").json()
+    assert body["map"]["name"] == "Purgatory"
+    assert [p["entity_id"] for p in body["players"]] == [valsi]
+    assert body["players"][0]["name"] == "NB VALSIᴰˢ"
+    assert len(body["teams"]) == 13
+    assert next(t for t in body["teams"] if t["slug"] == noobz)["has_tracks"] is True
+    assert body["events"] and all(e["kind"] in {"KILL", "KNOCK"} for e in body["events"])
+    assert len(body["zones"]) > 0
+    everyone = client.get(f"/api/v1/matches/{match.pk}/replay").json()
+    assert len(everyone["players"]) == 2
+    assert client.get(f"/api/v1/matches/{match.pk}/replay?team=nope").status_code == 400
+    assert APIClient().get(f"/api/v1/matches/{match.pk}/replay").status_code in {200, 401, 403}
+
+    # Re-confirming with the garbage .bin clears the tracks and warns.
+    batch = upload(all_files())
+    confirm(batch["id"], [{"game_match_id": str(MATCH_ID), "match_day": match_day.pk, "number": 1}])
+    assert not PlayerTrack.objects.filter(match=match).exists()
+    run = ParseRun.objects.filter(match=match).latest("id")
+    assert any("live replay" in w for w in run.warnings)

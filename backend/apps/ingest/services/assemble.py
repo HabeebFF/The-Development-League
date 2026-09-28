@@ -25,6 +25,8 @@ from apps.maps.models import Map
 from apps.results.models import MatchEvent, PlayerMatchResult, TeamMatchResult, ZonePhase
 from apps.results.standings import schedule_rebuild
 from apps.rotations.auto import draft_rotations
+from apps.rotations.models import PlayerTrack
+from apps.rotations.tracks import build_tracks
 
 from ..models import DebuggerBlock, ParseRun, UploadBatch, UploadedFile
 from ..parsers import debugger, match_result, replay_info
@@ -51,6 +53,7 @@ class AssembleError(Exception):
 class Sources:
     match_result: UploadedFile | None = None
     replay: UploadedFile | None = None
+    replay_bin: UploadedFile | None = None
     block: DebuggerBlock | None = None
     safe_zones: list[UploadedFile] = field(default_factory=list)
 
@@ -58,6 +61,7 @@ class Sources:
         return {
             "match_result": self.match_result.pk if self.match_result else None,
             "replay_info": self.replay.pk if self.replay else None,
+            "replay_bin": self.replay_bin.pk if self.replay_bin else None,
             "debugger_block": self.block.pk if self.block else None,
             "safe_zones": [f.pk for f in self.safe_zones],
         }
@@ -69,6 +73,13 @@ def latest_sources(game_match_id: int) -> Sources:
     return Sources(
         match_result=newest.filter(kind=FileKind.MATCH_RESULT).first(),
         replay=newest.filter(kind=FileKind.REPLAY_JSON).first(),
+        # The .bin is stored without parsing (status SKIPPED); it is read here.
+        replay_bin=UploadedFile.objects.filter(
+            game_match_id=game_match_id, kind=FileKind.REPLAY_BIN
+        )
+        .exclude(parse_status__in=[PS.FAILED, PS.DUPLICATE])
+        .order_by("-created_at")
+        .first(),
         block=DebuggerBlock.objects.filter(game_match_id=game_match_id)
         .exclude(file__parse_status__in=[PS.FAILED, PS.DUPLICATE])
         .select_related("file")
@@ -286,6 +297,19 @@ def _build(match: Match, assignment: Assignment, run: ParseRun) -> tuple[dict[st
     zones = _zones(match, block, timeline)
     ZonePhase.objects.bulk_create(zones)
     draft_rotations(match)
+    tracks = 0
+    if sources.replay_bin is not None:
+        tracks = build_tracks(
+            match,
+            storage.read_bytes(sources.replay_bin.storage_key),
+            entity_uid,
+            players,
+            uid_team,
+        )
+        if not tracks:
+            warnings.append("Replay .bin had no player positions; the live replay is empty.")
+    else:
+        PlayerTrack.objects.filter(match=match).delete()
 
     # -- consistency checks ----------------------------------------------------------------------
     result_kills = sum(p.kills for p in mr.players)
@@ -303,6 +327,7 @@ def _build(match: Match, assignment: Assignment, run: ParseRun) -> tuple[dict[st
         "events": len(events),
         "zones": len(zones),
         "kills": result_kills,
+        "tracks": tracks,
     }
     return counts, warnings
 

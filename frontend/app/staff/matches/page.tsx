@@ -30,10 +30,10 @@ export default function StaffMatches() {
           const total = m.rotations.AUTO + m.rotations.DRAFT + m.rotations.CONFIRMED;
           const done = m.rotations.CONFIRMED;
           return (
-            <li key={m.id}>
+            <li key={m.id} className="flex items-center">
               <Link
                 href={`/staff/matches/${m.id}/plot`}
-                className="flex items-center justify-between gap-4 px-4 py-3 hover:bg-panel-2"
+                className="flex flex-1 items-center justify-between gap-4 px-4 py-3 hover:bg-panel-2"
               >
                 <span>
                   <span className="block font-medium">{m.label}</span>
@@ -42,6 +42,12 @@ export default function StaffMatches() {
                 <span className={done === total && total > 0 ? "text-ok" : "text-muted"}>
                   {done}/{total} confirmed
                 </span>
+              </Link>
+              <Link
+                href={`/staff/matches/${m.id}/replay`}
+                className="self-stretch border-l border-line px-4 py-3 text-sm text-accent hover:bg-panel-2"
+              >
+                Live replay
               </Link>
             </li>
           );

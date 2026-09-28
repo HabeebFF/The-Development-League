@@ -78,3 +78,30 @@ class RotationPoint(models.Model):
 
     def __str__(self) -> str:
         return f"{self.rotation}: {self.checkpoint}"
+
+
+class PlayerTrack(models.Model):
+    """One player's path through a match, from the replay .bin, for the live replay.
+
+    ``points`` holds one ``[x, z]`` (world decimetres) every ``step_s`` seconds from
+    ``start_s``; ``null`` where the player was not in the feed (plane, dead, gaps).
+    """
+
+    match = models.ForeignKey("league.Match", on_delete=models.CASCADE, related_name="tracks")
+    entity_id = models.BigIntegerField()
+    player = models.ForeignKey(
+        "league.Player", null=True, blank=True, on_delete=models.SET_NULL, related_name="tracks"
+    )
+    team = models.ForeignKey(
+        "league.Team", null=True, blank=True, on_delete=models.SET_NULL, related_name="tracks"
+    )
+    start_s = models.FloatField()
+    step_s = models.FloatField()
+    points = models.JSONField()
+
+    class Meta:
+        ordering = ["match", "team", "entity_id"]
+        unique_together = [("match", "entity_id")]
+
+    def __str__(self) -> str:
+        return f"{self.match}: {self.player or self.entity_id}"
