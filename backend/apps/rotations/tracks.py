@@ -14,7 +14,7 @@ from bisect import bisect_left
 from apps.ingest.parsers import replay_bin
 from apps.league.models import Match, Player, Team
 
-from .models import PlayerTrack
+from .models import PlayerTrack, ReplayObject
 
 STEP_S = 0.5
 MAX_GAP_S = 2.5
@@ -74,4 +74,71 @@ def build_tracks(
             )
         )
     PlayerTrack.objects.bulk_create(rows)
+    return len(rows)
+
+
+UAV_STEP_S = 0.5  # a UAV path keeps one point per half second
+# How far a Bolt Maker reaches: strikes land at random inside the zone (patch notes), and
+# in every zone of the Day 11 replays they land up to 76-81 m from the centre, so the
+# zone is drawn with an 80 m radius (160 m across).
+BOLT_ZONE_M = 80.0
+
+
+def build_objects(
+    match: Match,
+    data: bytes,
+    entity_uid: dict[int, int],
+    players: dict[int, Player],
+    uid_team: dict[int, Team],
+) -> int:
+    """Replace the match's UAVs and Bolt Makers with those in ``data``. Returns the count."""
+    ReplayObject.objects.filter(match=match).delete()
+    found = replay_bin.parse_objects(data)
+    rows = []
+
+    def owned(entity: int | None) -> dict:
+        uid = entity_uid.get(entity) if entity else None
+        return {"owner_entity": entity, "player": players.get(uid), "team": uid_team.get(uid)}
+
+    for drone in found["drones"]:
+        samples = drone["samples"]
+        points, last = [], None
+        for i, (t, x, _y, z) in enumerate(samples):
+            if last is None or t - last >= UAV_STEP_S - 0.01 or i == len(samples) - 1:
+                points.append([round(t, 1), round(x * 10), round(z * 10)])
+                last = t
+        kind = (
+            ReplayObject.Kind.PLAYER_UAV
+            if drone["kind"] == "PLAYER_UAV"
+            else ReplayObject.Kind.GENERAL_UAV
+        )
+        rows.append(
+            ReplayObject(
+                match=match,
+                kind=kind,
+                start_s=samples[0][0],
+                end_s=samples[-1][0],
+                x=samples[0][1],
+                z=samples[0][3],
+                radius_m=drone["range"],
+                points=points,
+                **owned(drone["owner"]),
+            )
+        )
+    for bolt in found["bolts"]:
+        strikes = bolt["strikes"]
+        rows.append(
+            ReplayObject(
+                match=match,
+                kind=ReplayObject.Kind.BOLT_MAKER,
+                start_s=bolt["t"],
+                end_s=max([bolt["t"] + bolt["duration"], *(s[0] for s in strikes)]),
+                x=bolt["x"],
+                z=bolt["z"],
+                radius_m=BOLT_ZONE_M,
+                points=[[round(t, 1), round(x * 10), round(z * 10)] for t, x, z, _r in strikes],
+                **owned(bolt["owner"]),
+            )
+        )
+    ReplayObject.objects.bulk_create(rows)
     return len(rows)

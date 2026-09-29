@@ -21,9 +21,14 @@ def _message(t: float, kind: int, payload: bytes) -> bytes:
 
 
 def build(
-    samples: dict[int, list[tuple[float, float, float, float]]], header_t: float = 0.0
+    samples: dict[int, list[tuple[float, float, float, float]]],
+    header_t: float = 0.0,
+    extra: list[tuple[float, int, list[int]]] = (),
 ) -> bytes:
-    """``samples``: entity id -> [(t, x, y, z)]. One position message per time."""
+    """``samples``: entity id -> [(t, x, y, z)]. One position message per time.
+
+    ``extra`` adds other messages as (t, type, varints), sorted in by time.
+    """
     out = bytearray(_message(header_t, 100, b"\x01\x02\x03"))
     state = [_zz(len(samples))]
     for entity in samples:
@@ -33,11 +38,39 @@ def build(
     for entity, rows in samples.items():
         for t, x, y, z in rows:
             by_time.setdefault(t, []).append((entity & 0xFFFFFF, x, y, z))
+    messages = []
     for frame, t in enumerate(sorted(by_time)):
         rows = by_time[t]
         tokens = [0, _zz(len(rows))]
         for low, x, y, z in rows:
             tokens += [low] + [_zz(round(v * 1000)) for v in (x, y, z)] + [0] * 15
         tokens += [0, frame]
-        out += _message(t, 2054, b"".join(_varint(v) for v in tokens))
+        messages.append((t, 2054, tokens))
+    messages += list(extra)
+    for t, kind, tokens in sorted(messages, key=lambda m: m[0]):
+        out += _message(t, kind, b"".join(_varint(v) for v in tokens))
     return bytes(out)
+
+
+def mm(v: float) -> int:
+    """A coordinate in metres as the zigzag millimetre varint value."""
+    return _zz(round(v * 1000))
+
+
+def uav(t: float, object_id: int, owner: int, kind: int, x: float, y: float, z: float):
+    """One type-2005 flying-object sample."""
+    health = 200 if kind == 1006 else 500
+    scan = struct.unpack("<I", struct.pack("<f", 65.0 if kind == 1006 else 100.0))[0]
+    return (
+        t,
+        2005,
+        [object_id, 0, mm(x), mm(y), mm(z), 1, owner, kind, 0, scan, health, health, 7],
+    )
+
+
+def bolt(t: float, caster: int, x: float, z: float, strikes: int = 30):
+    """One type-157 Bolt Maker lightning zone, a strike a second."""
+    body = []
+    for i in range(strikes):
+        body += [mm(x + i % 3), mm(z - i % 2), 4400, 5000 + i * 2000]  # 2000 ticks a second
+    return (t, 157, [mm(x), mm(z), 20000, 0, 60, *body, caster >> 24, 3, caster])

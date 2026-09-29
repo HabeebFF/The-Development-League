@@ -105,3 +105,44 @@ class PlayerTrack(models.Model):
 
     def __str__(self) -> str:
         return f"{self.match}: {self.player or self.entity_id}"
+
+
+class ReplayObject(models.Model):
+    """A UAV or Bolt Maker lightning zone in the live replay (from the replay .bin).
+
+    ``points`` is ``[[t, x_dm, z_dm], ...]``: a UAV's flight path, or a Bolt Maker's
+    strikes (one a second). ``x``/``z`` is where it starts (a Bolt Maker's centre).
+    """
+
+    class Kind(models.TextChoices):
+        PLAYER_UAV = "PLAYER_UAV", "Player UAV"
+        GENERAL_UAV = "GENERAL_UAV", "General UAV"
+        BOLT_MAKER = "BOLT_MAKER", "Bolt Maker"
+
+    match = models.ForeignKey(
+        "league.Match", on_delete=models.CASCADE, related_name="replay_objects"
+    )
+    kind = models.CharField(max_length=16, choices=Kind.choices)
+    owner_entity = models.BigIntegerField(null=True, blank=True)
+    player = models.ForeignKey(
+        "league.Player", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+    team = models.ForeignKey(
+        "league.Team", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+    start_s = models.FloatField()
+    end_s = models.FloatField()
+    x = models.FloatField()
+    z = models.FloatField()
+    radius_m = models.FloatField(
+        null=True,
+        blank=True,
+        help_text="Metres a UAV scans around itself, or a Bolt Maker zone's radius",
+    )
+    points = models.JSONField(default=list)
+
+    class Meta:
+        ordering = ["match", "start_s", "id"]
+
+    def __str__(self) -> str:
+        return f"{self.match}: {self.kind} @ {self.start_s:.0f}s"

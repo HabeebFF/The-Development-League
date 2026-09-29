@@ -375,17 +375,22 @@ def test_confirm_drafts_rotations(upload, confirm, match_day):
 
 
 def test_replay_bin_builds_live_tracks(upload, confirm, match_day, client, django_user_model):
-    from apps.rotations.models import PlayerTrack
-    from apps.rotations.tests.replay_bin_factory import build
+    from apps.rotations.models import PlayerTrack, ReplayObject
+    from apps.rotations.tests.replay_bin_factory import bolt, build, uav
 
     valsi, other = 167772182, 16777217  # NOOBZ and another team
     path = [(60.0 + i * 0.2, 100.0 + i, 20.0, -50.0 - i) for i in range(50)]
-    data = build({valsi: path, other: [(60.0, 0.0, 10.0, 0.0), (61.0, 5.0, 10.0, 5.0)]})
+    extra = [uav(62.0 + i * 0.2, 9, valsi, 1006, 100.0 + i, 60.0, -50.0) for i in range(10)]
+    extra += [uav(130.0, 5, 0, 0, 0.0, 50.0, 0.0), bolt(70.0, other, 5.0, 5.0)]
+    data = build(
+        {valsi: path, other: [(60.0, 0.0, 10.0, 0.0), (61.0, 5.0, 10.0, 5.0)]}, extra=extra
+    )
     files = [f for f in all_files() if f.name != REPLAY_BIN_NAME]
     batch = upload([*files, SimpleUploadedFile(REPLAY_BIN_NAME, data)])
     confirm(batch["id"], [{"game_match_id": str(MATCH_ID), "match_day": match_day.pk, "number": 1}])
     match = Match.objects.get(game_match_id=MATCH_ID)
-    assert ParseRun.objects.get(match=match).counts["tracks"] == 2
+    counts = ParseRun.objects.get(match=match).counts
+    assert counts["tracks"] == 2 and counts["replay_objects"] == 3
 
     track = PlayerTrack.objects.get(match=match, entity_id=valsi)
     assert track.player.game_uid == 2063288734 and track.team.name == "NOOBZ ESPORTS"
@@ -401,6 +406,16 @@ def test_replay_bin_builds_live_tracks(upload, confirm, match_day, client, djang
     assert next(t for t in body["teams"] if t["slug"] == noobz)["has_tracks"] is True
     assert body["events"] and all(e["kind"] in {"KILL", "KNOCK"} for e in body["events"])
     assert len(body["zones"]) > 0
+    objects = {o["kind"]: o for o in body["objects"]}  # every team's, whatever is selected
+    assert set(objects) == {"PLAYER_UAV", "GENERAL_UAV", "BOLT_MAKER"}
+    drone = objects["PLAYER_UAV"]
+    assert drone["team"] == noobz and drone["owner_name"] == "NB VALSIᴰˢ"
+    assert drone["radius"] == 65.0 and objects["GENERAL_UAV"]["radius"] == 100.0
+    assert drone["points"][0] == [62.0, 1000, -500] and drone["points"][-1][0] == 63.8
+    assert objects["GENERAL_UAV"]["team"] is None
+    zone = objects["BOLT_MAKER"]
+    assert (zone["x"], zone["radius"], zone["end_s"]) == (5.0, 80.0, 100.0)
+    assert len(zone["points"]) == 30
     everyone = client.get(f"/api/v1/matches/{match.pk}/replay").json()
     assert len(everyone["players"]) == 2
     assert client.get(f"/api/v1/matches/{match.pk}/replay?team=nope").status_code == 400
@@ -410,6 +425,7 @@ def test_replay_bin_builds_live_tracks(upload, confirm, match_day, client, djang
     batch = upload(all_files())
     confirm(batch["id"], [{"game_match_id": str(MATCH_ID), "match_day": match_day.pk, "number": 1}])
     assert not PlayerTrack.objects.filter(match=match).exists()
+    assert not ReplayObject.objects.filter(match=match).exists()
     run = ParseRun.objects.filter(match=match).latest("id")
     assert any("live replay" in w for w in run.warnings)
 

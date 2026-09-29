@@ -21,6 +21,23 @@ positions: median error under 0.5 m):
 - Players are not in the feed while on the plane or while dead; lobby samples sit at
   y ~ 1400 m and are dropped.
 
+It also extracts UAVs and Bolt Maker lightning zones (``parse_objects``), checked
+2026-09-29 against staff notes on a real match (a UAV into Deca Square at about 6:00,
+Bolt Makers at 5:57 and 9:15) and the debugger log's lightning sounds:
+
+- Type 2005 is one sample of a flying object, about every 0.2 s while it moves:
+  object id, state, x, y, z (zigzag mm), frame, owner entity id (0 = none), kind,
+  0, scan range in metres (a float: 65 for a player UAV, 100 for the general one),
+  max health, health (it drops when the UAV is shot), spawn serial. Kind 1006 is a
+  player's UAV (it starts above its owner and flies straight for about 20 s); kind 0
+  is the general UAV (no owner, one per match, hovers and moves for several minutes,
+  silent while hovering).
+- Type 157 is a Bolt Maker lightning zone: centre x, z (zigzag mm), 20000 (not the
+  zone's reach: strikes land up to ~80 m from the centre), 0, damage per strike (60),
+  then per strike (x, z zigzag mm, strike radius mm, tick at 2000 a second), then team
+  slot, 3 and the caster's entity id (its top byte is that team slot). That matches
+  the OB51 patch notes: a 30 s zone, a random strike inside it every second, 60 damage.
+
 Standard library only. Never raises on bad or truncated data: it resyncs on the next
 valid message and skips what it cannot decode.
 """
@@ -29,10 +46,25 @@ from __future__ import annotations
 
 import struct
 
-__all__ = ["parse_tracks", "parse_replay", "iter_messages", "MSG_POSITIONS", "MSG_ENTITY_STATE"]
+__all__ = [
+    "parse_tracks",
+    "parse_replay",
+    "parse_objects",
+    "iter_messages",
+    "MSG_POSITIONS",
+    "MSG_ENTITY_STATE",
+]
 
 MSG_POSITIONS = 2054  # 0x0806: batch of per-player position records
 MSG_ENTITY_STATE = 2055  # 0x0807: batch of per-player state, carries full ids
+MSG_FLYING = 2005  # one sample of a flying object (UAVs)
+MSG_THUNDER_AREA = 157  # a Bolt Maker lightning zone
+
+KIND_PLAYER_UAV = 1006
+KIND_GENERAL_UAV = 0
+_DRONE_KINDS = {KIND_PLAYER_UAV: "PLAYER_UAV", KIND_GENERAL_UAV: "GENERAL_UAV"}
+BOLT_DURATION_S = 30.0  # OB51 patch notes: "a Lightning Zone that lasts for 30s"
+_DRONE_GAP = 150.0  # the general UAV goes quiet for ~60 s while it hovers
 
 _HDR = struct.Struct("<fBHH")  # time, flag, msg type, payload length
 _REC_LEN = 19  # varints per position record
@@ -247,3 +279,86 @@ def _parse_state_ids(pl, id_map):
         low = full & 0xFFFFFF
         if 0 < low and 0 < (full >> 24) < 256 and low not in id_map:
             id_map[low] = full
+
+
+def parse_objects(data):
+    """UAVs and Bolt Maker lightning zones in the replay.
+
+    Returns ``{"drones": [...], "bolts": [...]}``:
+
+    - drone: kind ("PLAYER_UAV" or "GENERAL_UAV"), owner (entity id or None), range
+      (scan radius, m), samples [(t, x, y, z)] in seconds / metres.
+    - bolt: owner (caster entity id or None), t, duration (s), x, z, damage (per strike)
+      and strikes [(t, x, z, radius)], one a second.
+    """
+    drones = []
+    bolts = []
+    open_drones = {}
+    try:
+        for _off, t, _flag, mtype, pl in iter_messages(data):
+            if mtype == MSG_FLYING:
+                _parse_drone(pl, t, open_drones, drones)
+            elif mtype == MSG_THUNDER_AREA:
+                bolt = _parse_bolt(pl, t)
+                if bolt:
+                    bolts.append(bolt)
+    except Exception:  # never raise on bad data
+        pass
+    return {"drones": drones, "bolts": bolts}
+
+
+def _parse_drone(pl, t, open_drones, drones):
+    v = _read_varints(pl)
+    if len(v) < 13 or v[7] not in _DRONE_KINDS:
+        return
+    key = (v[0], v[12])
+    track = open_drones.get(key)
+    if (
+        track is None
+        or track["kind"] != _DRONE_KINDS[v[7]]
+        or t - track["samples"][-1][0] > _DRONE_GAP
+    ):
+        track = {
+            "kind": _DRONE_KINDS[v[7]],
+            "owner": v[6] or None,
+            "range": _float_bits(v[9]),
+            "samples": [],
+        }
+        open_drones[key] = track
+        drones.append(track)
+    track["samples"].append((t, _zz(v[2]) / 1000.0, _zz(v[3]) / 1000.0, _zz(v[4]) / 1000.0))
+
+
+def _float_bits(v):
+    """A float stored as the varint of its IEEE-754 bits; None if it isn't a sane one."""
+    try:
+        f = struct.unpack("<f", struct.pack("<I", v & 0xFFFFFFFF))[0]
+    except struct.error:
+        return None
+    return round(f, 2) if 0 < f < 10000 else None
+
+
+def _parse_bolt(pl, t):
+    v = _read_varints(pl)
+    if len(v) < 12 or (len(v) - 8) % 4:
+        return None
+    body = v[5:-3]
+    first_tick = body[3]
+    strikes = [
+        (
+            t + (body[i + 3] - first_tick) / 2000.0,
+            _zz(body[i]) / 1000.0,
+            _zz(body[i + 1]) / 1000.0,
+            body[i + 2] / 1000.0,
+        )
+        for i in range(0, len(body), 4)
+    ]
+    return {
+        "owner": v[-1] or None,
+        "t": t,
+        "duration": BOLT_DURATION_S,
+        "damage": v[4],
+        "x": _zz(v[0]) / 1000.0,
+        "z": _zz(v[1]) / 1000.0,
+        "strikes": strikes,
+    }
