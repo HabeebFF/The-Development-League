@@ -82,6 +82,7 @@ UAV_STEP_S = 0.5  # a UAV path keeps one point per half second
 # in every zone of the Day 11 replays they land up to 76-81 m from the centre, so the
 # zone is drawn with an 80 m radius (160 m across).
 BOLT_ZONE_M = 80.0
+DINOCULARS_M = 50.0  # the scan radius, when a replay doesn't carry it
 
 
 def build_objects(
@@ -91,7 +92,9 @@ def build_objects(
     players: dict[int, Player],
     uid_team: dict[int, Team],
 ) -> int:
-    """Replace the match's UAVs and Bolt Makers with those in ``data``. Returns the count."""
+    """Replace the match's UAVs, Bolt Makers and Dinoculars scans with those in ``data``.
+
+    Returns the count."""
     ReplayObject.objects.filter(match=match).delete()
     found = replay_bin.parse_objects(data)
     rows = []
@@ -138,6 +141,19 @@ def build_objects(
                 radius_m=BOLT_ZONE_M,
                 points=[[round(t, 1), round(x * 10), round(z * 10)] for t, x, z, _r in strikes],
                 **owned(bolt["owner"]),
+            )
+        )
+    for scan in found["scans"]:
+        rows.append(
+            ReplayObject(
+                match=match,
+                kind=ReplayObject.Kind.DINOCULARS,
+                start_s=scan["t"],
+                end_s=scan["t"] + scan["duration"],
+                x=scan["x"],
+                z=scan["z"],
+                radius_m=scan["range"] or DINOCULARS_M,
+                **owned(scan["owner"]),
             )
         )
     ReplayObject.objects.bulk_create(rows)

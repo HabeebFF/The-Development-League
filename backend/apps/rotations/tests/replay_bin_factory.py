@@ -68,6 +68,13 @@ def uav(t: float, object_id: int, owner: int, kind: int, x: float, y: float, z: 
     )
 
 
+def scan(t: float, scanner: int, x: float, z: float):
+    """One type-847 Dinoculars scan of the spot (x, z), 50 m across in radius."""
+    radius = struct.unpack("<I", struct.pack("<f", 50.0))[0]
+    clock = struct.unpack("<I", struct.pack("<f", t - 26.0))[0]
+    return (t, 847, [mm(x), 0, mm(z), radius, clock, scanner])
+
+
 def bolt(t: float, caster: int, x: float, z: float, strikes: int = 30):
     """One type-157 Bolt Maker lightning zone, a strike a second."""
     body = []

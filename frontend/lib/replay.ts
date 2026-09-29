@@ -33,17 +33,18 @@ export type ReplayTeam = {
 };
 
 export type ReplayObject = {
-  kind: "PLAYER_UAV" | "GENERAL_UAV" | "BOLT_MAKER";
+  kind: "PLAYER_UAV" | "GENERAL_UAV" | "BOLT_MAKER" | "DINOCULARS";
   owner: number | null;
   owner_name: string | null;
   team: string | null;
   start_s: number;
   end_s: number;
+  /** Where it starts: a Bolt Maker's centre, the spot a Dinoculars scan looked at. */
   x: number;
   z: number;
-  /** Metres a UAV scans around itself, or how far a Bolt Maker zone reaches. */
+  /** Metres a UAV or Dinoculars scans, or how far a Bolt Maker zone reaches. */
   radius: number | null;
-  /** [t, x_dm, z_dm]: a UAV's path, or a Bolt Maker's strikes. */
+  /** [t, x_dm, z_dm]: a UAV's path, or a Bolt Maker's strikes (empty for a scan). */
   points: [number, number, number][];
 };
 
@@ -168,6 +169,16 @@ export function uavTrail(o: ReplayObject, t: number, seconds: number): World[] {
   const now = uavAt(o, t);
   if (now) out.push(now);
   return out;
+}
+
+/** How many enemies of the scanner were inside a Dinoculars scan when it went off. */
+export function enemiesInScan(o: ReplayObject, players: ReplayPlayer[], step: number): number {
+  const r = o.radius ?? 50;
+  return players.filter((p) => {
+    if (p.entity_id === o.owner || (o.team != null && p.team === o.team)) return false;
+    const w = positionAt(p, step, o.start_s);
+    return w != null && Math.hypot(w.x - o.x, w.z - o.z) <= r;
+  }).length;
 }
 
 /** Bolt Maker strikes that landed in the last ``seconds`` before t. */

@@ -21,7 +21,8 @@ positions: median error under 0.5 m):
 - Players are not in the feed while on the plane or while dead; lobby samples sit at
   y ~ 1400 m and are dropped.
 
-It also extracts UAVs and Bolt Maker lightning zones (``parse_objects``), checked
+It also extracts UAVs, Bolt Maker lightning zones and Dinoculars scans
+(``parse_objects``). UAVs and Bolt Makers were checked
 2026-09-29 against staff notes on a real match (a UAV into Deca Square at about 6:00,
 Bolt Makers at 5:57 and 9:15) and the debugger log's lightning sounds:
 
@@ -37,6 +38,11 @@ Bolt Makers at 5:57 and 9:15) and the debugger log's lightning sounds:
   then per strike (x, z zigzag mm, strike radius mm, tick at 2000 a second), then team
   slot, 3 and the caster's entity id (its top byte is that team slot). That matches
   the OB51 patch notes: a 30 s zone, a random strike inside it every second, 60 damage.
+- Type 847 is a Dinoculars scan (the Tactical Market item / Arvon's skill: it shows how
+  many enemies are in a 50 m circle the player picks on the map, for 3 s): x, y (0),
+  z (zigzag mm), scan radius as a float (50), a float clock, the scanner's entity id.
+  Checked 2026-09-29 on the Day 11 replays: always 6 varints and 50 m, aimed 15-430 m
+  away from the scanner, ~90 a match (a player can scan again after a cooldown).
 
 Standard library only. Never raises on bad or truncated data: it resyncs on the next
 valid message and skips what it cannot decode.
@@ -59,11 +65,13 @@ MSG_POSITIONS = 2054  # 0x0806: batch of per-player position records
 MSG_ENTITY_STATE = 2055  # 0x0807: batch of per-player state, carries full ids
 MSG_FLYING = 2005  # one sample of a flying object (UAVs)
 MSG_THUNDER_AREA = 157  # a Bolt Maker lightning zone
+MSG_DINOCULARS = 847  # a Dinoculars scan of a spot on the map
 
 KIND_PLAYER_UAV = 1006
 KIND_GENERAL_UAV = 0
 _DRONE_KINDS = {KIND_PLAYER_UAV: "PLAYER_UAV", KIND_GENERAL_UAV: "GENERAL_UAV"}
 BOLT_DURATION_S = 30.0  # OB51 patch notes: "a Lightning Zone that lasts for 30s"
+SCAN_DURATION_S = 3.0  # Dinoculars shows the enemy count for 3 s
 _DRONE_GAP = 150.0  # the general UAV goes quiet for ~60 s while it hovers
 
 _HDR = struct.Struct("<fBHH")  # time, flag, msg type, payload length
@@ -282,17 +290,19 @@ def _parse_state_ids(pl, id_map):
 
 
 def parse_objects(data):
-    """UAVs and Bolt Maker lightning zones in the replay.
+    """UAVs, Bolt Maker lightning zones and Dinoculars scans in the replay.
 
-    Returns ``{"drones": [...], "bolts": [...]}``:
+    Returns ``{"drones": [...], "bolts": [...], "scans": [...]}``:
 
     - drone: kind ("PLAYER_UAV" or "GENERAL_UAV"), owner (entity id or None), range
       (scan radius, m), samples [(t, x, y, z)] in seconds / metres.
     - bolt: owner (caster entity id or None), t, duration (s), x, z, damage (per strike)
       and strikes [(t, x, z, radius)], one a second.
+    - scan: owner (scanner entity id or None), t, duration (s), x, z, range (radius, m).
     """
     drones = []
     bolts = []
+    scans = []
     open_drones = {}
     try:
         for _off, t, _flag, mtype, pl in iter_messages(data):
@@ -302,9 +312,27 @@ def parse_objects(data):
                 bolt = _parse_bolt(pl, t)
                 if bolt:
                     bolts.append(bolt)
+            elif mtype == MSG_DINOCULARS:
+                scan = _parse_scan(pl, t)
+                if scan:
+                    scans.append(scan)
     except Exception:  # never raise on bad data
         pass
-    return {"drones": drones, "bolts": bolts}
+    return {"drones": drones, "bolts": bolts, "scans": scans}
+
+
+def _parse_scan(pl, t):
+    v = _read_varints(pl)
+    if len(v) != 6:
+        return None
+    return {
+        "owner": v[5] or None,
+        "t": t,
+        "duration": SCAN_DURATION_S,
+        "x": _zz(v[0]) / 1000.0,
+        "z": _zz(v[2]) / 1000.0,
+        "range": _float_bits(v[3]),
+    }
 
 
 def _parse_drone(pl, t, open_drones, drones):

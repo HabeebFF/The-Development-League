@@ -376,12 +376,13 @@ def test_confirm_drafts_rotations(upload, confirm, match_day):
 
 def test_replay_bin_builds_live_tracks(upload, confirm, match_day, client, django_user_model):
     from apps.rotations.models import PlayerTrack, ReplayObject
-    from apps.rotations.tests.replay_bin_factory import bolt, build, uav
+    from apps.rotations.tests.replay_bin_factory import bolt, build, scan, uav
 
     valsi, other = 167772182, 16777217  # NOOBZ and another team
     path = [(60.0 + i * 0.2, 100.0 + i, 20.0, -50.0 - i) for i in range(50)]
     extra = [uav(62.0 + i * 0.2, 9, valsi, 1006, 100.0 + i, 60.0, -50.0) for i in range(10)]
     extra += [uav(130.0, 5, 0, 0, 0.0, 50.0, 0.0), bolt(70.0, other, 5.0, 5.0)]
+    extra += [scan(65.0, valsi, 40.0, -80.0)]
     data = build(
         {valsi: path, other: [(60.0, 0.0, 10.0, 0.0), (61.0, 5.0, 10.0, 5.0)]}, extra=extra
     )
@@ -390,7 +391,7 @@ def test_replay_bin_builds_live_tracks(upload, confirm, match_day, client, djang
     confirm(batch["id"], [{"game_match_id": str(MATCH_ID), "match_day": match_day.pk, "number": 1}])
     match = Match.objects.get(game_match_id=MATCH_ID)
     counts = ParseRun.objects.get(match=match).counts
-    assert counts["tracks"] == 2 and counts["replay_objects"] == 3
+    assert counts["tracks"] == 2 and counts["replay_objects"] == 4
 
     track = PlayerTrack.objects.get(match=match, entity_id=valsi)
     assert track.player.game_uid == 2063288734 and track.team.name == "NOOBZ ESPORTS"
@@ -407,7 +408,7 @@ def test_replay_bin_builds_live_tracks(upload, confirm, match_day, client, djang
     assert body["events"] and all(e["kind"] in {"KILL", "KNOCK"} for e in body["events"])
     assert len(body["zones"]) > 0
     objects = {o["kind"]: o for o in body["objects"]}  # every team's, whatever is selected
-    assert set(objects) == {"PLAYER_UAV", "GENERAL_UAV", "BOLT_MAKER"}
+    assert set(objects) == {"PLAYER_UAV", "GENERAL_UAV", "BOLT_MAKER", "DINOCULARS"}
     drone = objects["PLAYER_UAV"]
     assert drone["team"] == noobz and drone["owner_name"] == "NB VALSIᴰˢ"
     assert drone["radius"] == 65.0 and objects["GENERAL_UAV"]["radius"] == 100.0

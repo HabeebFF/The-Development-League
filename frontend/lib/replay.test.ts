@@ -3,6 +3,7 @@ import { test } from "node:test";
 
 import {
   clock,
+  enemiesInScan,
   positionAt,
   strikesAt,
   timeRange,
@@ -67,4 +68,16 @@ test("uavAt interpolates, holds while hovering, and ends", () => {
   const bolt: ReplayObject = { ...o, kind: "BOLT_MAKER", points: [[100, 10, 10], [102, 20, 20]] };
   assert.equal(strikesAt(bolt, 101).length, 1);
   assert.equal(strikesAt(bolt, 102.5)[0].x, 2);
+});
+
+test("enemiesInScan counts other teams inside the circle when it fires", () => {
+  const scan: ReplayObject = {
+    kind: "DINOCULARS", owner: 1, owner_name: "A", team: "a",
+    start_s: 0, end_s: 3, x: 0, z: 0, radius: 50, points: [],
+  };
+  const at = (entity_id: number, team: string, x: number): ReplayPlayer => ({
+    entity_id, name: "", team, start_s: 0, points: [[x * 10, 0]],
+  });
+  const players = [at(1, "a", 0), at(2, "a", 10), at(3, "b", 49), at(4, "b", 51), at(5, "c", -20)];
+  assert.equal(enemiesInScan(scan, players, 0.5), 2); // 3 and 5; not teammates, not 51 m away
 });

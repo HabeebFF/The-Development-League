@@ -108,16 +108,19 @@ class PlayerTrack(models.Model):
 
 
 class ReplayObject(models.Model):
-    """A UAV or Bolt Maker lightning zone in the live replay (from the replay .bin).
+    """A UAV, Bolt Maker lightning zone or Dinoculars scan in the live replay (from the
+    replay .bin).
 
     ``points`` is ``[[t, x_dm, z_dm], ...]``: a UAV's flight path, or a Bolt Maker's
-    strikes (one a second). ``x``/``z`` is where it starts (a Bolt Maker's centre).
+    strikes (one a second); empty for a scan. ``x``/``z`` is where it starts (a Bolt
+    Maker's centre, the spot a Dinoculars scan looked at).
     """
 
     class Kind(models.TextChoices):
         PLAYER_UAV = "PLAYER_UAV", "Player UAV"
         GENERAL_UAV = "GENERAL_UAV", "General UAV"
         BOLT_MAKER = "BOLT_MAKER", "Bolt Maker"
+        DINOCULARS = "DINOCULARS", "Dinoculars"
 
     match = models.ForeignKey(
         "league.Match", on_delete=models.CASCADE, related_name="replay_objects"
