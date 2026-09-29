@@ -62,4 +62,15 @@ def test_parser_reads_uavs_and_bolt_makers():
     assert zone["owner"] == B and (zone["x"], zone["z"]) == (40.0, -30.0)
     assert zone["duration"] == 30.0 and zone["damage"] == 60 and len(zone["strikes"]) == 30
     assert zone["strikes"][0][0] == 300.0 and round(zone["strikes"][-1][0], 3) == 329.0
-    assert replay_bin.parse_objects(b"\x00\x01binary") == {"drones": [], "bolts": []}
+    empty = {"drones": [], "bolts": [], "scans": []}
+    assert replay_bin.parse_objects(b"\x00\x01binary") == empty
+
+
+def test_parser_reads_dinoculars_scans():
+    from .replay_bin_factory import scan
+
+    extra = [scan(259.4, A, 102.9, -375.2), (260.0, 847, [1, 2, 3])]  # short: ignored
+    (found,) = replay_bin.parse_objects(build({A: [(60.0, 1.0, 5.0, 2.0)]}, extra=extra))["scans"]
+    assert found["owner"] == A and found["range"] == 50.0 and found["duration"] == 3.0
+    assert (found["x"], found["z"]) == (102.9, -375.2)
+    assert round(found["t"], 1) == 259.4

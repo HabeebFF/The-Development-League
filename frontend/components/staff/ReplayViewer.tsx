@@ -10,6 +10,7 @@ import { teamColor } from "@/lib/colors";
 import { fitBounds, toPixel } from "@/lib/coordinates";
 import {
   clock,
+  enemiesInScan,
   positionAt,
   strikesAt,
   timeRange,
@@ -29,8 +30,10 @@ const MARK_S = 8; // how long a kill or knock stays on the map
 const UAV_TRAIL_S = 6;
 const NEUTRAL = "#e5e7eb";
 const BOLT = "#fde047";
+const SCAN = "#34d399";
+const SCAN_SHOW_S = 8; // a Dinoculars scan lasts 3 s; keep it up longer so it's seen at speed
 
-type FeedItem = { t: number; kind: "KILL" | "KNOCK" | "UAV" | "BOLT"; text: string; headshot?: boolean };
+type FeedItem = { t: number; kind: "KILL" | "KNOCK" | "UAV" | "BOLT" | "SCAN"; text: string; headshot?: boolean };
 
 type Loaded = { replay: Replay; map: GameMap | null };
 
@@ -160,8 +163,20 @@ export default function ReplayViewer({ matchId }: { matchId: number }) {
   const recent = replay.events.filter((e) => e.t <= t && e.t > t - MARK_S && involves(e));
   const nameOf = (id: number | null) => (id != null && byEntity[id]?.name) || "Enemy";
   const objects = gadgets ? (replay.objects ?? []) : [];
-  const liveObjects = objects.filter((o) => o.start_s <= t && t <= o.end_s);
+  const shownUntil = (o: ReplayObject) =>
+    o.kind === "DINOCULARS" ? Math.max(o.end_s, o.start_s + SCAN_SHOW_S) : o.end_s;
+  const liveObjects = objects.filter((o) => o.start_s <= t && t <= shownUntil(o));
   const ownerName = (o: ReplayObject) => o.owner_name ?? (o.owner != null ? nameOf(o.owner) : "Someone");
+  const enemies = (o: ReplayObject) => {
+    const n = enemiesInScan(o, replay.players, step);
+    return `${n} ${n === 1 ? "enemy" : "enemies"}`;
+  };
+  const objectFeed = (o: ReplayObject): Pick<FeedItem, "kind" | "text"> =>
+    o.kind === "BOLT_MAKER"
+      ? { kind: "BOLT", text: `${ownerName(o)} called a Bolt Maker` }
+      : o.kind === "DINOCULARS"
+        ? { kind: "SCAN", text: `${ownerName(o)} scanned with Dinoculars: ${enemies(o)}` }
+        : { kind: "UAV", text: `${ownerName(o)} launched a UAV` };
   const feed: FeedItem[] = [
     ...replay.events
       .filter((e) => e.t <= t && involves(e))
@@ -173,11 +188,7 @@ export default function ReplayViewer({ matchId }: { matchId: number }) {
       })),
     ...objects
       .filter((o) => o.start_s <= t && o.kind !== "GENERAL_UAV" && o.team != null && chosen.has(o.team))
-      .map((o) => ({
-        t: o.start_s,
-        kind: o.kind === "BOLT_MAKER" ? ("BOLT" as const) : ("UAV" as const),
-        text: `${ownerName(o)} ${o.kind === "BOLT_MAKER" ? "called a Bolt Maker" : "launched a UAV"}`,
-      })),
+      .map((o) => ({ t: o.start_s, ...objectFeed(o) })),
   ]
     .sort((a, b) => a.t - b.t)
     .slice(-8)
@@ -202,7 +213,7 @@ export default function ReplayViewer({ matchId }: { matchId: number }) {
             {labels ? "Hide names" : "Show names"}
           </button>
           <button className="btn px-2 py-1 text-xs" onClick={() => setGadgets((v) => !v)}>
-            {gadgets ? "Hide UAVs" : "Show UAVs"}
+            {gadgets ? "Hide gadgets" : "Show gadgets"}
           </button>
         </div>
         {replay.teams.map((team) => (
@@ -261,6 +272,33 @@ export default function ReplayViewer({ matchId }: { matchId: number }) {
                         );
                       })}
                       <Text text={"\u26A1"} x={c.px - px(7)} y={c.py - px(8)} fontSize={px(14)} />
+                    </Group>
+                  );
+                })}
+              {liveObjects
+                .filter((o) => o.kind === "DINOCULARS")
+                .map((o, i) => {
+                  const c = toPixel(view.t, o.x, o.z);
+                  const color = o.team ? colors[o.team] : SCAN;
+                  const r = Math.max(px(8), (o.radius ?? 50) * unit);
+                  const fade = t <= o.end_s ? 1 : 1 - (t - o.end_s) / (shownUntil(o) - o.end_s);
+                  return (
+                    <Group key={`scan${i}-${o.start_s}`} opacity={0.35 + 0.65 * fade} listening={false}>
+                      <Circle x={c.px} y={c.py} radius={r} fill={SCAN} opacity={0.15} />
+                      <Circle x={c.px} y={c.py} radius={r} stroke={color} strokeWidth={px(2)} dash={[px(2), px(3)]} />
+                      <Circle x={c.px} y={c.py} radius={px(3)} fill={SCAN} />
+                      {labels && (
+                        <Text
+                          text={`Dinoculars · ${ownerName(o)} · ${enemies(o)}`}
+                          x={c.px + px(6)}
+                          y={c.py - r - px(14)}
+                          fontSize={px(11)}
+                          fill={SCAN}
+                          shadowColor="#000"
+                          shadowBlur={px(3)}
+                          shadowOpacity={1}
+                        />
+                      )}
                     </Group>
                   );
                 })}
@@ -324,7 +362,7 @@ export default function ReplayViewer({ matchId }: { matchId: number }) {
                 );
               })}
               {liveObjects
-                .filter((o) => o.kind !== "BOLT_MAKER")
+                .filter((o) => o.kind === "PLAYER_UAV" || o.kind === "GENERAL_UAV")
                 .map((o, i) => {
                   const w = uavAt(o, t);
                   if (!w) return null;
@@ -440,6 +478,7 @@ const FEED_STYLE: Record<FeedItem["kind"], { label: string; className: string }>
   KNOCK: { label: "knocked", className: "text-yellow-400" },
   UAV: { label: "UAV", className: "text-sky-300" },
   BOLT: { label: "bolt", className: "text-yellow-300" },
+  SCAN: { label: "scan", className: "text-emerald-300" },
 };
 
 function ZoneRing({
