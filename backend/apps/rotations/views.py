@@ -15,7 +15,7 @@ from apps.results.models import MatchEvent, PlayerMatchResult, TeamMatchResult, 
 from common.permissions import HasFeature, IsStaff
 
 from .auto import draft_rotations
-from .models import PlayerTrack, RotationPoint, TeamRotation
+from .models import PlayerTrack, ReplayObject, RotationPoint, TeamRotation
 from .serializers import RotationSaveSerializer, TeamRotationSerializer, ZonePhaseSerializer
 
 
@@ -120,6 +120,7 @@ class MatchReplayView(APIView):
             PlayerTrack.objects.filter(match=match).values_list("team__slug", flat=True)
         )
         zones = ZonePhase.objects.filter(match=match).order_by("stage_index", "game_time_s")
+        objects = ReplayObject.objects.filter(match=match).select_related("team", "player")
         return Response(
             {
                 "match": match.pk,
@@ -139,6 +140,23 @@ class MatchReplayView(APIView):
                 ],
                 "players": players,
                 "zones": ZonePhaseSerializer(zones, many=True).data,
+                # UAVs and Bolt Makers of every team: enemies' scans matter too.
+                "objects": [
+                    {
+                        "kind": o.kind,
+                        "owner": o.owner_entity,
+                        "owner_name": names.get(o.owner_entity)
+                        or (o.player.display_name if o.player else None),
+                        "team": o.team.slug if o.team else None,
+                        "start_s": o.start_s,
+                        "end_s": o.end_s,
+                        "x": o.x,
+                        "z": o.z,
+                        "radius": o.radius_m,
+                        "points": o.points,
+                    }
+                    for o in objects
+                ],
                 "events": [
                     {
                         "kind": e.kind,

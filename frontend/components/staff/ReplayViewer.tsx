@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
-import { Circle, Group, Line, Text } from "react-konva";
+import { Circle, Group, Line, Rect, Text } from "react-konva";
 
 import MapCanvas from "@/components/map/MapCanvas";
 import { api, type GameMap } from "@/lib/api";
@@ -11,17 +11,26 @@ import { fitBounds, toPixel } from "@/lib/coordinates";
 import {
   clock,
   positionAt,
+  strikesAt,
   timeRange,
   trailAt,
+  uavAt,
+  uavTrail,
   zoneAt,
   type Replay,
   type ReplayEvent,
+  type ReplayObject,
 } from "@/lib/replay";
 
 const CANVAS = 1024;
 const SPEEDS = [1, 2, 4, 8, 16];
 const TRAIL_S = 20;
 const MARK_S = 8; // how long a kill or knock stays on the map
+const UAV_TRAIL_S = 6;
+const NEUTRAL = "#e5e7eb";
+const BOLT = "#fde047";
+
+type FeedItem = { t: number; kind: "KILL" | "KNOCK" | "UAV" | "BOLT"; text: string; headshot?: boolean };
 
 type Loaded = { replay: Replay; map: GameMap | null };
 
@@ -34,6 +43,7 @@ export default function ReplayViewer({ matchId }: { matchId: number }) {
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState(4);
   const [labels, setLabels] = useState(true);
+  const [gadgets, setGadgets] = useState(true);
 
   useEffect(() => {
     (async () => {
@@ -148,8 +158,30 @@ export default function ReplayViewer({ matchId }: { matchId: number }) {
   const involves = (e: ReplayEvent) =>
     [e.actor, e.target].some((id) => id != null && chosen.has(byEntity[id]?.team));
   const recent = replay.events.filter((e) => e.t <= t && e.t > t - MARK_S && involves(e));
-  const feed = replay.events.filter((e) => e.t <= t && involves(e)).slice(-8).reverse();
   const nameOf = (id: number | null) => (id != null && byEntity[id]?.name) || "Enemy";
+  const objects = gadgets ? (replay.objects ?? []) : [];
+  const liveObjects = objects.filter((o) => o.start_s <= t && t <= o.end_s);
+  const ownerName = (o: ReplayObject) => o.owner_name ?? (o.owner != null ? nameOf(o.owner) : "Someone");
+  const feed: FeedItem[] = [
+    ...replay.events
+      .filter((e) => e.t <= t && involves(e))
+      .map((e) => ({
+        t: e.t,
+        kind: e.kind,
+        text: `${nameOf(e.actor)} \u2192 ${nameOf(e.target)}`,
+        headshot: !!e.headshot,
+      })),
+    ...objects
+      .filter((o) => o.start_s <= t && o.kind !== "GENERAL_UAV" && o.team != null && chosen.has(o.team))
+      .map((o) => ({
+        t: o.start_s,
+        kind: o.kind === "BOLT_MAKER" ? ("BOLT" as const) : ("UAV" as const),
+        text: `${ownerName(o)} ${o.kind === "BOLT_MAKER" ? "called a Bolt Maker" : "launched a UAV"}`,
+      })),
+  ]
+    .sort((a, b) => a.t - b.t)
+    .slice(-8)
+    .reverse();
   const alive = players.filter((p) => positionAt(p, step, t)).length;
 
   return (
@@ -168,6 +200,9 @@ export default function ReplayViewer({ matchId }: { matchId: number }) {
           </button>
           <button className="btn px-2 py-1 text-xs" onClick={() => setLabels((v) => !v)}>
             {labels ? "Hide names" : "Show names"}
+          </button>
+          <button className="btn px-2 py-1 text-xs" onClick={() => setGadgets((v) => !v)}>
+            {gadgets ? "Hide UAVs" : "Show UAVs"}
           </button>
         </div>
         {replay.teams.map((team) => (
@@ -196,6 +231,39 @@ export default function ReplayViewer({ matchId }: { matchId: number }) {
                 <ZoneRing t={view.t} unit={unit} c={zone.next} stroke="#ffffffaa" width={px(1.5)} dash={[px(6), px(4)]} />
               )}
               {zone.current && <ZoneRing t={view.t} unit={unit} c={zone.current} stroke="#60a5fa" width={px(2.5)} />}
+              {liveObjects
+                .filter((o) => o.kind === "BOLT_MAKER")
+                .map((o, i) => {
+                  const c = toPixel(view.t, o.x, o.z);
+                  const color = o.team ? colors[o.team] : BOLT;
+                  const r = Math.max(px(10), (o.radius ?? 20) * unit);
+                  return (
+                    <Group key={`bolt${i}-${o.start_s}`} listening={false}>
+                      <Circle
+                        x={c.px}
+                        y={c.py}
+                        radius={r}
+                        fill={BOLT}
+                        opacity={0.3}
+                      />
+                      <Circle
+                        x={c.px}
+                        y={c.py}
+                        radius={r}
+                        stroke={color}
+                        strokeWidth={px(2.5)}
+                        dash={[px(4), px(3)]}
+                      />
+                      {strikesAt(o, t).map((s, j) => {
+                        const q = toPixel(view.t, s.x, s.z);
+                        return (
+                          <Circle key={j} x={q.px} y={q.py} radius={Math.max(px(4), 4.4 * unit)} fill={BOLT} opacity={1 - s.age} />
+                        );
+                      })}
+                      <Text text={"\u26A1"} x={c.px - px(7)} y={c.py - px(8)} fontSize={px(14)} />
+                    </Group>
+                  );
+                })}
               {players.map((p) =>
                 trailAt(p, step, t, TRAIL_S).map((piece, i) => (
                   <Line
@@ -255,6 +323,51 @@ export default function ReplayViewer({ matchId }: { matchId: number }) {
                   </Group>
                 );
               })}
+              {liveObjects
+                .filter((o) => o.kind !== "BOLT_MAKER")
+                .map((o, i) => {
+                  const w = uavAt(o, t);
+                  if (!w) return null;
+                  const q = toPixel(view.t, w.x, w.z);
+                  const general = o.kind === "GENERAL_UAV";
+                  const color = general ? NEUTRAL : o.team ? colors[o.team] : NEUTRAL;
+                  const size = px(general ? 9 : 7);
+                  const trail = uavTrail(o, t, UAV_TRAIL_S).flatMap((p) => {
+                    const r = toPixel(view.t, p.x, p.z);
+                    return [r.px, r.py];
+                  });
+                  return (
+                    <Group key={`uav${i}-${o.start_s}`} listening={false}>
+                      {trail.length >= 4 && (
+                        <Line points={trail} stroke={color} strokeWidth={px(1.5)} dash={[px(3), px(3)]} opacity={0.8} />
+                      )}
+                      <Rect
+                        x={q.px}
+                        y={q.py}
+                        width={size}
+                        height={size}
+                        offsetX={size / 2}
+                        offsetY={size / 2}
+                        rotation={45}
+                        fill={color}
+                        stroke="#000"
+                        strokeWidth={px(1.5)}
+                      />
+                      {labels && (
+                        <Text
+                          text={general ? "UAV" : `UAV \u00B7 ${ownerName(o)}`}
+                          x={q.px + px(9)}
+                          y={q.py + px(4)}
+                          fontSize={px(11)}
+                          fill={color}
+                          shadowColor="#000"
+                          shadowBlur={px(3)}
+                          shadowOpacity={1}
+                        />
+                      )}
+                    </Group>
+                  );
+                })}
             </>
           )}
         </MapCanvas>
@@ -297,11 +410,9 @@ export default function ReplayViewer({ matchId }: { matchId: number }) {
             {feed.map((e, i) => (
               <li key={`f${i}-${e.t}`} className="flex gap-2 py-0.5">
                 <span className="w-10 text-muted tabular-nums">{clock(e.t)}</span>
-                <span className={e.kind === "KILL" ? "text-bad" : "text-yellow-400"}>
-                  {e.kind === "KILL" ? "killed" : "knocked"}
-                </span>
+                <span className={FEED_STYLE[e.kind].className}>{FEED_STYLE[e.kind].label}</span>
                 <span className="truncate">
-                  {nameOf(e.actor)} &rarr; {nameOf(e.target)}
+                  {e.text}
                   {e.headshot ? " (headshot)" : ""}
                 </span>
               </li>
@@ -312,6 +423,13 @@ export default function ReplayViewer({ matchId }: { matchId: number }) {
     </div>
   );
 }
+
+const FEED_STYLE: Record<FeedItem["kind"], { label: string; className: string }> = {
+  KILL: { label: "killed", className: "text-bad" },
+  KNOCK: { label: "knocked", className: "text-yellow-400" },
+  UAV: { label: "UAV", className: "text-sky-300" },
+  BOLT: { label: "bolt", className: "text-yellow-300" },
+};
 
 function ZoneRing({
   t,

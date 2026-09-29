@@ -32,6 +32,21 @@ export type ReplayTeam = {
   has_tracks: boolean;
 };
 
+export type ReplayObject = {
+  kind: "PLAYER_UAV" | "GENERAL_UAV" | "BOLT_MAKER";
+  owner: number | null;
+  owner_name: string | null;
+  team: string | null;
+  start_s: number;
+  end_s: number;
+  x: number;
+  z: number;
+  /** Bolt Maker zone radius in metres. */
+  radius: number | null;
+  /** [t, x_dm, z_dm]: a UAV's path, or a Bolt Maker's strikes. */
+  points: [number, number, number][];
+};
+
 export type Replay = {
   match: number;
   map: { slug: string; name: string } | null;
@@ -41,6 +56,7 @@ export type Replay = {
   players: ReplayPlayer[];
   zones: Zone[];
   events: ReplayEvent[];
+  objects?: ReplayObject[];
 };
 
 export type World = { x: number; z: number };
@@ -131,4 +147,32 @@ function circle(z: Zone, which: "inner" | "outer") {
 export function clock(t: number): string {
   const s = Math.max(0, Math.floor(t));
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+}
+
+/** A UAV's position at t, or null when it isn't flying. Holds still across gaps (hovering). */
+export function uavAt(o: ReplayObject, t: number): World | null {
+  if (t < o.start_s || t > o.end_s || !o.points.length) return null;
+  const pts = o.points;
+  let i = 0;
+  while (i + 1 < pts.length && pts[i + 1][0] <= t) i++;
+  const a = pts[i];
+  const b = pts[i + 1];
+  if (!b || b[0] - a[0] > 2) return { x: a[1] / 10, z: a[2] / 10 };
+  const k = (t - a[0]) / (b[0] - a[0]);
+  return { x: (a[1] + (b[1] - a[1]) * k) / 10, z: (a[2] + (b[2] - a[2]) * k) / 10 };
+}
+
+/** A UAV's path over the last ``seconds`` before t. */
+export function uavTrail(o: ReplayObject, t: number, seconds: number): World[] {
+  const out = o.points.filter((p) => p[0] <= t && p[0] >= t - seconds).map((p) => ({ x: p[1] / 10, z: p[2] / 10 }));
+  const now = uavAt(o, t);
+  if (now) out.push(now);
+  return out;
+}
+
+/** Bolt Maker strikes that landed in the last ``seconds`` before t. */
+export function strikesAt(o: ReplayObject, t: number, seconds = 1.2): { x: number; z: number; age: number }[] {
+  return o.points
+    .filter((p) => p[0] <= t && p[0] > t - seconds)
+    .map((p) => ({ x: p[1] / 10, z: p[2] / 10, age: (t - p[0]) / seconds }));
 }

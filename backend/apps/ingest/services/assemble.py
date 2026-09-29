@@ -25,8 +25,8 @@ from apps.maps.models import Map
 from apps.results.models import MatchEvent, PlayerMatchResult, TeamMatchResult, ZonePhase
 from apps.results.standings import schedule_rebuild
 from apps.rotations.auto import draft_rotations
-from apps.rotations.models import PlayerTrack
-from apps.rotations.tracks import build_tracks
+from apps.rotations.models import PlayerTrack, ReplayObject
+from apps.rotations.tracks import build_objects, build_tracks
 
 from ..models import DebuggerBlock, ParseRun, UploadBatch, UploadedFile
 from ..parsers import debugger, match_result, replay_info
@@ -314,19 +314,16 @@ def _build(match: Match, assignment: Assignment, run: ParseRun) -> tuple[dict[st
     zones = _zones(match, block, timeline)
     ZonePhase.objects.bulk_create(zones)
     draft_rotations(match)
-    tracks = 0
+    tracks = objects = 0
     if sources.replay_bin is not None:
-        tracks = build_tracks(
-            match,
-            storage.read_bytes(sources.replay_bin.storage_key),
-            entity_uid,
-            players,
-            uid_team,
-        )
+        replay_data = storage.read_bytes(sources.replay_bin.storage_key)
+        tracks = build_tracks(match, replay_data, entity_uid, players, uid_team)
+        objects = build_objects(match, replay_data, entity_uid, players, uid_team)
         if not tracks:
             warnings.append("Replay .bin had no player positions; the live replay is empty.")
     else:
         PlayerTrack.objects.filter(match=match).delete()
+        ReplayObject.objects.filter(match=match).delete()
 
     # -- consistency checks ----------------------------------------------------------------------
     result_kills = sum(p.kills for p in mr.players)
@@ -345,6 +342,7 @@ def _build(match: Match, assignment: Assignment, run: ParseRun) -> tuple[dict[st
         "zones": len(zones),
         "kills": result_kills,
         "tracks": tracks,
+        "replay_objects": objects,
     }
     return counts, warnings
 
