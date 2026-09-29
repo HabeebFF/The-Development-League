@@ -17,7 +17,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
 
-from django.db import transaction
+from django.db import connection, transaction
 from django.utils import timezone
 
 from apps.league.models import Match, MatchDay, Player, Team, TeamAlias
@@ -116,6 +116,7 @@ def assemble(assignment: Assignment, *, batch: UploadBatch | None = None, user=N
     old_season_id = match.match_day.stage.season_id
     try:
         with transaction.atomic():
+            _lock_assembly()
             counts, warnings = _build(match, assignment, run)
     except Exception as exc:
         run.status = ParseRun.Status.FAILED
@@ -134,6 +135,22 @@ def assemble(assignment: Assignment, *, batch: UploadBatch | None = None, user=N
     # The match may have moved to another match day (and season): rebuild both tables.
     schedule_rebuild(old_season_id, match.match_day.stage.season_id)
     return run
+
+
+# Any fixed number, shared by every assembly; the value only has to be unique in this app.
+ASSEMBLY_LOCK_ID = 0x7D1_A55E
+
+
+def _lock_assembly() -> None:
+    """Build one match at a time.
+
+    Matches of a league share players and teams, so two builds running together update the
+    same rows in different orders and Postgres kills one of them as a deadlock. The lock is
+    released when the build's transaction ends.
+    """
+    if connection.vendor == "postgresql":
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT pg_advisory_xact_lock(%s)", [ASSEMBLY_LOCK_ID])
 
 
 def _check_number_free(match_day: MatchDay, number: int, match_pk: int | None) -> None:
