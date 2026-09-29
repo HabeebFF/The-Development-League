@@ -32,11 +32,11 @@ Bolt Makers at 5:57 and 9:15) and the debugger log's lightning sounds:
   player's UAV (it starts above its owner and flies straight for about 20 s); kind 0
   is the general UAV (no owner, one per match, hovers and moves for several minutes,
   silent while hovering).
-- Type 157 is a Bolt Maker lightning zone: centre x, z (zigzag mm), a size in mm
-  (20000; not the zone's reach, strikes land up to ~78 m from the centre), 0,
-  duration s (60), then per strike (x, z zigzag mm, strike radius mm, time ms; 30
-  strikes, one every 2 s), then team slot, 3 and the caster's entity id (its top byte
-  is that team slot).
+- Type 157 is a Bolt Maker lightning zone: centre x, z (zigzag mm), 20000 (not the
+  zone's reach: strikes land up to ~80 m from the centre), 0, damage per strike (60),
+  then per strike (x, z zigzag mm, strike radius mm, tick at 2000 a second), then team
+  slot, 3 and the caster's entity id (its top byte is that team slot). That matches
+  the OB51 patch notes: a 30 s zone, a random strike inside it every second, 60 damage.
 
 Standard library only. Never raises on bad or truncated data: it resyncs on the next
 valid message and skips what it cannot decode.
@@ -63,6 +63,7 @@ MSG_THUNDER_AREA = 157  # a Bolt Maker lightning zone
 KIND_PLAYER_UAV = 1006
 KIND_GENERAL_UAV = 0
 _DRONE_KINDS = {KIND_PLAYER_UAV: "PLAYER_UAV", KIND_GENERAL_UAV: "GENERAL_UAV"}
+BOLT_DURATION_S = 30.0  # OB51 patch notes: "a Lightning Zone that lasts for 30s"
 _DRONE_GAP = 150.0  # the general UAV goes quiet for ~60 s while it hovers
 
 _HDR = struct.Struct("<fBHH")  # time, flag, msg type, payload length
@@ -287,8 +288,8 @@ def parse_objects(data):
 
     - drone: kind ("PLAYER_UAV" or "GENERAL_UAV"), owner (entity id or None), range
       (scan radius, m), samples [(t, x, y, z)] in seconds / metres.
-    - bolt: owner (caster entity id or None), t, duration (s), x, z, radius (the logged
-      size in m) and strikes [(t, x, z, radius)], one every 2 s.
+    - bolt: owner (caster entity id or None), t, duration (s), x, z, damage (per strike)
+      and strikes [(t, x, z, radius)], one a second.
     """
     drones = []
     bolts = []
@@ -345,7 +346,7 @@ def _parse_bolt(pl, t):
     first_tick = body[3]
     strikes = [
         (
-            t + (body[i + 3] - first_tick) / 1000.0,
+            t + (body[i + 3] - first_tick) / 2000.0,
             _zz(body[i]) / 1000.0,
             _zz(body[i + 1]) / 1000.0,
             body[i + 2] / 1000.0,
@@ -355,9 +356,9 @@ def _parse_bolt(pl, t):
     return {
         "owner": v[-1] or None,
         "t": t,
-        "duration": float(v[4]),
+        "duration": BOLT_DURATION_S,
+        "damage": v[4],
         "x": _zz(v[0]) / 1000.0,
         "z": _zz(v[1]) / 1000.0,
-        "radius": v[2] / 1000.0,
         "strikes": strikes,
     }

@@ -414,7 +414,7 @@ def test_replay_bin_builds_live_tracks(upload, confirm, match_day, client, djang
     assert drone["points"][0] == [62.0, 1000, -500] and drone["points"][-1][0] == 63.8
     assert objects["GENERAL_UAV"]["team"] is None
     zone = objects["BOLT_MAKER"]
-    assert (zone["x"], zone["radius"], zone["end_s"]) == (5.0, 80.0, 130.0)
+    assert (zone["x"], zone["radius"], zone["end_s"]) == (5.0, 80.0, 100.0)
     assert len(zone["points"]) == 30
     everyone = client.get(f"/api/v1/matches/{match.pk}/replay").json()
     assert len(everyone["players"]) == 2

@@ -59,7 +59,7 @@ def test_parser_reads_uavs_and_bolt_makers():
     assert general["kind"] == "GENERAL_UAV" and general["owner"] is None
     assert general["range"] == 100.0
     (zone,) = found["bolts"]
-    assert zone["owner"] == B and (zone["x"], zone["z"], zone["radius"]) == (40.0, -30.0, 20.0)
-    assert zone["duration"] == 60.0 and len(zone["strikes"]) == 30
-    assert zone["strikes"][0][0] == 300.0 and round(zone["strikes"][-1][0], 3) == 358.0
+    assert zone["owner"] == B and (zone["x"], zone["z"]) == (40.0, -30.0)
+    assert zone["duration"] == 30.0 and zone["damage"] == 60 and len(zone["strikes"]) == 30
+    assert zone["strikes"][0][0] == 300.0 and round(zone["strikes"][-1][0], 3) == 329.0
     assert replay_bin.parse_objects(b"\x00\x01binary") == {"drones": [], "bolts": []}

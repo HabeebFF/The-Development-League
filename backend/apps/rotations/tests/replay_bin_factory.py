@@ -69,8 +69,8 @@ def uav(t: float, object_id: int, owner: int, kind: int, x: float, y: float, z: 
 
 
 def bolt(t: float, caster: int, x: float, z: float, strikes: int = 30):
-    """One type-157 Bolt Maker lightning zone, a strike every 2 s."""
+    """One type-157 Bolt Maker lightning zone, a strike a second."""
     body = []
     for i in range(strikes):
-        body += [mm(x + i % 3), mm(z - i % 2), 4400, 5000 + i * 2000]
+        body += [mm(x + i % 3), mm(z - i % 2), 4400, 5000 + i * 2000]  # 2000 ticks a second
     return (t, 157, [mm(x), mm(z), 20000, 0, 60, *body, caster >> 24, 3, caster])

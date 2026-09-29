@@ -78,8 +78,9 @@ def build_tracks(
 
 
 UAV_STEP_S = 0.5  # a UAV path keeps one point per half second
-# How far a Bolt Maker reaches: its strikes land up to ~78 m from the centre (measured on
-# every zone in the Day 11 replays), so the zone is drawn 80 m wide around it.
+# How far a Bolt Maker reaches: strikes land at random inside the zone (patch notes), and
+# in every zone of the Day 11 replays they land up to 76-81 m from the centre, so the
+# zone is drawn with an 80 m radius (160 m across).
 BOLT_ZONE_M = 80.0
 
 
