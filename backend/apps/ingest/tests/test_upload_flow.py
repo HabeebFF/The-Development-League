@@ -412,3 +412,17 @@ def test_replay_bin_builds_live_tracks(upload, confirm, match_day, client, djang
     assert not PlayerTrack.objects.filter(match=match).exists()
     run = ParseRun.objects.filter(match=match).latest("id")
     assert any("live replay" in w for w in run.warnings)
+
+
+def test_matches_are_built_one_at_a_time(upload, confirm, match_day):
+    """Concurrent builds share players; a lock stops them deadlocking each other."""
+    from django.db import connection
+    from django.test.utils import CaptureQueriesContext
+
+    batch = upload(all_files())
+    with CaptureQueriesContext(connection) as queries:
+        confirm(
+            batch["id"], [{"game_match_id": str(MATCH_ID), "match_day": match_day.pk, "number": 1}]
+        )
+    locks = [q["sql"] for q in queries.captured_queries if "pg_advisory_xact_lock" in q["sql"]]
+    assert len(locks) == 1
