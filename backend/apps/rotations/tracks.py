@@ -78,6 +78,9 @@ def build_tracks(
 
 
 UAV_STEP_S = 0.5  # a UAV path keeps one point per half second
+# How far a Bolt Maker reaches: its strikes land up to ~78 m from the centre (measured on
+# every zone in the Day 11 replays), so the zone is drawn 80 m wide around it.
+BOLT_ZONE_M = 80.0
 
 
 def build_objects(
@@ -116,6 +119,7 @@ def build_objects(
                 end_s=samples[-1][0],
                 x=samples[0][1],
                 z=samples[0][3],
+                radius_m=drone["range"],
                 points=points,
                 **owned(drone["owner"]),
             )
@@ -130,7 +134,7 @@ def build_objects(
                 end_s=max([bolt["t"] + bolt["duration"], *(s[0] for s in strikes)]),
                 x=bolt["x"],
                 z=bolt["z"],
-                radius_m=bolt["radius"],
+                radius_m=BOLT_ZONE_M,
                 points=[[round(t, 1), round(x * 10), round(z * 10)] for t, x, z, _r in strikes],
                 **owned(bolt["owner"]),
             )

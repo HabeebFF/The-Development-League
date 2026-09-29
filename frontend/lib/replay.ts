@@ -41,7 +41,7 @@ export type ReplayObject = {
   end_s: number;
   x: number;
   z: number;
-  /** Bolt Maker zone radius in metres. */
+  /** Metres a UAV scans around itself, or how far a Bolt Maker zone reaches. */
   radius: number | null;
   /** [t, x_dm, z_dm]: a UAV's path, or a Bolt Maker's strikes. */
   points: [number, number, number][];

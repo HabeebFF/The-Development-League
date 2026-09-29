@@ -244,7 +244,7 @@ export default function ReplayViewer({ matchId }: { matchId: number }) {
                         y={c.py}
                         radius={r}
                         fill={BOLT}
-                        opacity={0.3}
+                        opacity={0.15}
                       />
                       <Circle
                         x={c.px}
@@ -336,8 +336,19 @@ export default function ReplayViewer({ matchId }: { matchId: number }) {
                     const r = toPixel(view.t, p.x, p.z);
                     return [r.px, r.py];
                   });
+                  const range = (o.radius ?? (general ? 100 : 65)) * unit;
                   return (
                     <Group key={`uav${i}-${o.start_s}`} listening={false}>
+                      <Circle x={q.px} y={q.py} radius={range} fill={color} opacity={0.1} />
+                      <Circle
+                        x={q.px}
+                        y={q.py}
+                        radius={range}
+                        stroke={color}
+                        strokeWidth={px(general ? 2.5 : 1.5)}
+                        dash={[px(6), px(4)]}
+                        opacity={0.9}
+                      />
                       {trail.length >= 4 && (
                         <Line points={trail} stroke={color} strokeWidth={px(1.5)} dash={[px(3), px(3)]} opacity={0.8} />
                       )}

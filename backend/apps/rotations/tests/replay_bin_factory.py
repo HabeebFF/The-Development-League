@@ -59,8 +59,13 @@ def mm(v: float) -> int:
 
 def uav(t: float, object_id: int, owner: int, kind: int, x: float, y: float, z: float):
     """One type-2005 flying-object sample."""
-    radius = 200 if kind == 1006 else 500
-    return (t, 2005, [object_id, 0, mm(x), mm(y), mm(z), 1, owner, kind, 0, 0, radius, radius, 7])
+    health = 200 if kind == 1006 else 500
+    scan = struct.unpack("<I", struct.pack("<f", 65.0 if kind == 1006 else 100.0))[0]
+    return (
+        t,
+        2005,
+        [object_id, 0, mm(x), mm(y), mm(z), 1, owner, kind, 0, scan, health, health, 7],
+    )
 
 
 def bolt(t: float, caster: int, x: float, z: float, strikes: int = 30):

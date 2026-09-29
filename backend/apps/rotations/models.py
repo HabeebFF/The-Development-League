@@ -134,7 +134,11 @@ class ReplayObject(models.Model):
     end_s = models.FloatField()
     x = models.FloatField()
     z = models.FloatField()
-    radius_m = models.FloatField(null=True, blank=True, help_text="Bolt Maker zone radius")
+    radius_m = models.FloatField(
+        null=True,
+        blank=True,
+        help_text="Metres a UAV scans around itself, or a Bolt Maker zone's radius",
+    )
     points = models.JSONField(default=list)
 
     class Meta:

@@ -27,10 +27,13 @@ Bolt Makers at 5:57 and 9:15) and the debugger log's lightning sounds:
 
 - Type 2005 is one sample of a flying object, about every 0.2 s while it moves:
   object id, state, x, y, z (zigzag mm), frame, owner entity id (0 = none), kind,
-  0, a float, radius, radius, spawn serial. Kind 1006 is a player's UAV (it starts
-  above its owner and flies straight for about 20 s); kind 0 is the general UAV (no
-  owner, one per match, hovers and moves for several minutes, silent while hovering).
-- Type 157 is a Bolt Maker lightning zone: centre x, z (zigzag mm), radius mm, 0,
+  0, scan range in metres (a float: 65 for a player UAV, 100 for the general one),
+  max health, health (it drops when the UAV is shot), spawn serial. Kind 1006 is a
+  player's UAV (it starts above its owner and flies straight for about 20 s); kind 0
+  is the general UAV (no owner, one per match, hovers and moves for several minutes,
+  silent while hovering).
+- Type 157 is a Bolt Maker lightning zone: centre x, z (zigzag mm), a size in mm
+  (20000; not the zone's reach, strikes land up to ~78 m from the centre), 0,
   duration s (60), then per strike (x, z zigzag mm, strike radius mm, time ms; 30
   strikes, one every 2 s), then team slot, 3 and the caster's entity id (its top byte
   is that team slot).
@@ -282,10 +285,10 @@ def parse_objects(data):
 
     Returns ``{"drones": [...], "bolts": [...]}``:
 
-    - drone: kind ("PLAYER_UAV" or "GENERAL_UAV"), owner (entity id or None), radius
-      (as logged; unit unknown), samples [(t, x, y, z)] in seconds / metres.
-    - bolt: owner (caster entity id or None), t, duration (s), x, z, radius (m) and
-      strikes [(t, x, z, radius)], one every 2 s.
+    - drone: kind ("PLAYER_UAV" or "GENERAL_UAV"), owner (entity id or None), range
+      (scan radius, m), samples [(t, x, y, z)] in seconds / metres.
+    - bolt: owner (caster entity id or None), t, duration (s), x, z, radius (the logged
+      size in m) and strikes [(t, x, z, radius)], one every 2 s.
     """
     drones = []
     bolts = []
@@ -314,10 +317,24 @@ def _parse_drone(pl, t, open_drones, drones):
         or track["kind"] != _DRONE_KINDS[v[7]]
         or t - track["samples"][-1][0] > _DRONE_GAP
     ):
-        track = {"kind": _DRONE_KINDS[v[7]], "owner": v[6] or None, "radius": v[10], "samples": []}
+        track = {
+            "kind": _DRONE_KINDS[v[7]],
+            "owner": v[6] or None,
+            "range": _float_bits(v[9]),
+            "samples": [],
+        }
         open_drones[key] = track
         drones.append(track)
     track["samples"].append((t, _zz(v[2]) / 1000.0, _zz(v[3]) / 1000.0, _zz(v[4]) / 1000.0))
+
+
+def _float_bits(v):
+    """A float stored as the varint of its IEEE-754 bits; None if it isn't a sane one."""
+    try:
+        f = struct.unpack("<f", struct.pack("<I", v & 0xFFFFFFFF))[0]
+    except struct.error:
+        return None
+    return round(f, 2) if 0 < f < 10000 else None
 
 
 def _parse_bolt(pl, t):
