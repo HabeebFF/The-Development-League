@@ -95,6 +95,7 @@ class PasswordResetConfirmSerializer(serializers.Serializer):
 class InviteSerializer(serializers.ModelSerializer):
     invited_by = serializers.StringRelatedField()
     is_open = serializers.BooleanField(read_only=True)
+    link = serializers.SerializerMethodField()
 
     class Meta:
         model = Invite
@@ -102,6 +103,7 @@ class InviteSerializer(serializers.ModelSerializer):
             "id",
             "email",
             "role",
+            "link",
             "invited_by",
             "expires_at",
             "accepted_at",
@@ -110,6 +112,10 @@ class InviteSerializer(serializers.ModelSerializer):
             "created_at",
         ]
         read_only_fields = ["expires_at", "accepted_at", "revoked_at", "created_at"]
+
+    def get_link(self, invite: Invite) -> str | None:
+        """The accept link, so a manager can also send it by hand (e.g. on WhatsApp)."""
+        return f"{settings.FRONTEND_URL}/invite/{invite.token}" if invite.is_open else None
 
     def validate_email(self, value: str) -> str:
         value = value.strip().lower()

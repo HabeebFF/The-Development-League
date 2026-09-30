@@ -6,7 +6,8 @@ export const metadata: Metadata = { title: "Sign in" };
 
 export default async function LoginPage({ searchParams }: PageProps<"/auth/login">) {
   const { next } = await searchParams;
-  const target = typeof next === "string" && next.startsWith("/") ? next : "/staff";
+  // Only same-site paths: "//evil.test" would leave the site.
+  const target = typeof next === "string" && /^\/(?!\/)/.test(next) ? next : null;
   return (
     <section className="mx-auto max-w-sm px-4 py-16">
       <h1 className="font-display text-3xl uppercase">Sign in</h1>
