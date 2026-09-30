@@ -7,7 +7,8 @@ Monorepo layout (grows step by step):
 
 - `backend/` Django + DRF + Celery (Python 3.11+)
 - `frontend/` Next.js + Tailwind website (see `frontend/README.md`)
-- `infra/` Docker Compose for local development
+- `infra/` Docker Compose for local development, and production with HTTPS
+  (`docker-compose.prod.yml`; see `infra/oracle/README.md` for the free Oracle Cloud server)
 
 ## Backend: running locally
 

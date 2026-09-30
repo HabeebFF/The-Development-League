@@ -1,0 +1,28 @@
+# Caddy gets and renews the HTTPS certificate for SITE_DOMAIN by itself.
+{$SITE_DOMAIN} {
+	encode zstd gzip
+
+	# The API, Django admin and its static files go straight to Django.
+	@django path /api/* /admin /admin/*
+	handle @django {
+		reverse_proxy web:8000
+	}
+	handle /static/* {
+		root * /srv
+		file_server
+	}
+
+	# Only map images and team logos are public; uploaded match logs stay private.
+	@public_media path /media/maps/* /media/teams/*
+	handle @public_media {
+		root * /srv
+		file_server
+	}
+	handle /media/* {
+		respond 404
+	}
+
+	handle {
+		reverse_proxy frontend:3000
+	}
+}
