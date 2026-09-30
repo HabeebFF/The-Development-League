@@ -3,9 +3,10 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
-import { api, ApiError } from "@/lib/api";
+import { api, ApiError, type Me } from "@/lib/api";
+import { homeFor } from "@/lib/home";
 
-export default function LoginForm({ next }: { next: string }) {
+export default function LoginForm({ next }: { next: string | null }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -14,11 +15,11 @@ export default function LoginForm({ next }: { next: string }) {
     setBusy(true);
     setError(null);
     try {
-      await api("/auth/login", {
+      const me = await api<Me>("/auth/login", {
         method: "POST",
         body: { email: form.get("email"), password: form.get("password") },
       });
-      router.replace(next);
+      router.replace(next ?? homeFor(me));
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "Something went wrong. Try again.");
       setBusy(false);

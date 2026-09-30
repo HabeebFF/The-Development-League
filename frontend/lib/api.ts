@@ -83,6 +83,70 @@ export type Me = {
   is_super_admin: boolean;
   staff_role: "SUPER_ADMIN" | "STAFF" | "ANALYST" | null;
   features: string[];
+  memberships: Membership[];
+};
+
+export type Role = "MANAGER" | "PLAYER";
+
+export type Membership = {
+  id: number;
+  team: { id: number; name: string; tag: string; slug: string };
+  role: Role;
+  is_active: boolean;
+  created_at: string;
+};
+
+export type Member = {
+  id: number;
+  email: string;
+  display_name: string;
+  game_uid: string | null;
+  role: Role;
+  is_active: boolean;
+  created_at: string;
+};
+
+export type Invite = {
+  id: number;
+  email: string;
+  role: Role;
+  link: string | null;
+  invited_by: string | null;
+  expires_at: string;
+  accepted_at: string | null;
+  revoked_at: string | null;
+  is_open: boolean;
+  created_at: string;
+};
+
+export type InviteInfo = {
+  team: { id: number; name: string; tag: string; slug: string };
+  email: string;
+  role: Role;
+  expires_at: string;
+  is_open: boolean;
+  account_exists: boolean;
+};
+
+export type MatchSummary = {
+  id: number;
+  number: number;
+  map: string | null;
+  scheduled_at: string | null;
+  started_at: string | null;
+  played: boolean;
+  booyah: { name: string } | null;
+  vod_url: string | null;
+};
+
+export type MatchDay = {
+  id: number;
+  number: number;
+  title: string;
+  date: string | null;
+  stage: string;
+  group: string | null;
+  matches: MatchSummary[];
 };
 
 export type TeamRef = {

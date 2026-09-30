@@ -38,7 +38,17 @@ type FeedItem = { t: number; kind: "KILL" | "KNOCK" | "UAV" | "BOLT" | "SCAN"; t
 type Loaded = { replay: Replay; map: GameMap | null };
 
 /** Every player's movement over the match, played back on the map like a replay. */
-export default function ReplayViewer({ matchId }: { matchId: number }) {
+export default function ReplayViewer({
+  matchId,
+  backHref = "/staff/matches",
+  focusTeams = [],
+}: {
+  matchId: number;
+  /** Where the "Matches" link goes (the staff list, or the team area). */
+  backHref?: string;
+  /** Teams to watch first, e.g. the signed-in player's own team. */
+  focusTeams?: string[];
+}) {
   const [data, setData] = useState<Loaded | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [chosen, setChosen] = useState<Set<string>>(new Set());
@@ -54,13 +64,17 @@ export default function ReplayViewer({ matchId }: { matchId: number }) {
         const replay = await api<Replay>(`/matches/${matchId}/replay`);
         const map = replay.map ? await api<GameMap>(`/maps/${replay.map.slug}`) : null;
         setData({ replay, map });
-        const first = replay.teams.find((team) => team.has_tracks);
+        const first =
+          replay.teams.find((team) => team.has_tracks && focusTeams.includes(team.slug)) ??
+          replay.teams.find((team) => team.has_tracks);
         if (first) setChosen(new Set([first.slug]));
         if (replay.step_s) setT(timeRange(replay.players, replay.step_s)[0]);
       } catch (e) {
         setError(e instanceof Error ? e.message : "Couldn't load this match.");
       }
     })();
+    // focusTeams only picks the first team shown; it shouldn't reload the replay.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [matchId]);
 
   const replay = data?.replay;
@@ -150,7 +164,7 @@ export default function ReplayViewer({ matchId }: { matchId: number }) {
           This match has no player movement yet. Upload its ReplayInfo .bin file with the other logs
           (or upload the match again with it) and the live replay appears here.
         </p>
-        <Link href="/staff/matches" className="mt-4 inline-block text-accent">
+        <Link href={backHref} className="mt-4 inline-block text-accent">
           &larr; Matches
         </Link>
       </div>
@@ -199,7 +213,7 @@ export default function ReplayViewer({ matchId }: { matchId: number }) {
     <div className="flex h-[calc(100dvh-3.5rem)] flex-col lg:flex-row">
       {/* Teams */}
       <aside className="flex shrink-0 gap-1 overflow-x-auto border-b border-line p-2 lg:w-64 lg:flex-col lg:overflow-y-auto lg:border-r lg:border-b-0">
-        <Link href="/staff/matches" className="hidden px-2 pb-1 text-xs text-muted hover:text-text lg:block">
+        <Link href={backHref} className="hidden px-2 pb-1 text-xs text-muted hover:text-text lg:block">
           &larr; Matches
         </Link>
         <p className="hidden px-2 pb-1 text-xs text-muted lg:block">

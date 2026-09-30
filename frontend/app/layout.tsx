@@ -23,9 +23,14 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
             <Link href="/" className="font-display text-lg tracking-wide uppercase">
               The Development <span className="text-accent">League</span>
             </Link>
-            <Link href="/staff" className="text-sm text-muted hover:text-text">
-              Staff
-            </Link>
+            <div className="flex gap-4">
+              <Link href="/team" className="text-sm text-muted hover:text-text">
+                My team
+              </Link>
+              <Link href="/staff" className="text-sm text-muted hover:text-text">
+                Staff
+              </Link>
+            </div>
           </nav>
         </header>
         <main className="flex-1">{children}</main>

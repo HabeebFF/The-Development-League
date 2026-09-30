@@ -215,6 +215,7 @@ def test_manager_invites_player_who_signs_up(team, manager, django_capture_on_co
     assert resp.status_code == 201, resp.content
     token = Invite.objects.get().token
     assert token in mail.outbox[0].body
+    assert resp.json()["link"] == f"http://localhost:3000/invite/{token}"
 
     anon = APIClient()
     info = anon.get(f"/api/v1/invites/{token}").json()
@@ -266,6 +267,9 @@ def test_only_staff_invite_managers_and_revoke(team, manager, staff):
         as_user(manager).delete(f"/api/v1/teams/{team.slug}/invites/{invite_id}").status_code == 204
     )
     assert not Invite.objects.get(pk=invite_id).is_open
+    listed = as_user(manager).get(f"/api/v1/teams/{team.slug}/invites").json()
+    rows = listed["results"] if isinstance(listed, dict) else listed
+    assert rows[0]["link"] is None
 
 
 def test_players_and_outsiders_cannot_invite(team):

@@ -8,6 +8,7 @@ export default function StaffHome() {
   const me = useStaff();
   const cards = [
     { href: "/staff/matches", title: "Plot rotations", text: "Check each team's auto route, fix it and confirm." },
+    { href: "/staff/teams", title: "Teams and invites", text: "Invite each team's manager and see who has joined." },
     ...(me.is_super_admin
       ? [{ href: "/staff/maps", title: "Map images and calibration", text: "Upload map images and line them up with the game." }]
       : []),
