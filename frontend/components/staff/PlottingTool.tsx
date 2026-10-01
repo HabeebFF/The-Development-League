@@ -265,7 +265,7 @@ export default function PlottingTool({ matchId }: { matchId: number }) {
   const keyOf = Object.fromEntries(Object.entries(CHECKPOINT_KEYS).map(([k, c]) => [c, k.toUpperCase()]));
 
   return (
-    <div className="flex h-[calc(100dvh-3.5rem)] flex-col lg:flex-row">
+    <div className="flex h-[calc(100dvh-var(--header-h))] flex-col lg:flex-row">
       {/* Teams */}
       <aside className="flex shrink-0 gap-1 overflow-x-auto border-b border-line p-2 lg:w-60 lg:flex-col lg:overflow-y-auto lg:border-r lg:border-b-0">
         <Link href="/staff/matches" className="hidden px-2 pb-2 text-xs text-muted hover:text-text lg:block">

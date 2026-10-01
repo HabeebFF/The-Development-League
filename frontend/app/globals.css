@@ -12,6 +12,14 @@
   --accent-2: #ffb800;
   --ok: #22c55e;
   --bad: #ef4444;
+  /* The sticky header: two rows on phones (name, then links), one from sm up. */
+  --header-h: 5.75rem;
+}
+
+@media (width >= 40rem) {
+  :root {
+    --header-h: 3.5rem;
+  }
 }
 
 @theme inline {
