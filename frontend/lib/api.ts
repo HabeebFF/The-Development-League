@@ -18,7 +18,7 @@ function cookie(name: string): string | null {
   return match ? decodeURIComponent(match.slice(name.length + 1)) : null;
 }
 
-async function csrfToken(): Promise<string> {
+export async function csrfToken(): Promise<string> {
   let token = cookie("csrftoken");
   if (!token) {
     await fetch(`${BASE}/auth/csrf`, { credentials: "same-origin" });
