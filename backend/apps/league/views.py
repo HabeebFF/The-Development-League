@@ -1,6 +1,6 @@
 """League API. Public reads (seasons, standings, fixtures, results, teams); staff manage."""
 
-from django.db.models import F, Prefetch, ProtectedError, Q
+from django.db.models import Count, F, Prefetch, ProtectedError, Q
 from django.shortcuts import get_object_or_404
 from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action
@@ -12,6 +12,7 @@ from apps.results.models import StandingRow
 from apps.results.standings import schedule_rebuild
 from common.permissions import IsStaff, IsSuperAdmin
 
+from .merge import MergeError, merge_teams
 from .models import (
     Group,
     Match,
@@ -85,7 +86,9 @@ class TeamAdminViewSet(viewsets.ModelViewSet):
     lookup_field = "slug"
 
     def get_queryset(self):
-        qs = Team.objects.prefetch_related("aliases")
+        qs = Team.objects.prefetch_related("aliases").annotate(
+            matches_played=Count("match_results", distinct=True)
+        )
         search = self.request.query_params.get("search", "").strip()
         if search:
             qs = qs.filter(
@@ -94,6 +97,17 @@ class TeamAdminViewSet(viewsets.ModelViewSet):
                 | Q(aliases__in_game_name__icontains=search)
             ).distinct()
         return qs
+
+    @action(detail=True, methods=["post"])
+    def merge(self, request, slug=None):
+        """Merge this team into ``{"into": slug}``: its results, names and people move over."""
+        source = self.get_object()
+        target = get_object_or_404(Team, slug=request.data.get("into") or "")
+        try:
+            result = merge_teams(source, target)
+        except MergeError as exc:
+            raise ValidationError({"detail": str(exc)}) from exc
+        return Response(result)
 
 
 class TeamAliasViewSet(viewsets.ModelViewSet):
