@@ -6,6 +6,11 @@ const API_URL = process.env.API_URL ?? "http://localhost:8000";
 
 const nextConfig: NextConfig = {
   output: "standalone",
+  experimental: {
+    // Match logs go through the /api rewrite when Caddy isn't in front (local Docker):
+    // debugger logs are 50 MB+ and the default limit is 10 MB.
+    proxyClientMaxBodySize: "320mb",
+  },
   async rewrites() {
     return [
       { source: "/api/:path*", destination: `${API_URL}/api/:path*` },

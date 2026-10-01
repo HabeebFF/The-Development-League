@@ -7,6 +7,7 @@ import { useStaff } from "./StaffGate";
 export default function StaffHome() {
   const me = useStaff();
   const cards = [
+    { href: "/staff/upload", title: "Upload matches", text: "Send a match day's log files and build the results, rotations and replays." },
     { href: "/staff/matches", title: "Plot rotations", text: "Check each team's auto route, fix it and confirm." },
     { href: "/staff/teams", title: "Teams and invites", text: "Invite each team's manager and see who has joined." },
     ...(me.is_super_admin
