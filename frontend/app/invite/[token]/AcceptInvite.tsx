@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
@@ -13,7 +12,6 @@ export default function AcceptInvite({ token }: { token: string }) {
   const [me, setMe] = useState<Me | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const path = `/invite/${encodeURIComponent(token)}`;
 
   useEffect(() => {
     api<InviteInfo>(`/invites/${encodeURIComponent(token)}`)
@@ -37,6 +35,33 @@ export default function AcceptInvite({ token }: { token: string }) {
       setError(e instanceof ApiError ? e.message : "Something went wrong. Try again.");
       setBusy(false);
     }
+  }
+
+  async function signOut() {
+    setBusy(true);
+    setError(null);
+    try {
+      await api("/auth/logout", { method: "POST" });
+      setMe(null);
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : "Something went wrong. Try again.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function signInAndAccept(form: FormData) {
+    if (!info) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await api("/auth/login", { method: "POST", body: { email: info.email, password: form.get("password") } });
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : "Something went wrong. Try again.");
+      setBusy(false);
+      return;
+    }
+    await accept();
   }
 
   if (!info) {
@@ -76,32 +101,71 @@ export default function AcceptInvite({ token }: { token: string }) {
     );
   }
 
-  if (me || info.account_exists) {
+  // Signed in as someone else (often the manager testing the link on their own phone).
+  if (me) {
     return (
       <>
         {heading}
         <p className="mt-6 text-sm">
-          {me
-            ? `You're signed in as ${me.email}. Sign in as ${info.email} to accept.`
-            : `There's already an account for ${info.email}. Sign in, then come back to this link.`}
+          You&apos;re signed in as {me.email}, but this invite is for {info.email}. Sign out to
+          continue as {info.email}.
         </p>
-        <Link href={`/auth/login?next=${encodeURIComponent(path)}`} className="btn btn-primary mt-4 block text-center">
-          Sign in
-        </Link>
+        {error && <p className="mt-4 text-sm text-bad">{error}</p>}
+        <button className="btn btn-primary mt-4 w-full" disabled={busy} onClick={signOut}>
+          {busy ? "Signing out..." : "Sign out"}
+        </button>
       </>
     );
   }
 
+  // The invited email already has an account: sign in right here, then join.
+  if (info.account_exists) {
+    return (
+      <>
+        {heading}
+        <p className="mt-6 text-sm">
+          {info.email} already has an account on this site. Enter its password to join.
+        </p>
+        <p className="mt-2 text-xs text-muted">
+          Never made an account? Then this link was already used by someone else. Ask your
+          manager for a new invite with your own email.
+        </p>
+        <form action={signInAndAccept} className="mt-4 space-y-4">
+          <label className="block text-sm">
+            <span className="text-muted">Password</span>
+            <input name="password" type="password" autoComplete="current-password" required className="input mt-1" />
+          </label>
+          {error && <p className="text-sm text-bad">{error}</p>}
+          <button type="submit" disabled={busy} className="btn btn-primary w-full">
+            {busy ? "Joining..." : `Sign in and join ${info.team.name}`}
+          </button>
+        </form>
+      </>
+    );
+  }
+
+  // First time here: the invite creates the account.
   return (
     <>
       {heading}
-      <form action={accept} className="mt-8 space-y-4">
+      <div className="mt-6 rounded-lg border border-line bg-panel p-3 text-sm">
+        <p className="font-medium">New here? No account needed yet.</p>
+        <p className="mt-1 text-muted">
+          This creates your account. Pick a new password now. Next time, sign in with{" "}
+          {info.email} and this password.
+        </p>
+      </div>
+      <form action={accept} className="mt-6 space-y-4">
+        <label className="block text-sm">
+          <span className="text-muted">Email</span>
+          <input value={info.email} readOnly className="input mt-1 opacity-70" />
+        </label>
         <label className="block text-sm">
           <span className="text-muted">Your name (as your team knows you)</span>
           <input name="display_name" maxLength={80} autoComplete="nickname" className="input mt-1" />
         </label>
         <label className="block text-sm">
-          <span className="text-muted">Choose a password</span>
+          <span className="text-muted">Create a password (at least 8 characters)</span>
           <input name="password" type="password" autoComplete="new-password" required minLength={8} className="input mt-1" />
         </label>
         {error && <p className="text-sm text-bad">{error}</p>}
