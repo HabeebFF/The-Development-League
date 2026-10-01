@@ -39,6 +39,18 @@ export default function AcceptInvite({ token }: { token: string }) {
     }
   }
 
+  async function signOut() {
+    setBusy(true);
+    setError(null);
+    try {
+      await api("/auth/logout", { method: "POST" });
+      setMe(null);
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : "Couldn't sign out. Try again.");
+    }
+    setBusy(false);
+  }
+
   if (!info) {
     return error ? <p className="text-bad">{error}</p> : <p className="text-muted">Loading...</p>;
   }
@@ -76,14 +88,30 @@ export default function AcceptInvite({ token }: { token: string }) {
     );
   }
 
-  if (me || info.account_exists) {
+  // Someone else is signed in on this device (often the manager who made the link).
+  if (me) {
     return (
       <>
         {heading}
         <p className="mt-6 text-sm">
-          {me
-            ? `You're signed in as ${me.email}. Sign in as ${info.email} to accept.`
-            : `There's already an account for ${info.email}. Sign in, then come back to this link.`}
+          This device is signed in as {me.email}. Sign out, then this page lets {info.email} join
+          {info.account_exists ? " by signing in" : " by creating an account"}.
+        </p>
+        {error && <p className="mt-4 text-sm text-bad">{error}</p>}
+        <button className="btn btn-primary mt-4 w-full" disabled={busy} onClick={signOut}>
+          {busy ? "Signing out..." : "Sign out"}
+        </button>
+      </>
+    );
+  }
+
+  if (info.account_exists) {
+    return (
+      <>
+        {heading}
+        <p className="mt-6 text-sm">
+          There&apos;s already an account for {info.email}. Sign in with it and you&apos;ll come back here
+          to join.
         </p>
         <Link href={`/auth/login?next=${encodeURIComponent(path)}`} className="btn btn-primary mt-4 block text-center">
           Sign in
@@ -95,13 +123,20 @@ export default function AcceptInvite({ token }: { token: string }) {
   return (
     <>
       {heading}
-      <form action={accept} className="mt-8 space-y-4">
+      <p className="mt-6 text-sm">
+        You don&apos;t have an account yet, and you don&apos;t need one: create it here in one step.
+      </p>
+      <form action={accept} className="mt-6 space-y-4">
+        <label className="block text-sm">
+          <span className="text-muted">Email</span>
+          <input value={info.email} readOnly className="input mt-1 opacity-70" />
+        </label>
         <label className="block text-sm">
           <span className="text-muted">Your name (as your team knows you)</span>
           <input name="display_name" maxLength={80} autoComplete="nickname" className="input mt-1" />
         </label>
         <label className="block text-sm">
-          <span className="text-muted">Choose a password</span>
+          <span className="text-muted">Create a password (8+ characters, you&apos;ll use it to sign in next time)</span>
           <input name="password" type="password" autoComplete="new-password" required minLength={8} className="input mt-1" />
         </label>
         {error && <p className="text-sm text-bad">{error}</p>}
