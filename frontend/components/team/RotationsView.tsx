@@ -89,7 +89,7 @@ export default function RotationsView({ matchId, focusTeam }: { matchId: number;
   const single = shown.length === 1 ? shown[0] : null;
 
   return (
-    <div className="flex h-[calc(100dvh-3.5rem)] flex-col lg:flex-row">
+    <div className="flex h-[calc(100dvh-var(--header-h))] flex-col lg:flex-row">
       <aside className="flex shrink-0 gap-1 overflow-x-auto border-b border-line p-2 lg:w-64 lg:flex-col lg:overflow-y-auto lg:border-r lg:border-b-0">
         <Link href="/team" className="hidden px-2 pb-1 text-xs text-muted hover:text-text lg:block">
           &larr; Matches

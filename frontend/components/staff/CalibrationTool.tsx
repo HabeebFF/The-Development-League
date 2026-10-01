@@ -162,7 +162,7 @@ export default function CalibrationTool({ slug }: { slug: string }) {
   const changed = JSON.stringify(adjust) !== JSON.stringify(NO_ADJUST);
 
   return (
-    <div className="flex h-[calc(100dvh-3.5rem)] flex-col lg:flex-row">
+    <div className="flex h-[calc(100dvh-var(--header-h))] flex-col lg:flex-row">
       <MapCanvas
         width={w}
         height={h}
