@@ -102,6 +102,80 @@ export function dayHint(matches: PreviewMatch[]): number | null {
   return best;
 }
 
+/** The room name most of the matches were played in ("TDL DAY 12"), tidied, if any. */
+export function roomName(matches: Pick<PreviewMatch, "room_name">[]): string | null {
+  const counts = new Map<string, number>();
+  for (const m of matches) {
+    const name = (m.room_name ?? "").replace(/\s+/g, " ").trim();
+    if (name) counts.set(name, (counts.get(name) ?? 0) + 1);
+  }
+  let best: string | null = null;
+  for (const [name, n] of counts) if (best === null || n > (counts.get(best) ?? 0)) best = name;
+  return best;
+}
+
+export type Session = { key: string; name: string; matches: PreviewMatch[] };
+
+/** "8PM" for a start time, to the nearest hour, in the viewer's time zone. */
+export function hourLabel(iso: string): string {
+  const d = new Date(iso);
+  const h = (d.getHours() + (d.getMinutes() >= 30 ? 1 : 0)) % 24;
+  return `${h % 12 || 12}${h < 12 ? "AM" : "PM"}`;
+}
+
+/**
+ * Splits matches (in play order) into sessions, such as the 8pm and 10pm scrims of one day.
+ * A new session starts after a break of ``breakMinutes`` between two starts, or once
+ * ``sessionMinutes`` have passed since the session's first match (TDL plays 5 matches in a
+ * 2-hour slot, starting about every 24 minutes). Each session is named after its room and,
+ * when there is more than one, its start hour ("TDL DAY 12 8PM").
+ */
+export function sessionsOf(ordered: PreviewMatch[], breakMinutes = 40, sessionMinutes = 110): Session[] {
+  const groups: PreviewMatch[][] = [];
+  let first: number | null = null;
+  let last: number | null = null;
+  for (const m of ordered) {
+    const at = m.started_at ? Date.parse(m.started_at) : null;
+    const fresh =
+      !groups.length ||
+      (at != null && last != null && (at - last) / 60000 >= breakMinutes) ||
+      (at != null && first != null && (at - first) / 60000 >= sessionMinutes);
+    if (fresh) {
+      groups.push([]);
+      first = at;
+    }
+    groups[groups.length - 1].push(m);
+    if (at != null) {
+      last = at;
+      first ??= at;
+    }
+  }
+  return groups.map((matches) => {
+    const room = roomName(matches) ?? "";
+    const start = matches.find((m) => m.started_at)?.started_at;
+    const name = groups.length > 1 && start ? `${room} ${hourLabel(start)}`.trim() : room;
+    return { key: matches[0].game_match_id, name, matches };
+  });
+}
+
+/** Match days are told apart by their name: same words, any case or spacing. */
+export function sameDayName(a: string, b: string): boolean {
+  const norm = (s: string) => s.replace(/\s+/g, " ").trim().toLowerCase();
+  return norm(a) !== "" && norm(a) === norm(b);
+}
+
+/**
+ * Match numbers for a chosen match day: a match already in that day keeps its number,
+ * the rest are numbered in play order after the highest number taken.
+ */
+export function numberFor(ordered: PreviewMatch[], dayId: number | null): Record<string, number> {
+  const kept = ordered.filter((m) => dayId != null && m.existing_match?.match_day === dayId);
+  let next = Math.max(0, ...kept.map((m) => m.existing_match!.number));
+  return Object.fromEntries(
+    ordered.map((m) => [m.game_match_id, kept.includes(m) ? m.existing_match!.number : ++next]),
+  );
+}
+
 export function formatBytes(n: number): string {
   if (n >= 1024 ** 3) return `${(n / 1024 ** 3).toFixed(1)} GB`;
   if (n >= 1024 ** 2) return `${(n / 1024 ** 2).toFixed(1)} MB`;

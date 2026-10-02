@@ -192,6 +192,23 @@ def test_reupload_updates_and_never_duplicates(upload, confirm, match_day):
     assert ParseRun.objects.count() == 2
 
 
+def test_reupload_moves_a_match_to_another_day(upload, confirm, match_day):
+    # TDL Day 12 was filed under Day 11; uploading it again under the right day moves it.
+    first = upload(all_files())
+    assignment = {"game_match_id": str(MATCH_ID), "match_day": match_day.pk, "number": 11}
+    confirm(first["id"], [assignment])
+    right_day = MatchDay.objects.create(stage=match_day.stage, number=12, title="TDL DAY 12")
+
+    second = upload(all_files())
+    resp = confirm(
+        second["id"], [{"game_match_id": str(MATCH_ID), "match_day": right_day.pk, "number": 1}]
+    )
+    assert resp.status_code == 202
+    match = Match.objects.get()
+    assert (match.match_day_id, match.number) == (right_day.pk, 1)
+    assert str(match) == "TDL DAY 12 / Match 1"
+
+
 def test_team_mapping_is_remembered(upload, confirm, match_day):
     noobz = Team.objects.create(name="Noobz", tag="NB")
     batch = upload(all_files())

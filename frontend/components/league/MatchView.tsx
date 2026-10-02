@@ -54,7 +54,7 @@ export default function MatchView({ id }: { id: number }) {
                 <th className="px-2 py-2 text-left">Place</th>
                 <th className="px-2 py-2 text-left">Team</th>
                 <th className={cell}>Kills</th>
-                <th className={`${cell} hidden sm:table-cell`}>Place pts</th>
+                <th className={cell}>Place pts</th>
                 <th className={`${cell} hidden sm:table-cell`}>Kill pts</th>
                 <th className={cell}>Total</th>
               </tr>
@@ -74,7 +74,7 @@ export default function MatchView({ id }: { id: number }) {
                       <TeamBadge team={r.team} link={false} wrap />
                     </td>
                     <td className={cell}>{r.kills}</td>
-                    <td className={`${cell} hidden sm:table-cell`}>{r.placement_points}</td>
+                    <td className={cell}>{r.placement_points}</td>
                     <td className={`${cell} hidden sm:table-cell`}>{r.kill_points}</td>
                     <td className={`${cell} font-display text-xl text-white`}>{r.total_points}</td>
                   </tr>

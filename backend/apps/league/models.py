@@ -173,7 +173,7 @@ class MatchDay(TimeStampedModel):
         unique_together = [("stage", "group", "number")]
 
     def __str__(self) -> str:
-        return self.title or f"{self.stage} / Day {self.number}"
+        return self.title or f"Day {self.number}"
 
     @property
     def season(self) -> Season:

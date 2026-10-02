@@ -1,7 +1,19 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { chunk, classify, dayHint, daysIn, inPlayOrder, pickMatchFiles, type PreviewMatch } from "./upload.ts";
+import {
+  chunk,
+  classify,
+  dayHint,
+  daysIn,
+  inPlayOrder,
+  numberFor,
+  pickMatchFiles,
+  roomName,
+  sameDayName,
+  sessionsOf,
+  type PreviewMatch,
+} from "./upload.ts";
 
 test("classifies observer files and debugger logs like the server", () => {
   assert.deepEqual(classify("MatchResult_2103980121133858816_2026-09-27-00-05-01.log"), {
@@ -49,4 +61,50 @@ test("orders matches by start time and finds the day in room names", () => {
   assert.deepEqual(order.map((x) => x.game_match_id), ["1", "2", "3"]);
   assert.equal(dayHint(order), 12);
   assert.equal(dayHint([m("1", null, null)]), null);
+});
+
+test("the match day comes from the room name", () => {
+  const r = (room_name: string) => ({ room_name });
+  assert.equal(roomName([r("TDL  DAY 12 "), r("TDL DAY 12"), r("scrim")]), "TDL DAY 12");
+  assert.equal(roomName([r(""), r("  ")]), null);
+  assert.ok(sameDayName("TDL Day 12", "tdl  DAY 12"));
+  assert.ok(!sameDayName("TDL Day 12", "TDL Day 11"));
+  assert.ok(!sameDayName("", ""));
+});
+
+test("matches are numbered for the chosen day", () => {
+  const m = (id: string, existing: { match_day: number; number: number } | null) =>
+    ({ game_match_id: id, existing_match: existing && { id: 1, status: "PUBLISHED", ...existing } }) as PreviewMatch;
+  // Day 12 matches filed under day 1 as 11 and 12: moving them to day 2 numbers them 1, 2.
+  const order = [m("a", { match_day: 1, number: 11 }), m("b", { match_day: 1, number: 12 }), m("c", null)];
+  assert.deepEqual(numberFor(order, 2), { a: 1, b: 2, c: 3 });
+  assert.deepEqual(numberFor(order, 1), { a: 11, b: 12, c: 13 });
+  assert.deepEqual(numberFor(order, null), { a: 1, b: 2, c: 3 });
+});
+
+test("an 8pm and a 10pm session become two match days", () => {
+  const at = (h: number, m: number) => new Date(2026, 9, 1, h, m).toISOString();
+  const m = (id: string, started: string) =>
+    ({ game_match_id: id, started_at: started, room_name: "TDL DAY 12" }) as PreviewMatch;
+  const order = [
+    m("1", at(20, 2)),
+    m("2", at(20, 26)),
+    m("3", at(20, 50)),
+    m("4", at(21, 14)),
+    m("5", at(21, 38)),
+    m("6", at(22, 1)),
+    m("7", at(22, 25)),
+  ];
+  const s = sessionsOf(order);
+  assert.deepEqual(
+    s.map((x) => [x.name, x.matches.map((y) => y.game_match_id)]),
+    [
+      ["TDL DAY 12 8PM", ["1", "2", "3", "4", "5"]],
+      ["TDL DAY 12 10PM", ["6", "7"]],
+    ],
+  );
+  // A long break also starts a new session.
+  assert.equal(sessionsOf([m("1", at(18, 0)), m("2", at(18, 24)), m("3", at(19, 30))]).length, 2);
+  // One session keeps the plain room name.
+  assert.deepEqual(sessionsOf(order.slice(0, 3)).map((x) => x.name), ["TDL DAY 12"]);
 });
