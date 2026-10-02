@@ -24,12 +24,23 @@ export function TeamMark({ team, size = "sm" }: { team: TeamRef; size?: keyof ty
 }
 
 /** A team's mark and name, linking to its page. */
-export default function TeamBadge({ team, link = true, size = "sm" }: { team: TeamRef; link?: boolean; size?: "sm" | "lg" }) {
+export default function TeamBadge({
+  team,
+  link = true,
+  size = "sm",
+  wrap = false,
+}: {
+  team: TeamRef;
+  link?: boolean;
+  size?: "sm" | "lg";
+  /** Let a long name run onto a second line instead of cutting it off. */
+  wrap?: boolean;
+}) {
   if (size === "lg") return <TeamMark team={team} size="lg" />;
   const body = (
     <span className="flex min-w-0 items-center gap-2.5">
       <TeamMark team={team} />
-      <span className="truncate font-semibold">{team.name}</span>
+      <span className={`font-semibold ${wrap ? "line-clamp-2 text-[13px] leading-tight sm:text-sm" : "truncate"}`}>{team.name}</span>
     </span>
   );
   return link ? (

@@ -55,8 +55,8 @@ export default function StandingsTable({ rows, compact = false }: { rows: Standi
               <td className="px-2 py-2.5">
                 <RankBadge rank={r.rank} />
               </td>
-              <td className="max-w-[9rem] px-2 py-2.5 sm:max-w-none">
-                <TeamBadge team={r.team} />
+              <td className="max-w-[10.5rem] px-2 py-2.5 sm:max-w-none">
+                <TeamBadge team={r.team} wrap />
               </td>
               <td className={`${cell} ${wide} text-muted`}>{r.matches_played}</td>
               <td className={`${cell} font-semibold ${r.booyahs ? "text-accent-2" : "text-muted"}`}>{r.booyahs}</td>

@@ -71,7 +71,7 @@ export default function MatchView({ id }: { id: number }) {
                       {r.booyah ? "Booyah" : ordinal(r.placement)}
                     </td>
                     <td className="max-w-[8rem] px-2 py-2 sm:max-w-none">
-                      <TeamBadge team={r.team} link={false} />
+                      <TeamBadge team={r.team} link={false} wrap />
                     </td>
                     <td className={cell}>{r.kills}</td>
                     <td className={`${cell} hidden sm:table-cell`}>{r.placement_points}</td>
