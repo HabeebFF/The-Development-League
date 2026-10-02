@@ -3,7 +3,7 @@
 import Link from "next/link";
 
 import type { MatchDay, Paged } from "@/lib/api";
-import { currentSeason, latestPlayed, rows, type Season, type Standings } from "@/lib/league";
+import { currentSeason, dayName, latestPlayed, rows, type Season, type Standings } from "@/lib/league";
 import { useApi } from "@/lib/useApi";
 
 import MatchDayCard from "./MatchDayCard";
@@ -14,11 +14,16 @@ export default function HomeView() {
   const seasons = useApi<Paged<Season>>("/seasons?page_size=100");
   const season = seasons.data ? currentSeason(rows(seasons.data)) : null;
   const slug = season ? encodeURIComponent(season.slug) : null;
-  const standings = useApi<Standings>(slug && `/seasons/${slug}/standings`);
   const days = useApi<Paged<MatchDay>>(slug && `/match-days?season=${slug}&page_size=100`);
   const upcoming = useApi<Paged<MatchDay>>(slug && `/seasons/${slug}/fixtures?upcoming=true&page_size=3`);
 
   const latest = days.data ? latestPlayed(rows(days.data)) : null;
+  // The latest match day's table (the season table only before anything is played).
+  const standings = useApi<Standings>(
+    slug && (days.data || days.error)
+      ? `/seasons/${slug}/standings${latest ? `?match_day=${latest.id}` : ""}`
+      : null,
+  );
   const next = upcoming.data ? rows(upcoming.data).filter((d) => d.id !== latest?.id) : [];
 
   return (
@@ -38,7 +43,9 @@ export default function HomeView() {
           <div className="grid gap-8 lg:grid-cols-[3fr_2fr] [&>*]:min-w-0">
             <div>
               <div className="flex items-baseline justify-between">
-                <h2 className="font-display text-2xl uppercase">Standings</h2>
+                <h2 className="font-display text-2xl uppercase">
+                  Standings{latest ? <span className="text-muted"> · {dayName(latest)}</span> : null}
+                </h2>
                 <Link href="/standings" className="text-sm text-accent">
                   Full table &rarr;
                 </Link>
