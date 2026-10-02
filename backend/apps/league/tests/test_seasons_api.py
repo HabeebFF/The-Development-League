@@ -6,6 +6,7 @@ import pytest
 from rest_framework.test import APIClient
 
 from apps.accounts.models import User
+from apps.accounts.testing import signed_in_client
 from apps.league.models import Group, Match, MatchDay, Player, ScoringRule, Season, Stage, Team
 from apps.results.models import PlayerMatchResult, StandingRow, TeamMatchResult
 
@@ -121,10 +122,10 @@ def league(staff_client, commit):
 
 
 def test_public_seasons(league):
-    anon = APIClient()
-    seasons = anon.get("/api/v1/seasons").json()
+    viewer = signed_in_client()
+    seasons = viewer.get("/api/v1/seasons").json()
     assert [s["slug"] for s in seasons["results"]] == ["season-one"]
-    detail = anon.get("/api/v1/seasons/season-one").json()
+    detail = viewer.get("/api/v1/seasons/season-one").json()
     assert detail["scoring"]["placement_points"]["1"] == 12
     groups = detail["stages"][0]["groups"]
     assert [(g["name"], [t["slug"] for t in g["teams"]]) for g in groups] == [
@@ -134,9 +135,9 @@ def test_public_seasons(league):
 
 
 def test_public_standings_scopes(league):
-    anon = APIClient()
+    viewer = signed_in_client()
     base = "/api/v1/seasons/season-one/standings"
-    season = anon.get(base).json()
+    season = viewer.get(base).json()
     assert season["scope"] == "season"
     assert [(r["rank"], r["team"]["slug"], r["total_points"]) for r in season["rows"]] == [
         (1, "alpha", 16),
@@ -144,46 +145,46 @@ def test_public_standings_scopes(league):
     ]
     assert season["rows"][0]["form"] == [1] and season["rows"][0]["booyahs"] == 1
 
-    group_b = anon.get(f"{base}?group={league['gb']['id']}").json()
+    group_b = viewer.get(f"{base}?group={league['gb']['id']}").json()
     assert [r["total_points"] for r in group_b["rows"]] == [0, 0]
-    assert anon.get(f"{base}?match_day={league['day']['id']}").json()["rows"][0]["kills"] == 4
-    assert anon.get(f"{base}?stage={league['stage']['id']}").json()["scope"].startswith("stage:")
+    assert viewer.get(f"{base}?match_day={league['day']['id']}").json()["rows"][0]["kills"] == 4
+    assert viewer.get(f"{base}?stage={league['stage']['id']}").json()["scope"].startswith("stage:")
 
     other = Season.objects.create(name="Other", scoring_rule=ScoringRule.objects.first())
     foreign = Group.objects.create(stage=Stage.objects.create(season=other, name="X"), name="Z")
-    assert anon.get(f"{base}?group={foreign.pk}").status_code == 404
-    assert anon.get(f"{base}?group=abc").status_code == 400
+    assert viewer.get(f"{base}?group={foreign.pk}").status_code == 404
+    assert viewer.get(f"{base}?group=abc").status_code == 400
 
 
 def test_public_fixtures_and_match_days(league):
-    anon = APIClient()
-    fixtures = anon.get("/api/v1/seasons/season-one/fixtures").json()
+    viewer = signed_in_client()
+    fixtures = viewer.get("/api/v1/seasons/season-one/fixtures").json()
     assert fixtures["count"] == 1
     day = fixtures["results"][0]
     assert (day["stage"], day["group"], day["date"]) == ("Groups", "A", "2026-10-01")
     played, upcoming = day["matches"]
     assert played["played"] and played["booyah"]["slug"] == "alpha" and played["map"] == "bermuda"
     assert not upcoming["played"] and upcoming["booyah"] is None
-    assert anon.get("/api/v1/seasons/season-one/fixtures?upcoming=true").json()["count"] == 1
+    assert viewer.get("/api/v1/seasons/season-one/fixtures?upcoming=true").json()["count"] == 1
 
     Match.objects.filter(pk=league["m2"]["id"]).delete()
-    assert anon.get("/api/v1/seasons/season-one/fixtures?upcoming=true").json()["count"] == 0
+    assert viewer.get("/api/v1/seasons/season-one/fixtures?upcoming=true").json()["count"] == 0
 
-    detail = anon.get(f"/api/v1/match-days/{league['day']['id']}").json()
+    detail = viewer.get(f"/api/v1/match-days/{league['day']['id']}").json()
     assert detail["season"] == "season-one"
     assert [r["team"]["slug"] for r in detail["standings"]] == ["alpha", "bravo"]
-    assert anon.get("/api/v1/match-days?season=season-one").json()["count"] == 1
+    assert viewer.get("/api/v1/match-days?season=season-one").json()["count"] == 1
 
 
 def test_public_matches_hide_unpublished(league):
-    anon = APIClient()
-    listed = anon.get("/api/v1/matches?season=season-one").json()
+    viewer = signed_in_client()
+    listed = viewer.get("/api/v1/matches?season=season-one").json()
     assert [m["id"] for m in listed["results"]] == [league["m1"]["id"]]
-    assert anon.get("/api/v1/matches?team=charlie").json()["count"] == 0
-    assert anon.get("/api/v1/matches?team=alpha&map=bermuda").json()["count"] == 1
-    assert anon.get(f"/api/v1/matches/{league['m2']['id']}").status_code == 404
+    assert viewer.get("/api/v1/matches?team=charlie").json()["count"] == 0
+    assert viewer.get("/api/v1/matches?team=alpha&map=bermuda").json()["count"] == 1
+    assert viewer.get(f"/api/v1/matches/{league['m2']['id']}").status_code == 404
 
-    detail = anon.get(f"/api/v1/matches/{league['m1']['id']}").json()
+    detail = viewer.get(f"/api/v1/matches/{league['m1']['id']}").json()
     assert detail["game_match_id"] == "2103980121133858816"
     first = detail["results"][0]
     assert (first["placement"], first["team"]["slug"], first["total_points"]) == (1, "alpha", 16)
@@ -195,7 +196,7 @@ def test_unpublishing_and_deleting_update_standings(league, staff_client, commit
     m1 = league["m1"]["id"]
     with commit():
         staff_client.patch(f"/api/v1/admin/matches/{m1}", {"status": "NEEDS_REVIEW"}, format="json")
-    rows = APIClient().get("/api/v1/seasons/season-one/standings").json()["rows"]
+    rows = signed_in_client().get("/api/v1/seasons/season-one/standings").json()["rows"]
     assert rows == []
 
     with commit():
@@ -218,9 +219,9 @@ def test_moving_a_match_day_to_another_season_rebuilds_both(league, staff_client
             format="json",
         )
     assert resp.status_code == 200, resp.content
-    anon = APIClient()
-    assert anon.get("/api/v1/seasons/season-one/standings").json()["rows"] == []
-    assert len(anon.get("/api/v1/seasons/season-two/standings").json()["rows"]) == 2
+    viewer = signed_in_client()
+    assert viewer.get("/api/v1/seasons/season-one/standings").json()["rows"] == []
+    assert len(viewer.get("/api/v1/seasons/season-two/standings").json()["rows"]) == 2
 
 
 def test_scoring_rule_changes_rescore(league, admin_client, staff_client, commit):
@@ -240,7 +241,7 @@ def test_scoring_rule_changes_rescore(league, admin_client, staff_client, commit
             f"/api/v1/admin/scoring-rules/{rule.pk}", {"points_per_kill": 2}, format="json"
         )
     assert ok.status_code == 200, ok.content
-    rows = APIClient().get("/api/v1/seasons/season-one/standings").json()["rows"]
+    rows = signed_in_client().get("/api/v1/seasons/season-one/standings").json()["rows"]
     assert [r["total_points"] for r in rows] == [20, 11]
     assert admin_client.delete(f"/api/v1/admin/scoring-rules/{rule.pk}").status_code == 400
 
@@ -325,6 +326,22 @@ def test_one_active_season(staff_client):
     assert list(Season.objects.filter(is_active=True).values_list("slug", flat=True)) == ["s2"]
 
 
+def test_league_data_needs_sign_in(league):
+    # The whole site is login-only (Habeeb, 2026-10-02): no league data without an account.
+    anon = APIClient()
+    for url in [
+        "/api/v1/seasons",
+        "/api/v1/seasons/season-one/standings",
+        "/api/v1/seasons/season-one/fixtures",
+        "/api/v1/match-days",
+        "/api/v1/matches",
+        "/api/v1/teams",
+        "/api/v1/maps",
+    ]:
+        assert anon.get(url).status_code == 401, url
+        assert signed_in_client().get(url).status_code == 200, url
+
+
 def test_staff_only(league):
     anon, player = APIClient(), APIClient()
     player.force_authenticate(User.objects.create_user(email="p@tdl.test"))
@@ -342,6 +359,6 @@ def test_match_day_dates_order_fixtures(league, staff_client):
         {"stage": stage, "group": league["gb"]["id"], "number": 1, "date": "2026-09-30"},
         format="json",
     )
-    days = APIClient().get("/api/v1/seasons/season-one/fixtures").json()["results"]
+    days = signed_in_client().get("/api/v1/seasons/season-one/fixtures").json()["results"]
     assert [d["date"] for d in days] == ["2026-09-30", "2026-10-01"]
     assert MatchDay.objects.get(date=dt.date(2026, 9, 30)).group.name == "B"

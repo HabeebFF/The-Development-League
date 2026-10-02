@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Barlow_Condensed, Inter } from "next/font/google";
 import Link from "next/link";
 
+import { AuthGate, AuthProvider } from "@/components/Auth";
 import SiteNav from "@/components/SiteNav";
 
 import "./globals.css";
@@ -20,8 +21,11 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="en" className={`${body.variable} ${display.variable} h-full antialiased`}>
       <body className="flex min-h-full flex-col pb-[var(--bottom-nav-h)] font-sans">
-        <SiteNav />
-        <main className="flex-1">{children}</main>
+        <AuthProvider>
+          <SiteNav />
+          <main className="flex-1">
+            <AuthGate>{children}</AuthGate>
+          </main>
         <footer className="border-t border-line">
           <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-6 text-xs text-muted">
             <span className="font-display text-sm tracking-wide uppercase">
@@ -43,6 +47,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
             </span>
           </div>
         </footer>
+        </AuthProvider>
       </body>
     </html>
   );
