@@ -39,7 +39,10 @@ export default function TeamBadge({
   if (size === "lg") return <TeamMark team={team} size="lg" />;
   const body = (
     <span className="flex min-w-0 items-center gap-2.5">
-      <TeamMark team={team} />
+      {/* In wrapping tables the logo gives its room to the name on phones. */}
+      <span className={wrap ? "hidden sm:contents" : "contents"}>
+        <TeamMark team={team} />
+      </span>
       <span className={`font-semibold ${wrap ? "line-clamp-2 text-[13px] leading-tight sm:text-sm" : "truncate"}`}>{team.name}</span>
     </span>
   );

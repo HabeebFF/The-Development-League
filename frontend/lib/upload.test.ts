@@ -11,6 +11,7 @@ import {
   pickMatchFiles,
   roomName,
   sameDayName,
+  sessionsOf,
   type PreviewMatch,
 } from "./upload.ts";
 
@@ -79,4 +80,31 @@ test("matches are numbered for the chosen day", () => {
   assert.deepEqual(numberFor(order, 2), { a: 1, b: 2, c: 3 });
   assert.deepEqual(numberFor(order, 1), { a: 11, b: 12, c: 13 });
   assert.deepEqual(numberFor(order, null), { a: 1, b: 2, c: 3 });
+});
+
+test("an 8pm and a 10pm session become two match days", () => {
+  const at = (h: number, m: number) => new Date(2026, 9, 1, h, m).toISOString();
+  const m = (id: string, started: string) =>
+    ({ game_match_id: id, started_at: started, room_name: "TDL DAY 12" }) as PreviewMatch;
+  const order = [
+    m("1", at(20, 2)),
+    m("2", at(20, 26)),
+    m("3", at(20, 50)),
+    m("4", at(21, 14)),
+    m("5", at(21, 38)),
+    m("6", at(22, 1)),
+    m("7", at(22, 25)),
+  ];
+  const s = sessionsOf(order);
+  assert.deepEqual(
+    s.map((x) => [x.name, x.matches.map((y) => y.game_match_id)]),
+    [
+      ["TDL DAY 12 8PM", ["1", "2", "3", "4", "5"]],
+      ["TDL DAY 12 10PM", ["6", "7"]],
+    ],
+  );
+  // A long break also starts a new session.
+  assert.equal(sessionsOf([m("1", at(18, 0)), m("2", at(18, 24)), m("3", at(19, 30))]).length, 2);
+  // One session keeps the plain room name.
+  assert.deepEqual(sessionsOf(order.slice(0, 3)).map((x) => x.name), ["TDL DAY 12"]);
 });

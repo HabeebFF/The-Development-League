@@ -7,13 +7,12 @@ import { api, ApiError, csrfToken, type Paged } from "@/lib/api";
 import {
   chunk,
   daysIn,
-  dayHint,
   formatBytes,
   inPlayOrder,
   numberFor,
   pickMatchFiles,
-  roomName,
   sameDayName,
+  sessionsOf,
   type PreviewMatch,
 } from "@/lib/upload";
 
@@ -31,6 +30,8 @@ type Batch = {
 type Stage = { id: number; season: string; name: string };
 type Day = { id: number; stage: number; number: number; date: string | null; title: string };
 type Row = { include: boolean; number: number };
+/** Where one session's matches go: an existing match day id, or "new" with its details. */
+type Plan = { choice: string; title: string; number: string; date: string; stage: string };
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -81,13 +82,7 @@ export default function UploadMatches() {
 
   const [stages, setStages] = useState<Stage[]>([]);
   const [matchDays, setMatchDays] = useState<Day[]>([]);
-  const [dayChoice, setDayChoice] = useState<string>("new"); // a match day id, or "new"
-  const [newDay, setNewDay] = useState({
-    stage: "",
-    title: "",
-    number: "",
-    date: new Date().toISOString().slice(0, 10),
-  });
+  const [plans, setPlans] = useState<Record<string, Plan>>({});
   const [rows, setRows] = useState<Record<string, Row>>({});
 
   const allDays = useMemo(() => daysIn(picked), [picked]);
@@ -97,6 +92,7 @@ export default function UploadMatches() {
   // file, or already on the site, can be built.
   const all = useMemo(() => inPlayOrder(batch?.preview.matches ?? []), [batch]);
   const matches = all.filter((m) => m.ready);
+  const sessions = useMemo(() => sessionsOf(all.filter((m) => m.ready)), [all]);
   const skipped = all.length - matches.length;
 
   useEffect(() => {
@@ -107,7 +103,6 @@ export default function UploadMatches() {
       .then(([s, d]) => {
         setStages(s.results);
         setMatchDays(d.results);
-        if (s.results.length) setNewDay((v) => ({ ...v, stage: String(s.results[s.results.length - 1].id) }));
       })
       .catch((e) => setError(e.message));
   }, []);
@@ -139,20 +134,21 @@ export default function UploadMatches() {
       const ready = await api<Batch>(`/uploads/batches/${created.id}`);
       setBatch(ready);
       const ordered = inPlayOrder(ready.preview.matches ?? []).filter((m) => m.ready);
-      // Match days are told apart by the room's name ("TDL DAY 12"), never by number alone.
-      const room = roomName(ordered);
-      const known = room ? matchDays.find((d) => sameDayName(d.title, room)) : undefined;
-      if (known) setDayChoice(String(known.id));
-      else {
-        setDayChoice("new");
-        const hint = dayHint(ordered);
-        setNewDay((v) => ({
-          ...v,
-          title: room ?? "",
-          number: String(hint ?? Math.max(0, ...matchDays.map((d) => d.number)) + 1),
-        }));
+      // Each session (the 8pm and 10pm scrims) is its own match day, found by its name
+      // ("TDL DAY 12 8PM"), never by number alone.
+      const today = new Date().toISOString().slice(0, 10);
+      const stage = stages.length ? String(stages[stages.length - 1].id) : "";
+      let next = Math.max(0, ...matchDays.map((d) => d.number));
+      const plan: Record<string, Plan> = {};
+      const numbers: Record<string, number> = {};
+      for (const session of sessionsOf(ordered)) {
+        const known = session.name ? matchDays.find((d) => sameDayName(d.title, session.name)) : undefined;
+        plan[session.key] = known
+          ? { choice: String(known.id), title: known.title, number: String(known.number), date: today, stage }
+          : { choice: "new", title: session.name, number: String(++next), date: today, stage };
+        Object.assign(numbers, numberFor(session.matches, known?.id ?? null));
       }
-      const numbers = numberFor(ordered, known?.id ?? null);
+      setPlans(plan);
       setRows(Object.fromEntries(ordered.map((m) => [m.game_match_id, { include: true, number: numbers[m.game_match_id] }])));
       setStep("preview");
     } catch (e) {
@@ -166,37 +162,33 @@ export default function UploadMatches() {
     setError(null);
     const chosen = matches.filter((m) => rows[m.game_match_id]?.include);
     if (!chosen.length) return setError("Tick at least one match.");
-    const numbers = chosen.map((m) => rows[m.game_match_id].number);
-    if (new Set(numbers).size !== numbers.length) return setError("Two matches have the same number.");
+    for (const session of sessions) {
+      const numbers = session.matches.filter((m) => rows[m.game_match_id]?.include).map((m) => rows[m.game_match_id].number);
+      if (new Set(numbers).size !== numbers.length) return setError(`${session.name || "A session"}: two matches have the same number.`);
+    }
     setStep("building");
     try {
-      let matchDay = Number(dayChoice);
-      if (dayChoice === "new") {
-        if (!newDay.stage || !newDay.number) throw new Error("Give the new match day a name and number.");
-        const made = await api<Day>("/admin/match-days", {
-          method: "POST",
-          body: {
-            stage: Number(newDay.stage),
-            number: Number(newDay.number),
-            date: newDay.date || null,
-            title: newDay.title.trim(),
-          },
-        });
-        setMatchDays((d) => [...d, made]);
-        setDayChoice(String(made.id));
-        matchDay = made.id;
+      const assignments = [];
+      for (const session of sessions) {
+        const picked = session.matches.filter((m) => rows[m.game_match_id]?.include);
+        if (!picked.length) continue;
+        const plan = plans[session.key];
+        let matchDay = Number(plan.choice);
+        if (plan.choice === "new") {
+          if (!plan.stage || !plan.number || !plan.title.trim()) throw new Error("Give each new match day a name and number.");
+          const made = await api<Day>("/admin/match-days", {
+            method: "POST",
+            body: { stage: Number(plan.stage), number: Number(plan.number), date: plan.date || null, title: plan.title.trim() },
+          });
+          setMatchDays((d) => [...d, made]);
+          setPlans((p) => ({ ...p, [session.key]: { ...plan, choice: String(made.id) } }));
+          matchDay = made.id;
+        }
+        // Matches already on the site move to the chosen day too.
+        for (const m of picked)
+          assignments.push({ game_match_id: m.game_match_id, match_day: matchDay, number: rows[m.game_match_id].number });
       }
-      await api(`/uploads/batches/${batch.id}/confirm`, {
-        method: "POST",
-        body: {
-          // Matches already on the site move to the chosen day too.
-          matches: chosen.map((m) => ({
-            game_match_id: m.game_match_id,
-            match_day: matchDay,
-            number: rows[m.game_match_id].number,
-          })),
-        },
-      });
+      await api(`/uploads/batches/${batch.id}/confirm`, { method: "POST", body: { matches: assignments } });
       setBatch(await waitWhile(batch.id, ["PROCESSING", "READY"]));
       setStep("done");
     } catch (e) {
@@ -308,130 +300,138 @@ export default function UploadMatches() {
               ` ${skipped} other ${skipped === 1 ? "game" : "games"} in the debugger log had no result file and ${skipped === 1 ? "was" : "were"} left out.`}
           </p>
 
-          <div className="card p-4">
-            <h2 className="text-sm font-semibold text-muted uppercase">Match day</h2>
-            <select
-              className="input mt-2"
-              value={dayChoice}
-              onChange={(e) => {
-                setDayChoice(e.target.value);
-                const numbers = numberFor(matches, e.target.value === "new" ? null : Number(e.target.value));
-                setRows((r) =>
-                  Object.fromEntries(Object.entries(r).map(([id, row]) => [id, { ...row, number: numbers[id] ?? row.number }])),
-                );
-              }}
-              disabled={step === "building"}
-            >
-              <option value="new">New match day...</option>
-              {matchDays.map((d) => (
-                <option key={d.id} value={d.id}>
-                  {d.title || `Day ${d.number}`}
-                  {d.date ? ` (${d.date})` : ""}
-                  {stages.length > 1 ? ` · ${stageName(d.stage)}` : ""}
-                </option>
-              ))}
-            </select>
-            {dayChoice === "new" && (
-              <div className="mt-3 grid gap-2 sm:grid-cols-3">
-                <label className="text-sm sm:col-span-3">
-                  <span className="text-muted">Name (from the room name)</span>
-                  <input
-                    className="input mt-1"
-                    value={newDay.title}
-                    placeholder="TDL DAY 12"
-                    onChange={(e) => setNewDay((v) => ({ ...v, title: e.target.value }))}
-                  />
-                </label>
-                {stages.length > 1 && (
-                  <label className="text-sm">
-                    <span className="text-muted">Season</span>
-                    <select
-                      className="input mt-1"
-                      value={newDay.stage}
-                      onChange={(e) => setNewDay((v) => ({ ...v, stage: e.target.value }))}
-                    >
-                      {stages.map((s) => (
-                        <option key={s.id} value={s.id}>
-                          {s.season} · {s.name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                )}
-                <label className="text-sm">
-                  <span className="text-muted">Day number</span>
-                  <input
-                    className="input mt-1"
-                    type="number"
-                    min={1}
-                    value={newDay.number}
-                    onChange={(e) => setNewDay((v) => ({ ...v, number: e.target.value }))}
-                  />
-                </label>
-                <label className="text-sm">
-                  <span className="text-muted">Date</span>
-                  <input
-                    className="input mt-1"
-                    type="date"
-                    value={newDay.date}
-                    onChange={(e) => setNewDay((v) => ({ ...v, date: e.target.value }))}
-                  />
-                </label>
-              </div>
-            )}
-          </div>
-
-          <ul className="divide-y divide-line card">
-            {matches.map((m) => {
-              const row = rows[m.game_match_id] ?? { include: false, number: 1 };
-              const set = (patch: Partial<Row>) => setRows((r) => ({ ...r, [m.game_match_id]: { ...row, ...patch } }));
-              return (
-                <li key={m.game_match_id} className="flex flex-wrap items-start gap-3 px-4 py-3 text-sm">
-                  <input
-                    type="checkbox"
-                    className="mt-1"
-                    checked={row.include}
+          {sessions.map((session) => {
+            const plan = plans[session.key];
+            if (!plan) return null;
+            const setPlan = (patch: Partial<Plan>) => setPlans((p) => ({ ...p, [session.key]: { ...plan, ...patch } }));
+            return (
+              <div key={session.key} className="space-y-3">
+                <div className="card p-4">
+                  <h2 className="text-sm font-semibold text-muted uppercase">
+                    {sessions.length > 1 ? `${session.name || "Session"} · ` : ""}Match day
+                  </h2>
+                  <select
+                    className="input mt-2"
+                    value={plan.choice}
                     disabled={step === "building"}
-                    onChange={(e) => set({ include: e.target.checked })}
-                  />
-                  <div className="min-w-0 flex-1">
-                    <p className="font-medium">
-                      {m.room_name || `Match ${m.game_match_id}`}
-                      <span className="ml-2 text-xs text-muted">
-                        {clockTime(m.started_at)} · {m.map?.name ?? "Map unknown"} · {m.teams.length} teams
-                      </span>
-                    </p>
-                    <p className="mt-0.5 text-xs text-muted">
-                      {[
-                        m.has_match_result ? "Result" : null,
-                        m.has_replay_info ? "Replay" : null,
-                        m.has_debugger ? "Debugger log" : null,
-                      ]
-                        .filter(Boolean)
-                        .join(" · ") || "No files"}
-                      {m.existing_match ? ` · Already on the site: it will be updated and filed under this match day` : ""}
-                    </p>
-                    {m.warnings.map((w) => (
-                      <p key={w} className="mt-0.5 text-xs text-accent-2">
-                        {w}
-                      </p>
+                    onChange={(e) => {
+                      setPlan({ choice: e.target.value });
+                      const numbers = numberFor(session.matches, e.target.value === "new" ? null : Number(e.target.value));
+                      setRows((r) => ({
+                        ...r,
+                        ...Object.fromEntries(session.matches.map((m) => [m.game_match_id, { ...r[m.game_match_id], number: numbers[m.game_match_id] }])),
+                      }));
+                    }}
+                  >
+                    <option value="new">New match day...</option>
+                    {matchDays.map((d) => (
+                      <option key={d.id} value={d.id}>
+                        {d.title || `Day ${d.number}`}
+                        {d.date ? ` (${d.date})` : ""}
+                        {stages.length > 1 ? ` · ${stageName(d.stage)}` : ""}
+                      </option>
                     ))}
-                  </div>
-                  <label className="flex items-center gap-1 text-xs text-muted">
-                    Match
-                    <input
-                      className="input w-16 py-1"
-                      type="number"
-                      min={1}
-                      value={row.number}
-                      disabled={!row.include || step === "building"}
-                      onChange={(e) => set({ number: Number(e.target.value) })}
-                    />
-                  </label>
-                </li>
-              );
-            })}
-          </ul>
+                  </select>
+                  {plan.choice === "new" && (
+                    <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                      <label className="text-sm sm:col-span-3">
+                        <span className="text-muted">Name (from the room name)</span>
+                        <input
+                          className="input mt-1"
+                          value={plan.title}
+                          placeholder="TDL DAY 12 8PM"
+                          onChange={(e) => setPlan({ title: e.target.value })}
+                        />
+                      </label>
+                      {stages.length > 1 && (
+                        <label className="text-sm">
+                          <span className="text-muted">Season</span>
+                          <select className="input mt-1" value={plan.stage} onChange={(e) => setPlan({ stage: e.target.value })}>
+                            {stages.map((st) => (
+                              <option key={st.id} value={st.id}>
+                                {st.season} · {st.name}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      )}
+                      <label className="text-sm">
+                        <span className="text-muted">Day number</span>
+                        <input
+                          className="input mt-1"
+                          type="number"
+                          min={1}
+                          value={plan.number}
+                          onChange={(e) => setPlan({ number: e.target.value })}
+                        />
+                      </label>
+                      <label className="text-sm">
+                        <span className="text-muted">Date</span>
+                        <input
+                          className="input mt-1"
+                          type="date"
+                          value={plan.date}
+                          onChange={(e) => setPlan({ date: e.target.value })}
+                        />
+                      </label>
+                    </div>
+                  )}
+                </div>
+
+              <ul className="divide-y divide-line card">
+                {session.matches.map((m) => {
+                  const row = rows[m.game_match_id] ?? { include: false, number: 1 };
+                  const set = (patch: Partial<Row>) => setRows((r) => ({ ...r, [m.game_match_id]: { ...row, ...patch } }));
+                  return (
+                    <li key={m.game_match_id} className="flex flex-wrap items-start gap-3 px-4 py-3 text-sm">
+                      <input
+                        type="checkbox"
+                        className="mt-1"
+                        checked={row.include}
+                        disabled={step === "building"}
+                        onChange={(e) => set({ include: e.target.checked })}
+                      />
+                      <div className="min-w-0 flex-1">
+                        <p className="font-medium">
+                          {m.room_name || `Match ${m.game_match_id}`}
+                          <span className="ml-2 text-xs text-muted">
+                            {clockTime(m.started_at)} · {m.map?.name ?? "Map unknown"} · {m.teams.length} teams
+                          </span>
+                        </p>
+                        <p className="mt-0.5 text-xs text-muted">
+                          {[
+                            m.has_match_result ? "Result" : null,
+                            m.has_replay_info ? "Replay" : null,
+                            m.has_debugger ? "Debugger log" : null,
+                          ]
+                            .filter(Boolean)
+                            .join(" · ") || "No files"}
+                          {m.existing_match ? ` · Already on the site: it will be updated and filed under this match day` : ""}
+                        </p>
+                        {m.warnings.map((w) => (
+                          <p key={w} className="mt-0.5 text-xs text-accent-2">
+                            {w}
+                          </p>
+                        ))}
+                      </div>
+                      <label className="flex items-center gap-1 text-xs text-muted">
+                        Match
+                        <input
+                          className="input w-16 py-1"
+                          type="number"
+                          min={1}
+                          value={row.number}
+                          disabled={!row.include || step === "building"}
+                          onChange={(e) => set({ number: Number(e.target.value) })}
+                        />
+                      </label>
+                    </li>
+                  );
+                })}
+              </ul>
+              </div>
+            );
+          })}
 
           {matches.length === 0 && (
             <p className="text-sm text-bad">
