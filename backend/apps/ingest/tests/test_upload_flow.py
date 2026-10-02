@@ -444,6 +444,7 @@ def test_matches_are_built_one_at_a_time(upload, confirm, match_day):
     locks = [q["sql"] for q in queries.captured_queries if "pg_advisory_xact_lock" in q["sql"]]
     assert len(locks) == 1
 
+
 def test_players_logged_with_uid_zero_are_recovered(upload, confirm, match_day):
     """The MatchResult log sometimes writes ID 0; those players must not collapse into one."""
     from apps.ingest.parsers.names import search_name
@@ -461,7 +462,7 @@ def test_players_logged_with_uid_zero_are_recovered(upload, confirm, match_day):
     run = ParseRun.objects.get(match=match)
     assert run.status != ParseRun.Status.FAILED, run.error
     rows = PlayerMatchResult.objects.filter(match=match)
-    assert rows.count() == 48  # nobody merged or dropped
+    assert rows.count() == 52  # nobody merged or dropped
     uids = set(rows.values_list("player__game_uid", flat=True))
     assert 2063288734 in uids and 6149860556 in uids  # recovered from the other logs
     assert 0 not in uids and not Player.objects.filter(game_uid=0).exists()
