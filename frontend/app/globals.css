@@ -1,24 +1,33 @@
 @import "tailwindcss";
 
-/* Dark esports look: near-black, one accent, bold display type. */
+/*
+ * TDL design system: near-black, one fiery accent, condensed display type, angled cards.
+ * Every page (public, team, staff) uses these tokens and the component classes below.
+ */
 :root {
-  --bg: #0b0b0f;
-  --panel: #14141b;
-  --panel-2: #1c1c26;
-  --line: #2a2a37;
-  --text: #ededf2;
-  --muted: #8b8b9c;
-  --accent: #ff2e63;
-  --accent-2: #ffb800;
+  --bg: #07080c;
+  --panel: #10121a;
+  --panel-2: #181b26;
+  --line: #262a38;
+  --text: #f2f3f7;
+  --muted: #8e93a6;
+  --accent: #ff5a1f; /* fiery orange */
+  --accent-hot: #ff8a3d;
+  --accent-2: #ffc23d; /* Booyah gold */
   --ok: #22c55e;
-  --bad: #ef4444;
-  /* The sticky header: two rows on phones (name, then links), one from sm up. */
-  --header-h: 5.75rem;
+  --bad: #f04444;
+  --gold: #f6c544;
+  --silver: #c8d0dc;
+  --bronze: #d38a4c;
+  --cut: 14px; /* angled corner size */
+  /* The sticky top bar, and the bottom tab bar on phones. */
+  --header-h: 3.5rem;
+  --bottom-nav-h: 3.75rem;
 }
 
-@media (width >= 40rem) {
+@media (width >= 48rem) {
   :root {
-    --header-h: 3.5rem;
+    --bottom-nav-h: 0rem;
   }
 }
 
@@ -30,31 +39,165 @@
   --color-text: var(--text);
   --color-muted: var(--muted);
   --color-accent: var(--accent);
+  --color-accent-hot: var(--accent-hot);
   --color-accent-2: var(--accent-2);
   --color-ok: var(--ok);
   --color-bad: var(--bad);
+  --color-gold: var(--gold);
+  --color-silver: var(--silver);
+  --color-bronze: var(--bronze);
   --font-sans: var(--font-body);
   --font-display: var(--font-display);
 }
 
 html {
   color-scheme: dark;
+  -webkit-tap-highlight-color: transparent;
 }
 
 body {
-  background: var(--bg);
+  background:
+    radial-gradient(60rem 30rem at 85% -10%, rgb(255 90 31 / 0.10), transparent 60%),
+    radial-gradient(40rem 24rem at -10% 10%, rgb(255 194 61 / 0.05), transparent 60%),
+    var(--bg);
+  background-attachment: fixed;
   color: var(--text);
 }
 
+::selection {
+  background: rgb(255 90 31 / 0.35);
+}
+
+/* Display headings: bold, condensed, upper case. */
+.font-display {
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+/* -- buttons ------------------------------------------------------------------------------ */
 .btn {
-  @apply inline-flex items-center justify-center gap-2 rounded-md border border-line bg-panel-2 px-3 py-2 text-sm font-medium transition hover:border-muted disabled:opacity-50;
+  @apply inline-flex items-center justify-center gap-2 border border-line bg-panel-2 px-3 py-2 text-sm font-semibold transition duration-150 hover:border-accent/60 hover:text-white active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50;
+  clip-path: polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 8px 100%, 0 calc(100% - 8px));
 }
 .btn-primary {
-  @apply border-accent bg-accent text-white hover:brightness-110;
+  @apply border-accent text-white uppercase tracking-wide;
+  background: linear-gradient(135deg, var(--accent), var(--accent-hot));
+  box-shadow: 0 0 24px -6px rgb(255 90 31 / 0.7);
 }
+.btn-primary:hover {
+  @apply brightness-110;
+  box-shadow: 0 0 32px -4px rgb(255 90 31 / 0.85);
+}
+.btn-ghost {
+  @apply border-transparent bg-transparent;
+}
+
+/* -- form fields -------------------------------------------------------------------------- */
 .input {
-  @apply w-full rounded-md border border-line bg-panel px-3 py-2 text-sm outline-none focus:border-accent;
+  @apply w-full rounded-none border border-line bg-panel px-3 py-2 text-sm outline-none transition focus:border-accent focus:shadow-[0_0_0_3px_rgb(255_90_31/0.18)];
 }
 .kbd {
-  @apply rounded border border-line bg-panel-2 px-1.5 py-0.5 font-mono text-xs text-muted;
+  @apply border border-line bg-panel-2 px-1.5 py-0.5 font-mono text-xs text-muted;
+}
+
+/* -- cards: sharp angled corners, a faint top glow ---------------------------------------- */
+.card {
+  @apply relative border border-line bg-panel;
+  clip-path: polygon(0 0, calc(100% - var(--cut)) 0, 100% var(--cut), 100% 100%, var(--cut) 100%, 0 calc(100% - var(--cut)));
+  background-image: linear-gradient(180deg, rgb(255 255 255 / 0.025), transparent 40%);
+}
+.card-hover {
+  @apply transition duration-200 hover:-translate-y-0.5 hover:border-accent/50;
+}
+.card-hover:hover {
+  box-shadow: 0 10px 40px -18px rgb(255 90 31 / 0.6);
+}
+
+/* Section titles with an accent slash in front. */
+.section-title {
+  @apply flex items-center gap-3 font-display text-2xl uppercase sm:text-3xl;
+}
+.section-title::before {
+  content: "";
+  @apply inline-block h-6 w-1.5 -skew-x-12 bg-accent sm:h-7;
+  box-shadow: 0 0 12px rgb(255 90 31 / 0.8);
+}
+
+.eyebrow {
+  @apply text-xs font-bold tracking-[0.25em] text-accent uppercase;
+}
+
+/* A small label chip. */
+.chip {
+  @apply inline-flex items-center gap-1 border border-line bg-panel-2 px-2 py-0.5 text-[11px] font-semibold tracking-wide uppercase;
+}
+
+/* Rank badges: gold, silver, bronze for the podium. */
+.rank {
+  @apply flex h-8 w-8 shrink-0 items-center justify-center font-display text-lg text-muted;
+  clip-path: polygon(25% 0, 100% 0, 75% 100%, 0 100%);
+}
+.rank-1 {
+  @apply text-black;
+  background: linear-gradient(135deg, #ffe08a, var(--gold));
+  box-shadow: 0 0 18px rgb(246 197 68 / 0.6);
+}
+.rank-2 {
+  @apply text-black;
+  background: linear-gradient(135deg, #f1f4f8, var(--silver));
+}
+.rank-3 {
+  @apply text-black;
+  background: linear-gradient(135deg, #f0b47e, var(--bronze));
+}
+
+/* Data tables. */
+.table {
+  @apply w-full text-sm;
+}
+.table thead {
+  @apply text-[11px] tracking-wider text-muted uppercase;
+}
+.table th {
+  @apply px-2 py-2.5 font-semibold;
+}
+.table tbody tr {
+  @apply border-t border-line transition-colors hover:bg-white/[0.03];
+}
+
+/* Loading skeletons. */
+.skeleton {
+  @apply bg-panel-2;
+  background-image: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.05), transparent);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s infinite;
+}
+@keyframes shimmer {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+
+/* Page enter transition (app/template.tsx wraps every page). */
+.page-enter {
+  animation: page-enter 0.28s ease-out both;
+}
+@keyframes page-enter {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .page-enter,
+  .skeleton {
+    animation: none;
+  }
+  .card-hover {
+    @apply hover:translate-y-0;
+  }
 }

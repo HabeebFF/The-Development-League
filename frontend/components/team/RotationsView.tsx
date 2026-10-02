@@ -89,7 +89,7 @@ export default function RotationsView({ matchId, focusTeam }: { matchId: number;
   const single = shown.length === 1 ? shown[0] : null;
 
   return (
-    <div className="flex h-[calc(100dvh-var(--header-h))] flex-col lg:flex-row">
+    <div className="flex h-[calc(100dvh-var(--header-h)-var(--bottom-nav-h))] flex-col lg:flex-row">
       <aside className="flex shrink-0 gap-1 overflow-x-auto border-b border-line p-2 lg:w-64 lg:flex-col lg:overflow-y-auto lg:border-r lg:border-b-0">
         <Link href="/team" className="hidden px-2 pb-1 text-xs text-muted hover:text-text lg:block">
           &larr; Matches
@@ -107,7 +107,7 @@ export default function RotationsView({ matchId, focusTeam }: { matchId: number;
           <button
             key={r.team.slug}
             onClick={(e) => pick(r.team.slug, e.shiftKey)}
-            className={`flex shrink-0 items-center gap-2 rounded px-2 py-1.5 text-left text-sm ${
+            className={`flex shrink-0 items-center gap-2 px-2 py-1.5 text-left text-sm ${
               chosen.has(r.team.slug) ? "bg-panel-2" : "text-muted hover:bg-panel"
             }`}
           >
@@ -146,7 +146,7 @@ export default function RotationsView({ matchId, focusTeam }: { matchId: number;
           </p>
           <ul className="mt-3 space-y-1">
             {single.points.map((p, i) => (
-              <li key={`${p.checkpoint}-${i}`} className="flex items-center gap-2 rounded bg-panel px-2 py-1">
+              <li key={`${p.checkpoint}-${i}`} className="flex items-center gap-2 bg-panel px-2 py-1">
                 <span className="w-20 font-medium">{LABELS[p.checkpoint]}</span>
                 <span className="flex-1 truncate text-xs text-muted">
                   {p.area ?? `${Math.round(p.x)}, ${Math.round(p.z)}`}

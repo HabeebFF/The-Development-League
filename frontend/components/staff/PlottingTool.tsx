@@ -265,7 +265,7 @@ export default function PlottingTool({ matchId }: { matchId: number }) {
   const keyOf = Object.fromEntries(Object.entries(CHECKPOINT_KEYS).map(([k, c]) => [c, k.toUpperCase()]));
 
   return (
-    <div className="flex h-[calc(100dvh-var(--header-h))] flex-col lg:flex-row">
+    <div className="flex h-[calc(100dvh-var(--header-h)-var(--bottom-nav-h))] flex-col lg:flex-row">
       {/* Teams */}
       <aside className="flex shrink-0 gap-1 overflow-x-auto border-b border-line p-2 lg:w-60 lg:flex-col lg:overflow-y-auto lg:border-r lg:border-b-0">
         <Link href="/staff/matches" className="hidden px-2 pb-2 text-xs text-muted hover:text-text lg:block">
@@ -275,7 +275,7 @@ export default function PlottingTool({ matchId }: { matchId: number }) {
           <button
             key={r.team.slug}
             onClick={() => select(i)}
-            className={`flex shrink-0 items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm ${
+            className={`flex shrink-0 items-center gap-2 px-2 py-1.5 text-left text-sm ${
               i === selected ? "bg-panel-2 ring-1 ring-accent" : "hover:bg-panel"
             }`}
           >
@@ -332,7 +332,7 @@ export default function PlottingTool({ matchId }: { matchId: number }) {
           {current.plotted_by ? ` · ${current.plotted_by}` : ""}
         </p>
         {!data.map?.is_calibrated && (
-          <p className="mt-2 rounded border border-accent-2/40 bg-accent-2/10 p-2 text-xs text-accent-2">
+          <p className="mt-2 border border-accent-2/40 bg-accent-2/10 p-2 text-xs text-accent-2">
             This map has no calibrated image yet, so points are drawn on a grid. They are
             still saved in game coordinates.
           </p>
@@ -342,7 +342,7 @@ export default function PlottingTool({ matchId }: { matchId: number }) {
             <button
               key={c}
               onClick={() => setCheckpoint(c)}
-              className={`rounded border px-1.5 py-1 text-xs ${
+              className={`border px-1.5 py-1 text-xs ${
                 c === checkpoint ? "border-accent bg-accent/20" : "border-line hover:border-muted"
               } ${points.some((p) => p.checkpoint === c) ? "" : "text-muted"}`}
             >
@@ -354,7 +354,7 @@ export default function PlottingTool({ matchId }: { matchId: number }) {
 
         <ul className="mt-3 space-y-1">
           {points.map((p, i) => (
-            <li key={`${p.checkpoint}-${i}`} className="flex items-center gap-2 rounded bg-panel px-2 py-1">
+            <li key={`${p.checkpoint}-${i}`} className="flex items-center gap-2 bg-panel px-2 py-1">
               <span className="w-20 font-medium">{LABELS[p.checkpoint]}</span>
               <span className="flex-1 truncate text-xs text-muted">
                 {p.area ?? `${Math.round(p.x)}, ${Math.round(p.z)}`}

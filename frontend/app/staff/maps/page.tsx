@@ -21,11 +21,11 @@ export default function StaffMaps() {
   if (!me.is_super_admin) return <p className="p-6 text-muted">Only the Super Admin can calibrate maps.</p>;
   return (
     <section className="mx-auto max-w-6xl px-4 py-10">
-      <h1 className="font-display text-4xl uppercase">Maps</h1>
+      <h1 className="font-display text-5xl leading-none font-extrabold uppercase">Maps</h1>
       {error && <p className="mt-6 text-bad">{error}</p>}
       <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {maps?.map((m) => (
-          <Link key={m.slug} href={`/staff/maps/${m.slug}/calibrate`} className="overflow-hidden rounded-lg border border-line bg-panel hover:border-accent">
+          <Link key={m.slug} href={`/staff/maps/${m.slug}/calibrate`} className="card card-hover overflow-hidden">
             <div className="aspect-square bg-panel-2">
               {m.image && (
                 // eslint-disable-next-line @next/next/no-img-element

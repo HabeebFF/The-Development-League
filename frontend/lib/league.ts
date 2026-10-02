@@ -101,9 +101,16 @@ export function plural(n: number, word: string): string {
   return `${n} ${word}${n === 1 ? "" : "s"}`;
 }
 
-/** The newest match day with at least one played match. Days come oldest first. */
-export function latestPlayed<T extends Pick<MatchDay, "matches">>(days: T[]): T | null {
-  return [...days].reverse().find((d) => d.matches.some((m) => m.played)) ?? null;
+/** Played match days, newest first (by date, then day number; undated days count as oldest). */
+export function playedNewestFirst<T extends Pick<MatchDay, "matches" | "date" | "number">>(days: T[]): T[] {
+  return days
+    .filter((d) => d.matches.some((m) => m.played))
+    .sort((a, b) => (b.date ?? "").localeCompare(a.date ?? "") || b.number - a.number);
+}
+
+/** The newest match day with at least one played match. */
+export function latestPlayed<T extends Pick<MatchDay, "matches" | "date" | "number">>(days: T[]): T | null {
+  return playedNewestFirst(days)[0] ?? null;
 }
 
 export function mapName(slug: string | null): string {

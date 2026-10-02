@@ -210,7 +210,7 @@ export default function ReplayViewer({
   const alive = players.filter((p) => positionAt(p, step, t)).length;
 
   return (
-    <div className="flex h-[calc(100dvh-var(--header-h))] flex-col lg:flex-row">
+    <div className="flex h-[calc(100dvh-var(--header-h)-var(--bottom-nav-h))] flex-col lg:flex-row">
       {/* Teams */}
       <aside className="flex shrink-0 gap-1 overflow-x-auto border-b border-line p-2 lg:w-64 lg:flex-col lg:overflow-y-auto lg:border-r lg:border-b-0">
         <Link href={backHref} className="hidden px-2 pb-1 text-xs text-muted hover:text-text lg:block">
@@ -235,7 +235,7 @@ export default function ReplayViewer({
             key={team.slug}
             onClick={(e) => toggleTeam(team.slug, !(e.shiftKey || e.metaKey || e.ctrlKey))}
             disabled={!team.has_tracks}
-            className={`flex shrink-0 items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm disabled:opacity-40 ${
+            className={`flex shrink-0 items-center gap-2 px-2 py-1.5 text-left text-sm disabled:opacity-40 ${
               chosen.has(team.slug) ? "bg-panel-2 ring-1 ring-accent" : "hover:bg-panel"
             }`}
           >

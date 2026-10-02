@@ -162,7 +162,7 @@ export default function CalibrationTool({ slug }: { slug: string }) {
   const changed = JSON.stringify(adjust) !== JSON.stringify(NO_ADJUST);
 
   return (
-    <div className="flex h-[calc(100dvh-var(--header-h))] flex-col lg:flex-row">
+    <div className="flex h-[calc(100dvh-var(--header-h)-var(--bottom-nav-h))] flex-col lg:flex-row">
       <MapCanvas
         width={w}
         height={h}
@@ -279,7 +279,7 @@ export default function CalibrationTool({ slug }: { slug: string }) {
         )}
         <ul className="mt-3 space-y-1">
           {cal.points.map((p) => (
-            <li key={p.id} className="flex items-center gap-2 rounded bg-panel px-2 py-1 text-xs">
+            <li key={p.id} className="flex items-center gap-2 bg-panel px-2 py-1 text-xs">
               <span className="flex-1 truncate">{p.label || `${p.world_x}, ${p.world_z}`}</span>
               <span className={p.error_px != null && p.error_px > 15 ? "text-bad" : "text-muted"}>
                 {p.error_px != null ? `${p.error_px} px` : ""}

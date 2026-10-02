@@ -6,26 +6,36 @@ import type { Paged } from "@/lib/api";
 import { rows, type Team } from "@/lib/league";
 import { useApi } from "@/lib/useApi";
 
-import Loading from "./Loading";
-import TeamBadge from "./TeamBadge";
+import { Skeleton } from "./Loading";
+import { TeamMark } from "./TeamBadge";
 
 /** Every league team. */
 export default function TeamsView() {
   const teams = useApi<Paged<Team>>("/teams?page_size=100");
-  if (!teams.data) return <Loading error={teams.error} />;
+  if (teams.error) return <p className="text-bad">{teams.error}</p>;
+  if (!teams.data)
+    return (
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+        {Array.from({ length: 8 }, (_, i) => (
+          <Skeleton key={i} className="h-44" />
+        ))}
+      </div>
+    );
   const all = rows(teams.data).sort((a, b) => a.name.localeCompare(b.name));
   if (!all.length) return <p className="text-muted">No teams yet.</p>;
   return (
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
       {all.map((t) => (
-        <Link
-          key={t.id}
-          href={`/teams/${t.slug}`}
-          className="flex flex-col items-center gap-3 rounded-lg border border-line bg-panel p-4 text-center hover:border-muted"
-        >
-          <TeamBadge team={t} size="lg" />
-          <span className="w-full truncate font-medium">{t.name}</span>
-          {t.tag && <span className="-mt-2 text-xs text-muted">{t.tag}</span>}
+        <Link key={t.id} href={`/teams/${t.slug}`} className="card card-hover group flex flex-col items-center gap-3 overflow-hidden p-5 text-center">
+          <span
+            className="pointer-events-none absolute inset-x-0 top-0 h-20 opacity-40 transition-opacity group-hover:opacity-70"
+            style={{ background: `linear-gradient(180deg, ${t.primary_color || "var(--accent)"}, transparent)` }}
+          />
+          <span className="relative">
+            <TeamMark team={t} size="lg" />
+          </span>
+          <span className="relative w-full truncate font-display text-xl leading-tight uppercase">{t.name}</span>
+          {t.tag && <span className="relative -mt-2 text-xs font-semibold tracking-widest text-muted uppercase">{t.tag}</span>}
         </Link>
       ))}
     </div>

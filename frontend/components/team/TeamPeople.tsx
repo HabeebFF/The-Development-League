@@ -96,7 +96,7 @@ export default function TeamPeople({
         <h2 className="font-display text-2xl uppercase">Members</h2>
         {!members && !error && <p className="mt-2 text-muted">Loading...</p>}
         {members && active.length === 0 && <p className="mt-2 text-sm text-muted">Nobody has joined yet.</p>}
-        <ul className="mt-3 divide-y divide-line rounded-lg border border-line bg-panel">
+        <ul className="mt-3 divide-y divide-line card">
           {active.map((m) => (
             <li key={m.id} className="flex flex-wrap items-center gap-2 px-4 py-3 text-sm">
               <span className="flex-1">
@@ -148,7 +148,7 @@ export default function TeamPeople({
           {open.length > 0 && (
             <>
               <h3 className="mt-6 text-sm font-semibold text-muted uppercase">Waiting to join</h3>
-              <ul className="mt-2 divide-y divide-line rounded-lg border border-line bg-panel">
+              <ul className="mt-2 divide-y divide-line card">
                 {open.map((inv) => (
                   <li key={inv.id} className="flex flex-wrap items-center gap-2 px-4 py-3 text-sm">
                     <span className="flex-1">

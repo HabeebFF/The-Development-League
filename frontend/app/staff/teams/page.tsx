@@ -26,7 +26,7 @@ export default function StaffTeams() {
 
   return (
     <section className="mx-auto max-w-3xl px-4 py-10">
-      <h1 className="font-display text-4xl uppercase">Teams</h1>
+      <h1 className="font-display text-5xl leading-none font-extrabold uppercase">Teams</h1>
       <p className="mt-2 text-sm text-muted">
         Teams are created from in-game names when matches are uploaded. Give each one its proper name, logo
         and colour, merge spellings of the same team, and invite each team&apos;s manager.
@@ -35,7 +35,7 @@ export default function StaffTeams() {
       {!teams && !error && <p className="mt-6 text-muted">Loading...</p>}
       <ul className="mt-6 space-y-2">
         {teams?.map((team) => (
-          <li key={team.slug} className="rounded-lg border border-line bg-panel">
+          <li key={team.slug} className="card">
             <div className="flex flex-wrap items-center gap-2 px-4 py-3">
               <span className="min-w-0 flex-1">
                 <span className="block truncate font-medium">{team.name}</span>

@@ -1,7 +1,7 @@
 "use client";
 
 import type { MatchDay, Paged } from "@/lib/api";
-import { currentSeason, rows, type Season } from "@/lib/league";
+import { currentSeason, playedNewestFirst, rows, type Season } from "@/lib/league";
 import { useApi } from "@/lib/useApi";
 
 import Loading from "./Loading";
@@ -14,10 +14,8 @@ export default function ResultsView() {
   const days = useApi<Paged<MatchDay>>(season && `/match-days?season=${encodeURIComponent(season.slug)}&page_size=100`);
 
   if (seasons.data && !season) return <p className="text-muted">The first season hasn&apos;t started yet.</p>;
-  if (!days.data) return <Loading error={seasons.error ?? days.error} />;
-  const played = rows(days.data)
-    .filter((d) => d.matches.some((m) => m.played))
-    .reverse();
+  if (!days.data) return <Loading error={seasons.error ?? days.error} count={6} />;
+  const played = playedNewestFirst(rows(days.data));
   if (!played.length) return <p className="text-muted">No matches played yet.</p>;
   return (
     <div className="grid gap-4 md:grid-cols-2">
