@@ -26,7 +26,7 @@ export default function TeamHome() {
       <p className="text-sm font-semibold tracking-[0.2em] text-accent uppercase">
         {membership ? (membership.role === "MANAGER" ? "Team manager" : "Team player") : "League staff"}
       </p>
-      <h1 className="mt-1 font-display text-4xl uppercase">{membership?.team.name ?? "Team area"}</h1>
+      <h1 className="mt-1 font-display text-5xl leading-none font-extrabold uppercase">{membership?.team.name ?? "Team area"}</h1>
       <p className="mt-2 text-sm text-muted">Signed in as {me.email}</p>
       {membership && (
         <Link href="/team/members" className="btn mt-4 inline-block">
@@ -50,7 +50,7 @@ export default function TeamHome() {
               {day.title || `Day ${day.number}`}
               {day.date ? ` · ${new Date(day.date).toLocaleDateString()}` : ""}
             </h3>
-            <ul className="mt-2 divide-y divide-line rounded-lg border border-line bg-panel">
+            <ul className="mt-2 divide-y divide-line card">
               {day.matches
                 .filter((m) => m.played)
                 .map((m) => (

@@ -111,7 +111,7 @@ export default function TeamEditor({
         </p>
       )}
 
-      <div className="rounded-lg border border-line p-3">
+      <div className="card p-3">
         <p className="text-sm font-medium">Same team under another name?</p>
         <p className="mt-1 text-xs text-muted">
           Merging moves this team&apos;s results, members and in-game names to the team you pick, then

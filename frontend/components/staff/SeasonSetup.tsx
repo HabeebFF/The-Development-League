@@ -82,7 +82,7 @@ export default function SeasonSetup() {
       {data.seasons.map((season) => {
         const stages = data.stages.filter((st) => st.season === season.slug).sort((a, b) => a.order - b.order);
         return (
-          <div key={season.id} className="rounded-lg border border-line bg-panel">
+          <div key={season.id} className="card">
             <div className="flex flex-wrap items-center gap-2 border-b border-line px-4 py-3">
               <form
                 action={(form) =>
@@ -98,7 +98,7 @@ export default function SeasonSetup() {
                 </button>
               </form>
               {season.is_active ? (
-                <span className="rounded bg-accent px-2 py-1 text-xs font-semibold text-white">Current season</span>
+                <span className="bg-accent px-2 py-1 text-xs font-semibold text-white">Current season</span>
               ) : (
                 <button
                   className="btn px-2 py-1 text-xs"
@@ -129,7 +129,7 @@ export default function SeasonSetup() {
                       </button>
                     </form>
                     {days.length === 0 && <p className="mt-2 text-xs text-muted">No match days.</p>}
-                    <ul className="mt-2 divide-y divide-line rounded border border-line">
+                    <ul className="mt-2 divide-y divide-line border border-line">
                       {days.map((day) => (
                         <li key={day.id} className="flex flex-wrap items-center gap-2 px-3 py-2 text-sm">
                           <span className="min-w-0 flex-1 truncate">
@@ -180,7 +180,7 @@ export default function SeasonSetup() {
         );
       })}
 
-      <form action={addSeason} className="rounded-lg border border-dashed border-line p-4">
+      <form action={addSeason} className="border border-dashed border-line p-4">
         <p className="font-medium">New season</p>
         <div className="mt-2 flex flex-col gap-2 sm:flex-row">
           <input name="name" placeholder="e.g. TDL Season 1" required className="input flex-1" />

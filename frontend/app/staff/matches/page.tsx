@@ -18,14 +18,14 @@ export default function StaffMatches() {
 
   return (
     <section className="mx-auto max-w-6xl px-4 py-10">
-      <h1 className="font-display text-4xl uppercase">Plot rotations</h1>
+      <h1 className="font-display text-5xl leading-none font-extrabold uppercase">Plot rotations</h1>
       <p className="mt-2 text-sm text-muted">Published matches and how many team rotations are confirmed.</p>
       {error && <p className="mt-6 text-bad">{error}</p>}
       {!data && !error && <p className="mt-6 text-muted">Loading...</p>}
       {data && data.results.length === 0 && (
         <p className="mt-6 text-muted">No published matches yet. Upload some match logs first.</p>
       )}
-      <ul className="mt-6 divide-y divide-line rounded-lg border border-line bg-panel">
+      <ul className="mt-6 divide-y divide-line card">
         {data?.results.map((m) => {
           const total = m.rotations.AUTO + m.rotations.DRAFT + m.rotations.CONFIRMED;
           const done = m.rotations.CONFIRMED;

@@ -1,49 +1,48 @@
 import type { Metadata, Viewport } from "next";
-import { Anton, Inter } from "next/font/google";
+import { Barlow_Condensed, Inter } from "next/font/google";
 import Link from "next/link";
+
+import SiteNav from "@/components/SiteNav";
 
 import "./globals.css";
 
 const body = Inter({ variable: "--font-body", subsets: ["latin"] });
-const display = Anton({ variable: "--font-display", weight: "400", subsets: ["latin"] });
+const display = Barlow_Condensed({ variable: "--font-display", weight: ["600", "700", "800"], subsets: ["latin"] });
 
 export const metadata: Metadata = {
   title: { default: "The Development League", template: "%s | The Development League" },
   description: "The official home of The Development League, a Free Fire esports league.",
 };
 
-export const viewport: Viewport = { themeColor: "#0b0b0f", colorScheme: "dark" };
+export const viewport: Viewport = { themeColor: "#07080c", colorScheme: "dark", viewportFit: "cover" };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="en" className={`${body.variable} ${display.variable} h-full antialiased`}>
-      <body className="flex min-h-full flex-col font-sans">
-        <header className="sticky top-0 z-20 border-b border-line bg-bg/90 backdrop-blur">
-          <nav className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-6 px-4">
-            <Link href="/" className="flex h-14 items-center font-display text-lg tracking-wide uppercase">
-              The Development <span className="ml-1.5 text-accent">League</span>
-            </Link>
-            <div className="-mx-4 flex h-9 flex-1 basis-full sm:basis-auto items-center gap-5 overflow-x-auto px-4 text-sm whitespace-nowrap sm:mx-0 sm:h-14 sm:px-0">
-              {[
-                ["/standings", "Standings"],
-                ["/results", "Results"],
-                ["/teams", "Teams"],
-              ].map(([href, label]) => (
-                <Link key={href} href={href} className="font-medium hover:text-accent">
-                  {label}
-                </Link>
-              ))}
-              <span className="flex-1" />
-              <Link href="/team" className="text-muted hover:text-text">
-                My team
+      <body className="flex min-h-full flex-col pb-[var(--bottom-nav-h)] font-sans">
+        <SiteNav />
+        <main className="flex-1">{children}</main>
+        <footer className="border-t border-line">
+          <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-6 text-xs text-muted">
+            <span className="font-display text-sm tracking-wide uppercase">
+              The Development <span className="text-accent">League</span>
+            </span>
+            <span className="flex gap-4">
+              <Link href="/standings" className="hover:text-white">
+                Standings
               </Link>
-              <Link href="/staff" className="text-muted hover:text-text">
+              <Link href="/results" className="hover:text-white">
+                Results
+              </Link>
+              <Link href="/teams" className="hover:text-white">
+                Teams
+              </Link>
+              <Link href="/staff" className="hover:text-white">
                 Staff
               </Link>
-            </div>
-          </nav>
-        </header>
-        <main className="flex-1">{children}</main>
+            </span>
+          </div>
+        </footer>
       </body>
     </html>
   );

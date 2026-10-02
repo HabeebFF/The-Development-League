@@ -24,7 +24,7 @@ export default function TeamMembers() {
       <Link href="/team" className="text-xs text-muted hover:text-text">
         &larr; Team
       </Link>
-      <h1 className="mt-2 font-display text-4xl uppercase">{membership.team.name}</h1>
+      <h1 className="mt-2 font-display text-5xl leading-none font-extrabold uppercase">{membership.team.name}</h1>
       <div className="mt-6">
         <TeamPeople
           slug={membership.team.slug}

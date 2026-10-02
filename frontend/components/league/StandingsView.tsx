@@ -24,9 +24,9 @@ export default function StandingsView() {
   const day = played.find((d) => d.id === dayId) ?? played[0] ?? null;
   const table = useApi<Standings>(enc && day && `/seasons/${enc}/standings?match_day=${day.id}`);
 
-  if (!seasons.data) return <Loading error={seasons.error} />;
+  if (!seasons.data) return <Loading error={seasons.error} count={8} />;
   if (!slug) return <p className="text-muted">The first season hasn&apos;t started yet.</p>;
-  if (!days.data) return <Loading error={days.error} />;
+  if (!days.data) return <Loading error={days.error} count={8} />;
 
   return (
     <>
@@ -64,11 +64,11 @@ export default function StandingsView() {
         <p className="mt-4 text-muted">No matches played yet.</p>
       ) : (
         <>
-          <h2 className="mt-6 font-display text-2xl uppercase">
-            {dayName(day)}
-            {day.date && <span className="ml-2 text-sm font-normal text-muted normal-case">{shortDate(day.date)}</span>}
-          </h2>
-          <div className="mt-3">{table.data ? <StandingsTable rows={table.data.rows} /> : <Loading error={table.error} />}</div>
+          <div className="mt-6 flex flex-wrap items-baseline gap-x-3">
+            <h2 className="section-title">{dayName(day)}</h2>
+            {day.date && <span className="text-sm text-muted">{shortDate(day.date)}</span>}
+          </div>
+          <div className="mt-4">{table.data ? <StandingsTable rows={table.data.rows} /> : <Loading error={table.error} count={8} />}</div>
         </>
       )}
       {detail.data?.scoring && (

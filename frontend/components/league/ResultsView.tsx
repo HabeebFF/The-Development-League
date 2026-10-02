@@ -14,7 +14,7 @@ export default function ResultsView() {
   const days = useApi<Paged<MatchDay>>(season && `/match-days?season=${encodeURIComponent(season.slug)}&page_size=100`);
 
   if (seasons.data && !season) return <p className="text-muted">The first season hasn&apos;t started yet.</p>;
-  if (!days.data) return <Loading error={seasons.error ?? days.error} />;
+  if (!days.data) return <Loading error={seasons.error ?? days.error} count={6} />;
   const played = playedNewestFirst(rows(days.data));
   if (!played.length) return <p className="text-muted">No matches played yet.</p>;
   return (

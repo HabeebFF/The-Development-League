@@ -198,8 +198,8 @@ export default function UploadMatches() {
       <Link href="/staff" className="text-xs text-muted hover:text-text">
         &larr; Staff
       </Link>
-      <h1 className="mt-2 font-display text-4xl uppercase">Upload matches</h1>
-      {error && <p className="mt-4 rounded border border-bad/40 bg-bad/10 p-3 text-sm text-bad">{error}</p>}
+      <h1 className="mt-2 font-display text-5xl leading-none font-extrabold uppercase">Upload matches</h1>
+      {error && <p className="mt-4 border border-bad/40 bg-bad/10 p-3 text-sm text-bad">{error}</p>}
 
       {step === "pick" && (
         <div className="mt-6 space-y-6">
@@ -236,7 +236,7 @@ export default function UploadMatches() {
               </p>
               <div className="mt-2 flex flex-wrap gap-2">
                 {allDays.map((d) => (
-                  <label key={d} className="flex items-center gap-2 rounded border border-line px-3 py-1.5 text-sm">
+                  <label key={d} className="flex items-center gap-2 border border-line px-3 py-1.5 text-sm">
                     <input
                       type="checkbox"
                       checked={days.has(d)}
@@ -270,7 +270,7 @@ export default function UploadMatches() {
       {step === "uploading" && (
         <div className="mt-8">
           <p className="text-sm">{progress.label || "Starting..."}</p>
-          <div className="mt-2 h-2 overflow-hidden rounded bg-panel-2">
+          <div className="mt-2 h-2 overflow-hidden bg-panel-2">
             <div
               className="h-full bg-accent transition-all"
               style={{ width: `${progress.total ? Math.min(100, (100 * progress.sent) / progress.total) : 0}%` }}
@@ -291,7 +291,7 @@ export default function UploadMatches() {
               ` ${skipped} other ${skipped === 1 ? "game" : "games"} in the debugger log had no result file and ${skipped === 1 ? "was" : "were"} left out.`}
           </p>
 
-          <div className="rounded-lg border border-line bg-panel p-4">
+          <div className="card p-4">
             <h2 className="text-sm font-semibold text-muted uppercase">Match day</h2>
             <select
               className="input mt-2"
@@ -346,7 +346,7 @@ export default function UploadMatches() {
             )}
           </div>
 
-          <ul className="divide-y divide-line rounded-lg border border-line bg-panel">
+          <ul className="divide-y divide-line card">
             {matches.map((m) => {
               const row = rows[m.game_match_id] ?? { include: false, number: 1 };
               const set = (patch: Partial<Row>) => setRows((r) => ({ ...r, [m.game_match_id]: { ...row, ...patch } }));
@@ -419,7 +419,7 @@ export default function UploadMatches() {
 
       {step === "done" && batch && (
         <div className="mt-6 space-y-4">
-          <ul className="divide-y divide-line rounded-lg border border-line bg-panel">
+          <ul className="divide-y divide-line card">
             {(batch.preview.results ?? []).map((r) => {
               const m = matches.find((x) => x.game_match_id === r.game_match_id);
               const ok = r.status !== "FAILED";

@@ -148,7 +148,7 @@ export default function AcceptInvite({ token }: { token: string }) {
   return (
     <>
       {heading}
-      <div className="mt-6 rounded-lg border border-line bg-panel p-3 text-sm">
+      <div className="mt-6 card p-3 text-sm">
         <p className="font-medium">New here? No account needed yet.</p>
         <p className="mt-1 text-muted">
           This creates your account. Pick a new password now. Next time, sign in with{" "}
