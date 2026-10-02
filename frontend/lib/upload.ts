@@ -244,6 +244,19 @@ export function sessionsOf(
   );
 }
 
+/** YYYY-MM-DD of a moment, in the viewer's time zone. */
+export function localDate(d: Date): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+/** The day a session was played: its first match's start (a 10pm session that runs past
+ * midnight still counts as the evening it began). Null if no start times are known. */
+export function playedOn(matches: Pick<PreviewMatch, "started_at">[]): string | null {
+  const first = matches.find((m) => m.started_at)?.started_at;
+  return first ? localDate(new Date(first)) : null;
+}
+
 /** Match days are told apart by their name: same words, any case or spacing. */
 export function sameDayName(a: string, b: string): boolean {
   const norm = (s: string) => s.replace(/\s+/g, " ").trim().toLowerCase();

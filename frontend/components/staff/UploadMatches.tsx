@@ -24,6 +24,8 @@ import {
 import {
   formatBytes,
   inPlayOrder,
+  localDate,
+  playedOn,
   numberFor,
   sameDayName,
   sessionsOf,
@@ -365,13 +367,14 @@ export default function UploadMatches() {
     const ordered = inPlayOrder(ready.preview.matches ?? []).filter(
       (m) => m.ready,
     );
-    const today = new Date().toISOString().slice(0, 10);
+    const today = localDate(new Date());
     const stage = stages.length ? String(stages[stages.length - 1].id) : "";
     let next = Math.max(0, ...matchDays.map((d) => d.number));
     const out: Record<string, Plan> = {};
     const numbers: Record<string, number> = {};
     const include: Record<string, boolean> = {};
     for (const session of sessionsOf(ordered)) {
+      const date = playedOn(session.matches) ?? today;
       const known = session.name
         ? matchDays.find((d) => sameDayName(d.title, session.name))
         : undefined;
@@ -380,14 +383,14 @@ export default function UploadMatches() {
             choice: String(known.id),
             title: known.title,
             number: String(known.number),
-            date: today,
+            date,
             stage,
           }
         : {
             choice: "new",
             title: session.name,
             number: String(session.league ? ++next : next + 1),
-            date: today,
+            date,
             stage,
           };
       Object.assign(numbers, numberFor(session.matches, known?.id ?? null));
