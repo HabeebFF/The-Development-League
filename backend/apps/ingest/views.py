@@ -1,8 +1,9 @@
 """Staff upload API.
 
-Flow: create a batch -> add files (direct upload, or presign + PUT to S3 + register)
--> files are read in the background and a per-match preview appears on the batch
--> confirm with a match day / number per match -> matches are built in the background.
+Flow: create a batch -> ask which files the server already has (``known``) -> add the
+rest (direct upload, or presign + PUT to S3 + register) -> files are read in the
+background and a per-match preview appears on the batch -> confirm with a match day /
+number per match -> matches are built in the background.
 """
 
 from django.conf import settings
@@ -24,6 +25,7 @@ from . import tasks
 from .models import ParseRun, UploadBatch, UploadedFile
 from .serializers import (
     ConfirmSerializer,
+    KnownSerializer,
     ParseRunSerializer,
     PresignSerializer,
     RegisterSerializer,
@@ -31,6 +33,8 @@ from .serializers import (
     UploadBatchSerializer,
 )
 from .services import storage
+
+PS = UploadedFile.ParseStatus
 
 OPEN_STATUSES = {UploadBatch.Status.UPLOADING, UploadBatch.Status.READY, UploadBatch.Status.FAILED}
 CONFIRMABLE_STATUSES = {
@@ -69,7 +73,12 @@ class UploadBatchViewSet(
 
     @action(detail=True, methods=["post"])
     def files(self, request, pk=None):
-        """Direct upload (multipart, field name ``files``). Fine for dev and small files."""
+        """Direct upload (multipart, field name ``files``). Fine for dev and small files.
+
+        With ``defer=1`` the files are only stored, so several requests can run at once;
+        call ``group`` after the last one. Sending the same file twice stores it once; a
+        newer copy of a file (a debugger log the game was still writing) replaces the older.
+        """
         batch = self._open_batch()
         uploads = request.FILES.getlist("files")
         if not uploads:
@@ -77,15 +86,78 @@ class UploadBatchViewSet(
         too_big = [f.name for f in uploads if f.size > settings.UPLOAD_MAX_FILE_BYTES]
         if too_big:
             return Response({"files": [f"Too large: {', '.join(too_big)}"]}, status=400)
+        defer = str(request.data.get("defer", "")).lower() in {"1", "true", "yes"}
         with transaction.atomic():
             for f in uploads:
                 key, size, sha = storage.save_upload(batch.pk, f.name, f)
+                if batch.files.filter(original_name=f.name, sha256=sha).exists():
+                    default_storage.delete(key)  # a retry of a file that already arrived
+                    continue
+                for older in batch.files.filter(original_name=f.name):
+                    shared = UploadedFile.objects.filter(storage_key=older.storage_key).count() > 1
+                    older.delete()
+                    if not shared:
+                        default_storage.delete(older.storage_key)
                 UploadedFile.objects.create(
                     batch=batch, original_name=f.name, storage_key=key, size=size, sha256=sha
                 )
-            self._after_files_added(batch)
+            if not defer:
+                self._after_files_added(batch)
         batch.refresh_from_db()
         return Response(UploadBatchSerializer(batch).data, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=["post"])
+    def known(self, request, pk=None):
+        """Which of these files (name and size) the server already has.
+
+        Files already in this batch count (an upload that was cut off and resumed), and
+        so do files from earlier uploads: those are added to this batch without sending
+        them again. Returns ``{"have": [names]}``; the browser sends only the rest.
+        """
+        batch = self._open_batch()
+        serializer = KnownSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        have = []
+        with transaction.atomic():
+            for spec in serializer.validated_data["files"]:
+                name, size = spec["name"], spec["size"]
+                if batch.files.filter(original_name=name, size=size).exists():
+                    have.append(name)
+                    continue
+                original = (
+                    UploadedFile.objects.filter(original_name=name, size=size)
+                    .exclude(sha256="")
+                    .exclude(parse_status__in=[PS.PENDING, PS.FAILED, PS.DUPLICATE])
+                    .order_by("created_at")
+                    .first()
+                )
+                if original is None:
+                    continue
+                UploadedFile.objects.create(
+                    batch=batch,
+                    original_name=name,
+                    kind=original.kind,
+                    game_match_id=original.game_match_id,
+                    file_timestamp=original.file_timestamp,
+                    storage_key=original.storage_key,
+                    size=original.size,
+                    sha256=original.sha256,
+                    parse_status=PS.DUPLICATE,
+                    parse_report={"duplicate_of": original.pk},
+                )
+                have.append(name)
+        return Response({"have": have})
+
+    @action(detail=True, methods=["post"])
+    def group(self, request, pk=None):
+        """Read the files sent with ``defer=1`` and build the preview."""
+        batch = self._open_batch()
+        if not batch.files.exists():
+            return Response({"files": ["Attach at least one file."]}, status=400)
+        with transaction.atomic():
+            self._after_files_added(batch)
+        batch.refresh_from_db()
+        return Response(UploadBatchSerializer(batch).data, status=status.HTTP_202_ACCEPTED)
 
     @action(detail=True, methods=["post"])
     def presign(self, request, pk=None):

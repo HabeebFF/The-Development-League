@@ -55,6 +55,10 @@ class FileSpecSerializer(serializers.Serializer):
         return value
 
 
+class KnownSerializer(serializers.Serializer):
+    files = FileSpecSerializer(many=True, allow_empty=False, max_length=5000)
+
+
 class PresignSerializer(serializers.Serializer):
     files = FileSpecSerializer(many=True, allow_empty=False)
 

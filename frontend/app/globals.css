@@ -181,6 +181,16 @@ body {
   }
 }
 
+/* An indeterminate bar sliding across (Upload: scanning the folder). */
+@keyframes scan {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(300%);
+  }
+}
+
 /* Page enter transition (app/template.tsx wraps every page). */
 .page-enter {
   animation: page-enter 0.28s ease-out both;
