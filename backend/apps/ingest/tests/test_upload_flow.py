@@ -443,3 +443,28 @@ def test_matches_are_built_one_at_a_time(upload, confirm, match_day):
         )
     locks = [q["sql"] for q in queries.captured_queries if "pg_advisory_xact_lock" in q["sql"]]
     assert len(locks) == 1
+
+
+def test_players_logged_with_uid_zero_are_recovered(upload, confirm, match_day):
+    """The MatchResult log sometimes writes ID 0; those players must not collapse into one."""
+    from apps.ingest.parsers.names import search_name
+    from apps.ingest.services.assemble import unlinked_uid
+
+    text = fixture_bytes(MATCH_RESULT_NAME).decode("utf-8-sig")
+    text = text.replace("ID: 2063288734", "ID: 0")  # NB VALSI, in the kill feed
+    text = text.replace("ID: 6149860556", "ID: 0")
+    text = text.replace("NBㅤDRAXx7`           ID: 1759305665", "GHOSTㅤPLAYER         ID: 0")
+    files = [f for f in all_files() if f.name != MATCH_RESULT_NAME]
+    batch = upload([SimpleUploadedFile(MATCH_RESULT_NAME, text.encode()), *files])
+    confirm(batch["id"], [{"game_match_id": str(MATCH_ID), "match_day": match_day.pk, "number": 1}])
+
+    match = Match.objects.get(game_match_id=MATCH_ID)
+    run = ParseRun.objects.get(match=match)
+    assert run.status != ParseRun.Status.FAILED, run.error
+    rows = PlayerMatchResult.objects.filter(match=match)
+    assert rows.count() == 52  # nobody merged or dropped
+    uids = set(rows.values_list("player__game_uid", flat=True))
+    assert 2063288734 in uids and 6149860556 in uids  # recovered from the other logs
+    assert 0 not in uids and not Player.objects.filter(game_uid=0).exists()
+    assert unlinked_uid(search_name("GHOSTㅤPLAYER")) in uids  # unknown: kept apart by name
+    assert any("no game ID" in w for w in run.warnings)
