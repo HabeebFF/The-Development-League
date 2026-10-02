@@ -35,6 +35,21 @@ type Plan = { choice: string; title: string; number: string; date: string; stage
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+/** Reads files into memory before sending. A file the game changed after it was picked (today's
+ * debugger log while Free Fire is open) can't be read any more: it is left out, not the whole upload. */
+async function snapshot(files: File[]): Promise<{ ok: File[]; changed: string[] }> {
+  const ok: File[] = [];
+  const changed: string[] = [];
+  for (const f of files) {
+    try {
+      ok.push(new File([await f.arrayBuffer()], f.name, { lastModified: f.lastModified }));
+    } catch {
+      changed.push(f.name);
+    }
+  }
+  return { ok, changed };
+}
+
 /** Sends one group of files to the batch, reporting bytes sent. */
 function send(batchId: number, files: File[], token: string, onBytes: (n: number) => void): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -79,6 +94,7 @@ export default function UploadMatches() {
   const [progress, setProgress] = useState({ sent: 0, total: 0, label: "" });
   const [batch, setBatch] = useState<Batch | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [changed, setChanged] = useState<string[]>([]);
 
   const [stages, setStages] = useState<Stage[]>([]);
   const [matchDays, setMatchDays] = useState<Day[]>([]);
@@ -117,6 +133,7 @@ export default function UploadMatches() {
 
   async function upload() {
     setError(null);
+    setChanged([]);
     setStep("uploading");
     try {
       const created = await api<Batch>("/uploads/batches", { method: "POST", body: { note: "Upload page" } });
@@ -125,7 +142,10 @@ export default function UploadMatches() {
       for (const [i, group] of groups.entries()) {
         await api("/me"); // refreshes the sign-in if a long upload outlived it
         const label = `Uploading part ${i + 1} of ${groups.length}`;
-        await send(created.id, group, await csrfToken(), (n) => setProgress({ sent: done + n, total: totalBytes, label }));
+        const part = await snapshot(group);
+        if (part.changed.length) setChanged((c) => [...c, ...part.changed]);
+        if (part.ok.length)
+          await send(created.id, part.ok, await csrfToken(), (n) => setProgress({ sent: done + n, total: totalBytes, label }));
         done += group.reduce((n, f) => n + f.size, 0);
         setProgress({ sent: done, total: totalBytes, label: "Reading the files" });
         const ready = await waitWhile(created.id, ["GROUPING"]);
@@ -209,6 +229,13 @@ export default function UploadMatches() {
       </Link>
       <h1 className="mt-2 font-display text-5xl leading-none font-extrabold uppercase">Upload matches</h1>
       {error && <p className="mt-4 border border-bad/40 bg-bad/10 p-3 text-sm text-bad">{error}</p>}
+      {changed.length > 0 && (
+        <p className="mt-4 border border-accent/40 bg-accent/10 p-3 text-sm">
+          Left out {changed.join(", ")}: the game changed {changed.length === 1 ? "it" : "them"} after you picked the
+          folder. The other files are fine. To include {changed.length === 1 ? "it" : "them"}, close Free Fire, pick the
+          folder again and upload again.
+        </p>
+      )}
 
       {step === "pick" && (
         <div className="mt-6 space-y-6">
