@@ -8,6 +8,7 @@ import pytest
 from django.core.files.uploadedfile import SimpleUploadedFile
 from rest_framework.test import APIClient
 
+from apps.accounts.testing import signed_in_client
 from apps.ingest.models import ParseRun, UploadBatch, UploadedFile
 from apps.league.models import Match, MatchDay, Player, ScoringRule, Season, Stage, Team, TeamAlias
 from apps.maps.models import Map
@@ -302,8 +303,7 @@ def test_confirm_validation(upload, confirm, match_day, client):
 
 
 def test_permissions(client, staff, django_user_model):
-    anon = APIClient()
-    assert anon.get("/api/v1/uploads/batches").status_code == 401
+    assert APIClient().get("/api/v1/uploads/batches").status_code == 401
     player = django_user_model.objects.create_user(email="p@tdl.test", password="x-long-password")
     other = APIClient()
     other.force_authenticate(player)
@@ -370,7 +370,7 @@ def test_log_times_are_read_in_log_time_zone(settings, upload):
 def test_confirm_rebuilds_standings(upload, confirm, match_day):
     batch = upload(all_files())
     confirm(batch["id"], [{"game_match_id": str(MATCH_ID), "match_day": match_day.pk, "number": 1}])
-    table = APIClient().get("/api/v1/seasons/season-1/standings").json()
+    table = signed_in_client().get("/api/v1/seasons/season-1/standings").json()
     assert len(table["rows"]) == 13
     top = table["rows"][0]
     assert top["team"]["name"] == "NOOBZ ESPORTS"

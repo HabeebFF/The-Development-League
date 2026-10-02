@@ -4,6 +4,7 @@ import pytest
 from rest_framework.test import APIClient
 
 from apps.accounts.models import User
+from apps.accounts.testing import signed_in_client
 from apps.league.models import Player, ScoringRule, Season, Team, TeamAlias
 
 pytestmark = pytest.mark.django_db
@@ -29,13 +30,13 @@ def season() -> Season:
 def test_public_team_list_and_detail(season):
     team = Team.objects.create(name="NOOBZ ESPORTS", tag="NB")
     Team.objects.create(name="Guest", is_league_member=False)
-    anon = APIClient()
-    names = [t["name"] for t in anon.get("/api/v1/teams").json()["results"]]
+    viewer = signed_in_client()
+    names = [t["name"] for t in viewer.get("/api/v1/teams").json()["results"]]
     assert names == ["NOOBZ ESPORTS"]
-    assert anon.get("/api/v1/teams?search=nb").json()["count"] == 1
-    detail = anon.get(f"/api/v1/teams/{team.slug}").json()
+    assert viewer.get("/api/v1/teams?search=nb").json()["count"] == 1
+    detail = viewer.get(f"/api/v1/teams/{team.slug}").json()
     assert detail["roster"] == []
-    assert anon.post("/api/v1/teams", {"name": "x"}).status_code in (401, 403, 405)
+    assert viewer.post("/api/v1/teams", {"name": "x"}).status_code in (401, 403, 405)
 
 
 def test_staff_create_team_with_validation(staff_client):
@@ -106,7 +107,7 @@ def test_rosters_and_player_admin(staff_client, season):
     )
     assert unknown.status_code == 400
 
-    roster = APIClient().get(f"/api/v1/teams/{team.slug}").json()["roster"]
+    roster = signed_in_client().get(f"/api/v1/teams/{team.slug}").json()["roster"]
     assert roster[0]["player"]["game_uid"] == "2063288734" and roster[0]["role"] == "IGL"
 
     found = staff_client.get("/api/v1/admin/players?search=2063288734").json()["results"]

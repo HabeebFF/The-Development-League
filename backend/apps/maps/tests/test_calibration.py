@@ -9,6 +9,7 @@ from PIL import Image
 from rest_framework.test import APIClient
 
 from apps.accounts.models import User
+from apps.accounts.testing import signed_in_client
 from apps.maps.calibration import (
     CalibrationError,
     Point,
@@ -122,7 +123,7 @@ def test_upload_image_and_calibrate(boss):
     state = boss.get(url).json()
     assert state["calibration_error"] == 0 and state["points"][0]["error_px"] == 0
     assert close(Transform.from_dict(state["transform"]), TRUTH)
-    assert APIClient().get("/api/v1/maps/bermuda").json()["is_calibrated"] is True
+    assert signed_in_client().get("/api/v1/maps/bermuda").json()["is_calibrated"] is True
 
     outside = boss.post(
         url, {"world_x": 0, "world_z": 0, "pixel_x": 2000, "pixel_y": 5}, format="json"
@@ -184,7 +185,7 @@ def test_areas_and_permissions(boss):
     )
     assert MapArea.find(Map.objects.get(slug="purgatory").pk, 50, 50).name == "Brasilia"
 
-    public = APIClient().get("/api/v1/maps/purgatory").json()
+    public = signed_in_client().get("/api/v1/maps/purgatory").json()
     assert public["areas"][0]["name"] == "Brasilia"
 
     staff = APIClient()
@@ -198,5 +199,5 @@ def test_areas_and_permissions(boss):
 @pytest.mark.django_db
 def test_image_url_is_not_rewritten_to_the_api_host(boss):
     boss.patch("/api/v1/admin/maps/kalahari", {"image": png(64, 64)}, format="multipart")
-    image = APIClient().get("/api/v1/maps/kalahari").json()["image"]
+    image = signed_in_client().get("/api/v1/maps/kalahari").json()["image"]
     assert image.startswith("/media/maps/")  # same origin as the website in development

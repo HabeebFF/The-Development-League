@@ -4,6 +4,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 
+import { useAuth } from "./Auth";
+
 const MAIN = [
   { href: "/", label: "Home", icon: "M3 11 12 4l9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z" },
   { href: "/standings", label: "Standings", icon: "M4 20V10h4v10zm6 0V4h4v16zm6 0v-7h4v7z" },
@@ -30,6 +32,8 @@ function Icon({ d }: { d: string }) {
 /** The top bar (all links on desktop) and, on phones, a bottom tab bar plus a menu for the rest. */
 export default function SiteNav() {
   const path = usePathname();
+  const { status, signOut } = useAuth();
+  const signedIn = status === "in";
   const [open, setOpen] = useState(false);
   // Close the phone menu whenever the page changes.
   const [shown, setShown] = useState(path);
@@ -59,7 +63,7 @@ export default function SiteNav() {
               Development <span className="text-accent">League</span>
             </span>
           </Link>
-          <div className="hidden h-full flex-1 items-center gap-1 md:flex">
+          <div className={`hidden h-full flex-1 items-center gap-1 ${signedIn ? "md:flex" : ""}`}>
             {MAIN.slice(1).map((l) => (
               <Link
                 key={l.href}
@@ -82,10 +86,13 @@ export default function SiteNav() {
                 {l.label}
               </Link>
             ))}
+            <button type="button" onClick={signOut} className="px-3 text-sm font-medium text-muted transition-colors hover:text-white">
+              Sign out
+            </button>
           </div>
           <button
             type="button"
-            className="ml-auto flex h-10 w-10 items-center justify-center text-muted hover:text-white md:hidden"
+            className={`ml-auto h-10 w-10 items-center justify-center text-muted hover:text-white md:hidden ${signedIn ? "flex" : "hidden"}`}
             aria-label={open ? "Close menu" : "Open menu"}
             aria-expanded={open}
             onClick={() => setOpen((o) => !o)}
@@ -97,7 +104,7 @@ export default function SiteNav() {
         </nav>
       </header>
 
-      {open && (
+      {open && signedIn && (
         <div className="fixed inset-0 z-20 md:hidden" onClick={() => setOpen(false)}>
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
           <div
@@ -116,12 +123,19 @@ export default function SiteNav() {
                 <span className="text-muted">&rsaquo;</span>
               </Link>
             ))}
+            <button
+              type="button"
+              onClick={signOut}
+              className="flex w-full items-center justify-between pt-3.5 font-display text-2xl text-muted uppercase"
+            >
+              Sign out
+            </button>
           </div>
         </div>
       )}
 
       <nav
-        className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-bg/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-md md:hidden"
+        className={`fixed inset-x-0 bottom-0 z-30 ${signedIn ? "" : "hidden"} border-t border-line bg-bg/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-md md:hidden`}
         aria-label="Main"
       >
         <div className="grid h-[var(--bottom-nav-h)] grid-cols-4">

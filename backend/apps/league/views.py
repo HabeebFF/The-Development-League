@@ -5,7 +5,7 @@ from django.shortcuts import get_object_or_404
 from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from apps.results.models import StandingRow
@@ -64,9 +64,9 @@ def _day_matches() -> Prefetch:
 
 
 class PublicTeamViewSet(viewsets.ReadOnlyModelViewSet):
-    """League teams, visible to everyone. ``?search=`` matches name or tag."""
+    """League teams, for signed-in users. ``?search=`` matches name or tag."""
 
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]
     lookup_field = "slug"
 
     def get_queryset(self):
@@ -157,13 +157,13 @@ class RosterEntryViewSet(viewsets.ModelViewSet):
         return qs
 
 
-# -- public: seasons, standings, fixtures, match days, matches ---------------------------------
+# -- league data, signed-in users only: seasons, standings, fixtures, match days, matches
 
 
 class SeasonViewSet(viewsets.ReadOnlyModelViewSet):
     """Seasons, newest first. ``/seasons/{slug}`` includes stages, groups and scoring."""
 
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]
     lookup_field = "slug"
 
     def get_queryset(self):
@@ -234,7 +234,7 @@ class SeasonViewSet(viewsets.ReadOnlyModelViewSet):
 class MatchDayViewSet(viewsets.ReadOnlyModelViewSet):
     """Match days (``?season=slug``, ``?stage=id``); detail adds the day's standings."""
 
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]
     serializer_class = MatchDaySerializer
 
     def get_queryset(self):
@@ -262,7 +262,7 @@ class MatchDayViewSet(viewsets.ReadOnlyModelViewSet):
 class MatchViewSet(viewsets.ReadOnlyModelViewSet):
     """Published matches. Filters: ``?season=slug&match_day=id&map=slug&team=slug``."""
 
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
         qs = (
