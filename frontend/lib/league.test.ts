@@ -12,9 +12,12 @@ test("the active season wins, else the newest", () => {
 });
 
 test("latest played day skips days with no played match", () => {
-  const day = (id: number, played: boolean[]) => ({ id, matches: played.map((p) => ({ played: p })) });
+  const day = (id: number, played: boolean[], date: string | null = null) => ({ id, number: id, date, matches: played.map((p) => ({ played: p })) });
   const days = [day(1, [true]), day(2, [true, false]), day(3, [false])] as never[];
   assert.equal((latestPlayed(days) as { id: number } | null)?.id, 2);
+  // A dated day beats an undated one, whatever the day number.
+  const dated = [day(11, [true], "2026-09-28"), day(10, [true])] as never[];
+  assert.equal((latestPlayed(dated) as { id: number } | null)?.id, 11);
   assert.equal(latestPlayed([]), null);
 });
 

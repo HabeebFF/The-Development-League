@@ -3,7 +3,7 @@
 import Link from "next/link";
 
 import type { MatchDay, Paged } from "@/lib/api";
-import { currentSeason, latestPlayed, rows, type Season, type Standings } from "@/lib/league";
+import { currentSeason, dayName, latestPlayed, rows, type Season, type Standings } from "@/lib/league";
 import { useApi } from "@/lib/useApi";
 
 import MatchDayCard from "./MatchDayCard";
@@ -14,11 +14,12 @@ export default function HomeView() {
   const seasons = useApi<Paged<Season>>("/seasons?page_size=100");
   const season = seasons.data ? currentSeason(rows(seasons.data)) : null;
   const slug = season ? encodeURIComponent(season.slug) : null;
-  const standings = useApi<Standings>(slug && `/seasons/${slug}/standings`);
   const days = useApi<Paged<MatchDay>>(slug && `/match-days?season=${slug}&page_size=100`);
   const upcoming = useApi<Paged<MatchDay>>(slug && `/seasons/${slug}/fixtures?upcoming=true&page_size=3`);
 
   const latest = days.data ? latestPlayed(rows(days.data)) : null;
+  // The headline table is the latest match day's, not the season's running total.
+  const standings = useApi<Standings>(slug && latest && `/seasons/${slug}/standings?match_day=${latest.id}`);
   const next = upcoming.data ? rows(upcoming.data).filter((d) => d.id !== latest?.id) : [];
 
   return (
@@ -38,13 +39,18 @@ export default function HomeView() {
           <div className="grid gap-8 lg:grid-cols-[3fr_2fr] [&>*]:min-w-0">
             <div>
               <div className="flex items-baseline justify-between">
-                <h2 className="font-display text-2xl uppercase">Standings</h2>
+                <h2 className="font-display text-2xl uppercase">
+                  Standings
+                  {latest && <span className="ml-2 text-sm font-normal text-muted normal-case">{dayName(latest)}</span>}
+                </h2>
                 <Link href="/standings" className="text-sm text-accent">
                   Full table &rarr;
                 </Link>
               </div>
               <div className="mt-3">
-                {standings.data ? (
+                {days.data && !latest ? (
+                  <p className="text-sm text-muted">No matches played yet.</p>
+                ) : standings.data ? (
                   <StandingsTable rows={standings.data.rows.slice(0, 5)} compact />
                 ) : (
                   <p className={standings.error ? "text-bad" : "text-muted"}>{standings.error ?? "Loading..."}</p>
