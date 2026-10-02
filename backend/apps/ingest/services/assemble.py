@@ -12,6 +12,7 @@ replaced inside one transaction, so a re-upload updates and never duplicates.
 
 from __future__ import annotations
 
+import zlib
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -213,14 +214,36 @@ def _build(match: Match, assignment: Assignment, run: ParseRun) -> tuple[dict[st
 
     # -- teams and players -------------------------------------------------------------------
     teams = _resolve_teams(mr, assignment, season)
+
+    entity_uid: dict[int, int] = {}
+    if replay:
+        entity_uid.update(replay.entity_to_uid)
+    if block:
+        entity_uid.update(block.players)
+    entity_uid = {e: u for e, u in entity_uid.items() if u}  # the game logs 0 for "unknown"
+
+    # The MatchResult log sometimes writes ID 0 for players (seen on teams knocked out
+    # early); recover their real UID from the other logs, else keep them apart by name.
+    uid_of, unresolved = _resolve_zero_uids(mr, replay, entity_uid)
+    if unresolved:
+        warnings.append(
+            f"{len(unresolved)} player(s) had no game ID in the MatchResult log and could not "
+            f"be matched to one ({', '.join(unresolved[:5])}"
+            f"{'...' if len(unresolved) > 5 else ''}); "
+            "they are kept as separate players by name."
+        )
+
     players: dict[int, Player] = {}
     uid_team: dict[int, Team] = {}
     for team_row in mr.teams:
         team = teams[team_row.name_raw]
         for p in team_row.players:
+            uid = uid_of[id(p)]
+            if uid in players:  # the same account listed twice: keep the first row
+                continue
             name = clean(p.name_raw)
             player, _ = Player.objects.update_or_create(
-                game_uid=p.uid,
+                game_uid=uid,
                 defaults={
                     "current_name_raw": name.raw,
                     "display_name": name.display,
@@ -228,14 +251,9 @@ def _build(match: Match, assignment: Assignment, run: ParseRun) -> tuple[dict[st
                     "current_team": team,
                 },
             )
-            players[p.uid] = player
-            uid_team[p.uid] = team
+            players[uid] = player
+            uid_team[uid] = team
 
-    entity_uid: dict[int, int] = {}
-    if replay:
-        entity_uid.update(replay.entity_to_uid)
-    if block:
-        entity_uid.update(block.players)
     uid_entity = {uid: entity for entity, uid in entity_uid.items()}
 
     def player_of(entity: int | None) -> Player | None:
@@ -264,10 +282,13 @@ def _build(match: Match, assignment: Assignment, run: ParseRun) -> tuple[dict[st
     eliminated = {e.team_name.strip(): e.time for e in replay.eliminations} if replay else {}
 
     team_rows, player_rows = [], []
+    written: set[int] = set()
     for team_row in mr.teams:
         team = teams[team_row.name_raw]
         slots = Counter(
-            team_slot(uid_entity[p.uid]) for p in team_row.players if p.uid in uid_entity
+            team_slot(uid_entity[uid_of[id(p)]])
+            for p in team_row.players
+            if uid_of[id(p)] in uid_entity
         )
         placement_points = rule.placement_score(team_row.rank)
         kill_points = rule.kill_score(team_row.kill_score)
@@ -289,20 +310,24 @@ def _build(match: Match, assignment: Assignment, run: ParseRun) -> tuple[dict[st
             )
         )
         for p in team_row.players:
+            uid = uid_of[id(p)]
+            if uid in written:
+                continue
+            written.add(uid)
             name = clean(p.name_raw)
             player_rows.append(
                 PlayerMatchResult(
                     match=match,
-                    player=players[p.uid],
+                    player=players[uid],
                     team=team,
                     raw_name=name.raw,
                     display_name=name.display,
-                    entity_id=uid_entity.get(p.uid),
+                    entity_id=uid_entity.get(uid),
                     kills=p.kills,
-                    knocks=knocks[p.uid] if block else None,
-                    headshot_knocks=headshots[p.uid] if block else None,
-                    deaths=deaths[p.uid] if block else None,
-                    respawns=respawns[p.uid] if block else None,
+                    knocks=knocks[uid] if block else None,
+                    headshot_knocks=headshots[uid] if block else None,
+                    deaths=deaths[uid] if block else None,
+                    respawns=respawns[uid] if block else None,
                 )
             )
     TeamMatchResult.objects.bulk_create(team_rows)
@@ -369,6 +394,54 @@ def _read_block(
         warnings.append("Debugger block could not be re-read; skipped.")
         return None
     return block
+
+
+def unlinked_uid(search_name: str) -> int:
+    """A stable stand-in UID (negative, so it never clashes with a real one) for a player
+    whose real game ID is unknown: the same name always gets the same stand-in."""
+    return -(zlib.crc32(search_name.encode()) + 1)
+
+
+def _resolve_zero_uids(mr, replay, entity_uid: dict[int, int]) -> tuple[dict[int, int], list[str]]:
+    """Each MatchResult player's UID, keyed by ``id(player_row)``.
+
+    Rows logged with UID 0 are matched by name: first to the ReplayInfo kill feed (name ->
+    entity -> UID from the replay and debugger logs), then to the one known player with
+    that name. Players still unknown get ``unlinked_uid(name)`` and are listed back.
+    """
+    taken = {p.uid for t in mr.teams for p in t.players if p.uid}
+    by_name: dict[str, set[int]] = defaultdict(set)
+    if replay:
+        for k in replay.kills:
+            for entity, raw in ((k.killer_entity, k.killer_name), (k.victim_entity, k.victim_name)):
+                uid = entity_uid.get(entity)
+                if raw and uid:
+                    by_name[clean(raw).search].add(uid)
+
+    uid_of: dict[int, int] = {}
+    unresolved: list[str] = []
+    for team_row in mr.teams:
+        for p in team_row.players:
+            if p.uid:
+                uid_of[id(p)] = p.uid
+                continue
+            name = clean(p.name_raw)
+            found = [u for u in by_name.get(name.search, ()) if u not in taken]
+            if len(found) != 1:
+                known = list(
+                    Player.objects.filter(search_name=name.search, game_uid__gt=0)
+                    .exclude(game_uid__in=taken)
+                    .values_list("game_uid", flat=True)[:2]
+                )
+                found = known if len(known) == 1 else []
+            if found:
+                uid = found[0]
+            else:
+                uid = unlinked_uid(name.search)
+                unresolved.append(name.display)
+            taken.add(uid)
+            uid_of[id(p)] = uid
+    return uid_of, unresolved
 
 
 def _resolve_teams(mr, assignment: Assignment, season) -> dict[str, Team]:
