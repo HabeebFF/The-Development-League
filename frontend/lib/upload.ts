@@ -102,6 +102,36 @@ export function dayHint(matches: PreviewMatch[]): number | null {
   return best;
 }
 
+/** The room name most of the matches were played in ("TDL DAY 12"), tidied, if any. */
+export function roomName(matches: Pick<PreviewMatch, "room_name">[]): string | null {
+  const counts = new Map<string, number>();
+  for (const m of matches) {
+    const name = (m.room_name ?? "").replace(/\s+/g, " ").trim();
+    if (name) counts.set(name, (counts.get(name) ?? 0) + 1);
+  }
+  let best: string | null = null;
+  for (const [name, n] of counts) if (best === null || n > (counts.get(best) ?? 0)) best = name;
+  return best;
+}
+
+/** Match days are told apart by their name: same words, any case or spacing. */
+export function sameDayName(a: string, b: string): boolean {
+  const norm = (s: string) => s.replace(/\s+/g, " ").trim().toLowerCase();
+  return norm(a) !== "" && norm(a) === norm(b);
+}
+
+/**
+ * Match numbers for a chosen match day: a match already in that day keeps its number,
+ * the rest are numbered in play order after the highest number taken.
+ */
+export function numberFor(ordered: PreviewMatch[], dayId: number | null): Record<string, number> {
+  const kept = ordered.filter((m) => dayId != null && m.existing_match?.match_day === dayId);
+  let next = Math.max(0, ...kept.map((m) => m.existing_match!.number));
+  return Object.fromEntries(
+    ordered.map((m) => [m.game_match_id, kept.includes(m) ? m.existing_match!.number : ++next]),
+  );
+}
+
 export function formatBytes(n: number): string {
   if (n >= 1024 ** 3) return `${(n / 1024 ** 3).toFixed(1)} GB`;
   if (n >= 1024 ** 2) return `${(n / 1024 ** 2).toFixed(1)} MB`;

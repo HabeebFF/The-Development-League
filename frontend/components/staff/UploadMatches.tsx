@@ -10,7 +10,10 @@ import {
   dayHint,
   formatBytes,
   inPlayOrder,
+  numberFor,
   pickMatchFiles,
+  roomName,
+  sameDayName,
   type PreviewMatch,
 } from "@/lib/upload";
 
@@ -79,7 +82,12 @@ export default function UploadMatches() {
   const [stages, setStages] = useState<Stage[]>([]);
   const [matchDays, setMatchDays] = useState<Day[]>([]);
   const [dayChoice, setDayChoice] = useState<string>("new"); // a match day id, or "new"
-  const [newDay, setNewDay] = useState({ stage: "", number: "", date: new Date().toISOString().slice(0, 10) });
+  const [newDay, setNewDay] = useState({
+    stage: "",
+    title: "",
+    number: "",
+    date: new Date().toISOString().slice(0, 10),
+  });
   const [rows, setRows] = useState<Record<string, Row>>({});
 
   const allDays = useMemo(() => daysIn(picked), [picked]);
@@ -131,18 +139,21 @@ export default function UploadMatches() {
       const ready = await api<Batch>(`/uploads/batches/${created.id}`);
       setBatch(ready);
       const ordered = inPlayOrder(ready.preview.matches ?? []).filter((m) => m.ready);
-      setRows(
-        Object.fromEntries(
-          ordered.map((m, i) => [m.game_match_id, { include: true, number: m.existing_match?.number ?? i + 1 }]),
-        ),
-      );
-      const hint = dayHint(ordered);
-      const known = hint != null ? matchDays.filter((d) => d.number === hint) : [];
-      if (known.length) setDayChoice(String(known[known.length - 1].id));
+      // Match days are told apart by the room's name ("TDL DAY 12"), never by number alone.
+      const room = roomName(ordered);
+      const known = room ? matchDays.find((d) => sameDayName(d.title, room)) : undefined;
+      if (known) setDayChoice(String(known.id));
       else {
         setDayChoice("new");
-        if (hint != null) setNewDay((v) => ({ ...v, number: String(hint) }));
+        const hint = dayHint(ordered);
+        setNewDay((v) => ({
+          ...v,
+          title: room ?? "",
+          number: String(hint ?? Math.max(0, ...matchDays.map((d) => d.number)) + 1),
+        }));
       }
+      const numbers = numberFor(ordered, known?.id ?? null);
+      setRows(Object.fromEntries(ordered.map((m) => [m.game_match_id, { include: true, number: numbers[m.game_match_id] }])));
       setStep("preview");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Upload failed.");
@@ -155,16 +166,21 @@ export default function UploadMatches() {
     setError(null);
     const chosen = matches.filter((m) => rows[m.game_match_id]?.include);
     if (!chosen.length) return setError("Tick at least one match.");
-    const numbers = chosen.filter((m) => !m.existing_match).map((m) => rows[m.game_match_id].number);
+    const numbers = chosen.map((m) => rows[m.game_match_id].number);
     if (new Set(numbers).size !== numbers.length) return setError("Two matches have the same number.");
     setStep("building");
     try {
       let matchDay = Number(dayChoice);
-      if (dayChoice === "new" && numbers.length) {
-        if (!newDay.stage || !newDay.number) throw new Error("Choose the stage and number for the new match day.");
+      if (dayChoice === "new") {
+        if (!newDay.stage || !newDay.number) throw new Error("Give the new match day a name and number.");
         const made = await api<Day>("/admin/match-days", {
           method: "POST",
-          body: { stage: Number(newDay.stage), number: Number(newDay.number), date: newDay.date || null, title: "" },
+          body: {
+            stage: Number(newDay.stage),
+            number: Number(newDay.number),
+            date: newDay.date || null,
+            title: newDay.title.trim(),
+          },
         });
         setMatchDays((d) => [...d, made]);
         setDayChoice(String(made.id));
@@ -173,11 +189,12 @@ export default function UploadMatches() {
       await api(`/uploads/batches/${batch.id}/confirm`, {
         method: "POST",
         body: {
-          matches: chosen.map((m) =>
-            m.existing_match
-              ? { game_match_id: m.game_match_id }
-              : { game_match_id: m.game_match_id, match_day: matchDay, number: rows[m.game_match_id].number },
-          ),
+          // Matches already on the site move to the chosen day too.
+          matches: chosen.map((m) => ({
+            game_match_id: m.game_match_id,
+            match_day: matchDay,
+            number: rows[m.game_match_id].number,
+          })),
         },
       });
       setBatch(await waitWhile(batch.id, ["PROCESSING", "READY"]));
@@ -296,33 +313,51 @@ export default function UploadMatches() {
             <select
               className="input mt-2"
               value={dayChoice}
-              onChange={(e) => setDayChoice(e.target.value)}
+              onChange={(e) => {
+                setDayChoice(e.target.value);
+                const numbers = numberFor(matches, e.target.value === "new" ? null : Number(e.target.value));
+                setRows((r) =>
+                  Object.fromEntries(Object.entries(r).map(([id, row]) => [id, { ...row, number: numbers[id] ?? row.number }])),
+                );
+              }}
               disabled={step === "building"}
             >
               <option value="new">New match day...</option>
               {matchDays.map((d) => (
                 <option key={d.id} value={d.id}>
-                  {stageName(d.stage)} · Day {d.number}
+                  {d.title || `Day ${d.number}`}
                   {d.date ? ` (${d.date})` : ""}
+                  {stages.length > 1 ? ` · ${stageName(d.stage)}` : ""}
                 </option>
               ))}
             </select>
             {dayChoice === "new" && (
               <div className="mt-3 grid gap-2 sm:grid-cols-3">
-                <label className="text-sm">
-                  <span className="text-muted">Stage</span>
-                  <select
+                <label className="text-sm sm:col-span-3">
+                  <span className="text-muted">Name (from the room name)</span>
+                  <input
                     className="input mt-1"
-                    value={newDay.stage}
-                    onChange={(e) => setNewDay((v) => ({ ...v, stage: e.target.value }))}
-                  >
-                    {stages.map((s) => (
-                      <option key={s.id} value={s.id}>
-                        {s.season} · {s.name}
-                      </option>
-                    ))}
-                  </select>
+                    value={newDay.title}
+                    placeholder="TDL DAY 12"
+                    onChange={(e) => setNewDay((v) => ({ ...v, title: e.target.value }))}
+                  />
                 </label>
+                {stages.length > 1 && (
+                  <label className="text-sm">
+                    <span className="text-muted">Season</span>
+                    <select
+                      className="input mt-1"
+                      value={newDay.stage}
+                      onChange={(e) => setNewDay((v) => ({ ...v, stage: e.target.value }))}
+                    >
+                      {stages.map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.season} · {s.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                )}
                 <label className="text-sm">
                   <span className="text-muted">Day number</span>
                   <input
@@ -374,7 +409,7 @@ export default function UploadMatches() {
                       ]
                         .filter(Boolean)
                         .join(" · ") || "No files"}
-                      {m.existing_match ? ` · Already on the site as match ${m.existing_match.number}: it will be updated` : ""}
+                      {m.existing_match ? ` · Already on the site: it will be updated and filed under this match day` : ""}
                     </p>
                     {m.warnings.map((w) => (
                       <p key={w} className="mt-0.5 text-xs text-accent-2">
@@ -382,19 +417,17 @@ export default function UploadMatches() {
                       </p>
                     ))}
                   </div>
-                  {!m.existing_match && (
-                    <label className="flex items-center gap-1 text-xs text-muted">
-                      Match
-                      <input
-                        className="input w-16 py-1"
-                        type="number"
-                        min={1}
-                        value={row.number}
-                        disabled={!row.include || step === "building"}
-                        onChange={(e) => set({ number: Number(e.target.value) })}
-                      />
-                    </label>
-                  )}
+                  <label className="flex items-center gap-1 text-xs text-muted">
+                    Match
+                    <input
+                      className="input w-16 py-1"
+                      type="number"
+                      min={1}
+                      value={row.number}
+                      disabled={!row.include || step === "building"}
+                      onChange={(e) => set({ number: Number(e.target.value) })}
+                    />
+                  </label>
                 </li>
               );
             })}
