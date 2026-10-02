@@ -485,3 +485,64 @@ def test_players_logged_with_uid_zero_are_recovered(upload, confirm, match_day):
     assert 0 not in uids and not Player.objects.filter(game_uid=0).exists()
     assert unlinked_uid(search_name("GHOSTㅤPLAYER")) in uids  # unknown: kept apart by name
     assert any("no game ID" in w for w in run.warnings)
+
+
+def test_parallel_files_are_read_once_at_the_end(client, django_capture_on_commit_callbacks):
+    batch = client.post("/api/v1/uploads/batches", {}, format="json").json()
+    url = f"/api/v1/uploads/batches/{batch['id']}"
+    for f in all_files()[:2]:
+        resp = client.post(f"{url}/files", {"files": [f], "defer": "1"}, format="multipart")
+        assert resp.status_code == 201
+        assert resp.json()["status"] == "UPLOADING"  # still open for the next file
+    # A retry of a file that already arrived is stored once.
+    again = SimpleUploadedFile(MATCH_RESULT_NAME, fixture_bytes(MATCH_RESULT_NAME))
+    client.post(f"{url}/files", {"files": [again], "defer": "1"}, format="multipart")
+    assert UploadedFile.objects.filter(batch_id=batch["id"]).count() == 2
+    # A newer copy (the game kept writing) replaces the older one.
+    newer = SimpleUploadedFile(MATCH_RESULT_NAME, fixture_bytes(MATCH_RESULT_NAME) + b"\r\n")
+    client.post(f"{url}/files", {"files": [newer], "defer": "1"}, format="multipart")
+    rows = UploadedFile.objects.filter(batch_id=batch["id"], original_name=MATCH_RESULT_NAME)
+    assert [r.size for r in rows] == [len(fixture_bytes(MATCH_RESULT_NAME)) + 2]
+
+    with django_capture_on_commit_callbacks(execute=True):
+        assert client.post(f"{url}/group").status_code == 202
+    ready = client.get(url).json()
+    assert ready["status"] == "READY"
+    assert [m["game_match_id"] for m in ready["preview"]["matches"]] == [str(MATCH_ID)]
+
+
+def test_known_files_are_not_sent_again(upload, client, django_capture_on_commit_callbacks):
+    first = upload(all_files())
+    result = UploadedFile.objects.get(batch_id=first["id"], original_name=MATCH_RESULT_NAME)
+
+    batch = client.post("/api/v1/uploads/batches", {}, format="json").json()
+    url = f"/api/v1/uploads/batches/{batch['id']}"
+    resp = client.post(
+        f"{url}/known",
+        {
+            "files": [
+                {"name": MATCH_RESULT_NAME, "size": result.size},
+                {"name": REPLAY_JSON_NAME, "size": 1},  # same name, different file
+                {"name": "MatchResult_1_2026-10-02-20-00-00.log", "size": 10},  # new
+            ]
+        },
+        format="json",
+    )
+    assert resp.status_code == 200
+    assert resp.json() == {"have": [MATCH_RESULT_NAME]}
+    linked = UploadedFile.objects.get(batch_id=batch["id"])
+    assert linked.storage_key == result.storage_key
+    assert linked.parse_status == UploadedFile.ParseStatus.DUPLICATE
+
+    # Asking again (a resumed upload) finds it in this batch and adds nothing.
+    again = client.post(
+        f"{url}/known", {"files": [{"name": MATCH_RESULT_NAME, "size": result.size}]}, format="json"
+    )
+    assert again.json() == {"have": [MATCH_RESULT_NAME]}
+    assert UploadedFile.objects.filter(batch_id=batch["id"]).count() == 1
+
+    with django_capture_on_commit_callbacks(execute=True):
+        client.post(f"{url}/group")
+    preview = client.get(url).json()["preview"]
+    assert [m["game_match_id"] for m in preview["matches"]] == [str(MATCH_ID)]
+    assert preview["matches"][0]["ready"] is True
