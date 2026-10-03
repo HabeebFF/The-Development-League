@@ -160,12 +160,12 @@ export default function HomeView() {
 
         {replays.length > 0 && (
           <section>
-            <SectionHead title="Watch replays" href="/team" link="2D replays for teams" />
+            <SectionHead title="Watch replays" href={`/matches/${replays[0].id}/replay`} link="Latest 2D replay" />
             <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
               {replays.map((m) => (
                 <Link
                   key={m.id}
-                  href={m.vod_url ?? `/matches/${m.id}`}
+                  href={m.vod_url ?? `/matches/${m.id}/replay`}
                   {...(m.vod_url ? { target: "_blank", rel: "noreferrer" } : {})}
                   className="card card-hover group flex aspect-[4/3] flex-col justify-between overflow-hidden p-3 sm:p-4"
                 >
@@ -185,7 +185,7 @@ export default function HomeView() {
                       {m.booyah ? ` · Booyah ${m.booyah.name}` : ""}
                     </span>
                     <span className="mt-1 block text-[10px] font-bold tracking-widest text-accent uppercase">
-                      {m.vod_url ? "Watch video" : "Match details"}
+                      {m.vod_url ? "Watch video" : "2D replay"}
                     </span>
                   </span>
                 </Link>
