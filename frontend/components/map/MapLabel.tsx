@@ -91,7 +91,9 @@ function Pill({
 }) {
   const { spec, s, text } = m;
   const out = spec.status === "out";
-  const k = px(1) * at.scale;
+  // The pill is drawn in screen pixels inside a group scaled by px(1): text drawn at a
+  // sub-pixel font size and scaled up loses its spaces and dots on a zoomed-in map.
+  const k = at.scale;
   const [w, h] = [m.w * k, m.h * k];
   const border = out ? GREY : spec.color;
   const opacity = (spec.status === "knocked" ? 0.55 : out ? 0.7 : spec.focus ? 1 : 0.9) * (at.crowded ? 0.6 : 1);
@@ -106,10 +108,11 @@ function Pill({
   const textX = team ? logoX + logoSize + 4 * k : -w / 2;
   const textY = team ? -fontSize / 2 : logoY + logoSize + 1 * k;
   const textW = team ? w / 2 - pad - textX : w;
+  const unit = px(1);
   return (
     <Group opacity={opacity}>
       <Line points={[spec.x, spec.y, cx, cy]} stroke={border} strokeWidth={px(1)} opacity={0.6} />
-      <Group x={cx} y={cy}>
+      <Group x={cx} y={cy} scaleX={unit} scaleY={unit}>
         <Rect
           x={-w / 2}
           y={-h / 2}
@@ -117,17 +120,17 @@ function Pill({
           height={h}
           fill={PILL}
           stroke={border}
-          strokeWidth={px(spec.focus ? 1.6 : 1)}
-          cornerRadius={px(3)}
+          strokeWidth={spec.focus ? 1.6 : 1}
+          cornerRadius={3}
           shadowColor={spec.focus ? border : "#000"}
-          shadowBlur={px(spec.focus ? 6 : 2)}
+          shadowBlur={spec.focus ? 6 : 2}
           shadowOpacity={spec.focus ? 0.6 : 0.4}
         />
         {logo ? (
           <KImage image={logo} x={logoX} y={logoY} width={logoSize} height={logoSize} opacity={out ? 0.4 : 1} />
         ) : (
           <Group x={logoX} y={logoY}>
-            <Rect width={logoSize} height={logoSize} fill={out ? GREY : spec.color} cornerRadius={px(2)} />
+            <Rect width={logoSize} height={logoSize} fill={out ? GREY : spec.color} cornerRadius={2} />
             <Text
               text={spec.tag.slice(0, 2).toUpperCase()}
               width={logoSize}
