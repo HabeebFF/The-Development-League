@@ -12,6 +12,7 @@ import {
   roomName,
   sameDayName,
   sessionsOf,
+  playedOn,
   isLeagueRoom,
   retryDelay,
   speed,
@@ -216,4 +217,10 @@ test("upload progress: time left, retry waits and speed", () => {
     ]),
     1_000_000,
   );
+});
+
+test("a session's match day date is the day it was played, not today", () => {
+  const at = (d: number, h: number) => new Date(2026, 8, d, h, 0).toISOString();
+  assert.equal(playedOn([{ started_at: null }, { started_at: at(29, 22) }, { started_at: at(30, 0) }]), "2026-09-29");
+  assert.equal(playedOn([{ started_at: null }]), null);
 });
