@@ -37,11 +37,19 @@ export default function MatchView({ id }: { id: number }) {
     <>
       <PageHeader eyebrow={mapName(m.map)} title={`Match ${m.number}`}>
         {[shortDate(m.started_at), m.duration_s ? `${clock(m.duration_s)} long` : null].filter(Boolean).join(" · ")}
-        {m.vod_url && (
-          <a href={m.vod_url} target="_blank" rel="noreferrer" className="btn btn-primary mt-4 flex w-fit">
-            Watch the match
-          </a>
-        )}
+        <div className="mt-4 flex flex-wrap gap-2">
+          {m.vod_url && (
+            <a href={m.vod_url} target="_blank" rel="noreferrer" className="btn btn-primary flex w-fit">
+              Watch the match
+            </a>
+          )}
+          <Link href={`/matches/${m.id}/replay`} className="btn flex w-fit">
+            Live replay
+          </Link>
+          <Link href={`/matches/${m.id}/rotations`} className="btn flex w-fit">
+            Rotations
+          </Link>
+        </div>
       </PageHeader>
       <div className="mx-auto max-w-6xl px-4 py-8">
         <Link href={`/results/${m.match_day}`} className="text-xs font-bold tracking-widest text-muted uppercase hover:text-accent">

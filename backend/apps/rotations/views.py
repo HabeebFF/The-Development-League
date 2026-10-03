@@ -1,4 +1,5 @@
-"""Rotation API: team accounts with rotations.view read; staff plot and confirm."""
+"""Rotation API: team accounts with rotations.view read (anyone while the site is public);
+staff plot and confirm."""
 
 from django.db import transaction
 from django.db.models import Q
@@ -22,7 +23,7 @@ from .serializers import RotationSaveSerializer, TeamRotationSerializer, ZonePha
 
 def _match(request, pk: int) -> Match:
     qs = Match.objects.select_related("map")
-    if not request.user.is_league_staff:
+    if not getattr(request.user, "is_league_staff", False):
         qs = qs.filter(status=Match.Status.PUBLISHED)
     return get_object_or_404(qs, pk=pk)
 
@@ -32,7 +33,7 @@ def _map_info(match: Match) -> dict | None:
 
 
 class MatchZonesView(APIView):
-    permission_classes = [HasFeature("rotations.view")]
+    permission_classes = [HasFeature("rotations.view", public=True)]
 
     def get(self, request, pk: int):
         match = _match(request, pk)
@@ -50,7 +51,7 @@ class MatchZonesView(APIView):
 class MatchRotationsView(APIView):
     """Every team's rotation in a match, best placement first."""
 
-    permission_classes = [HasFeature("rotations.view")]
+    permission_classes = [HasFeature("rotations.view", public=True)]
 
     def get(self, request, pk: int):
         match = _match(request, pk)
@@ -106,7 +107,7 @@ class MatchReplayView(APIView):
     every team is included. Tracks are ``[x, z]`` in world decimetres every ``step_s``.
     """
 
-    permission_classes = [HasFeature("rotations.view")]
+    permission_classes = [HasFeature("rotations.view", public=True)]
     EVENT_KINDS = [MatchEvent.Kind.KILL, MatchEvent.Kind.KNOCK]
 
     def get(self, request, pk: int):

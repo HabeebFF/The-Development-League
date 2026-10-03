@@ -146,7 +146,8 @@ def team_client(team: Team) -> APIClient:
     return client
 
 
-def test_read_zones_and_rotations_needs_the_feature(match):
+def test_read_zones_and_rotations_needs_the_feature(match, settings):
+    settings.PUBLIC_SITE = False
     draft_rotations(match)
     alpha_player = team_client(Team.objects.get(name="Alpha"))
     zones = alpha_player.get(f"/api/v1/matches/{match.pk}/zones").json()
@@ -163,6 +164,20 @@ def test_read_zones_and_rotations_needs_the_feature(match):
     match.status = Match.Status.NEEDS_REVIEW
     match.save()
     assert alpha_player.get(f"/api/v1/matches/{match.pk}/rotations").status_code == 404
+
+
+def test_replays_and_rotations_are_public_for_now(match):
+    draft_rotations(match)
+    anon = APIClient()
+    for part in ("zones", "rotations", "replay"):
+        assert anon.get(f"/api/v1/matches/{match.pk}/{part}").status_code == 200, part
+    outsider = team_client(Team.objects.create(name="Guest", is_league_member=False))
+    assert outsider.get(f"/api/v1/matches/{match.pk}/rotations").status_code == 200
+    # Staff tools stay staff only, and unpublished matches stay hidden.
+    assert anon.get(f"/api/v1/matches/{match.pk}/rotations/bravo").status_code == 401
+    match.status = Match.Status.NEEDS_REVIEW
+    match.save()
+    assert anon.get(f"/api/v1/matches/{match.pk}/rotations").status_code == 404
 
 
 def test_plot_confirm_and_reset(match, staff):

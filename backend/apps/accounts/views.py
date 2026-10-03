@@ -91,6 +91,16 @@ def signed_in(user: User, request, code: int = status.HTTP_200_OK) -> Response:
 # -- auth ----------------------------------------------------------------------------------------
 
 
+class SiteView(APIView):
+    """What the website needs before anyone signs in: is it open to visitors?"""
+
+    permission_classes = [AllowAny]
+    authentication_classes: list = []
+
+    def get(self, request):
+        return Response({"public": settings.PUBLIC_SITE})
+
+
 @method_decorator(ensure_csrf_cookie, name="get")
 class CsrfView(APIView):
     """Sets the ``csrftoken`` cookie; the site calls this once before signing in."""
