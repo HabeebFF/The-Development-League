@@ -9,7 +9,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from apps.results.models import MatchEvent
-from common.permissions import IsSuperAdmin
+from common.permissions import IsStaff, IsSuperAdmin
 
 from . import bundled, calibration
 from .models import CalibrationPoint, Map, MapArea
@@ -158,7 +158,10 @@ class CalibrationPointViewSet(_MapChildMixin, viewsets.ModelViewSet):
 
 
 class MapAreaViewSet(_MapChildMixin, viewsets.ModelViewSet):
-    """Named areas. Changing them re-labels the rotation points already on this map."""
+    """Named areas. Changing them re-labels the rotation points already on this map.
+    Any staff member may draw them: they are part of the coach's knowledge base."""
+
+    permission_classes = [IsStaff]
 
     serializer_class = MapAreaSerializer
     pagination_class = None

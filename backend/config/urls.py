@@ -10,6 +10,7 @@ urlpatterns = [
     path("api/v1/", include("apps.ingest.urls")),
     path("api/v1/", include("apps.maps.urls")),
     path("api/v1/", include("apps.rotations.urls")),
+    path("api/v1/", include("apps.coach.urls")),
 ]
 
 if settings.DEBUG:  # uploaded files (map images) in development; S3 serves them in production

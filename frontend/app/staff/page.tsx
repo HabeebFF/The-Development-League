@@ -11,6 +11,7 @@ export default function StaffHome() {
     { href: "/staff/matches", title: "Plot rotations", text: "Check each team's auto route, fix it and confirm." },
     { href: "/staff/teams", title: "Teams", text: "Name teams, add logos, merge spellings of the same team and invite managers." },
     { href: "/staff/seasons", title: "Seasons", text: "Set up the season and its stages, and move match days into it." },
+    { href: "/staff/coach", title: "Coach knowledge", text: "What the AI Coach knows: utility, weapons, the zone, and named drop spots on each map." },
     ...(me.is_super_admin
       ? [{ href: "/staff/maps", title: "Map images and calibration", text: "Upload map images and line them up with the game." }]
       : []),
