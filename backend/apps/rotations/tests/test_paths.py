@@ -10,6 +10,7 @@ from apps.rotations.paths import (
     Track,
     bridged,
     landed_index,
+    player_segments,
     simplify,
     team_path,
     zone_close_times,
@@ -112,3 +113,39 @@ def test_auto_draft_reads_points_off_the_replay_path(match, django_user_model): 
     (segment,) = by_team["Alpha"]
     assert segment[0] == [100.0, 0.0, 0.0] and segment[-1] == [700.0, 1200.0, 0.0]
     assert len(segment) == 2  # a straight walk simplifies to its ends
+    (alpha_row,) = [r for r in rows if r["team"]["name"] == "Alpha"]
+    (player,) = alpha_row["players"]
+    assert player["entity_id"] == 1 and player["deaths"] == []
+    assert player["path"] == [[[100.0, 0.0, 0.0], [700.0, 1200.0, 0.0]]]
+
+
+def test_player_path_skips_each_glide_and_breaks_on_a_long_hole():
+    first = glide_then_walk(0, 0, glide_steps=20, walk_steps=40)
+    respawn = glide_then_walk(2000, 500, glide_steps=10, walk_steps=20)
+    track = Track(60.0, STEP, [*first, *([None] * 60), *respawn])
+    a, b = player_segments(track)
+    assert a[0][1] >= 15 * 16  # starts where the first glide ended
+    assert b[0][1] >= 2000 + 15 * 6 and b[0][2] == 500  # and again after the respawn drop
+    assert b[0][0] >= 60.0 + (len(first) + 60) * STEP
+
+
+def test_player_deaths_come_from_the_logs(match):  # noqa: F811
+    from apps.league.models import Team
+    from apps.results.models import MatchEvent
+    from apps.rotations.paths import player_paths
+
+    alpha = Team.objects.get(name="Alpha")
+    PlayerTrack.objects.create(
+        match=match,
+        entity_id=7,
+        team=alpha,
+        start_s=100.0,
+        step_s=STEP,
+        points=[[i * 10, 0] for i in range(41)],
+    )
+    MatchEvent.objects.filter(match=match).delete()
+    MatchEvent.objects.create(
+        match=match, kind=MatchEvent.Kind.KILL, game_time_s=110.0, target_entity=7, tx=None, tz=None
+    )
+    ((_, path),) = player_paths(match)[alpha.pk]
+    assert path.deaths == [(110.0, 20.0, 0.0)]  # no logged spot: where the track had them

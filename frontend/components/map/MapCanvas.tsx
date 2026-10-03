@@ -5,6 +5,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Image as KImage, Layer, Line, Rect, Stage } from "react-konva";
 import useImage from "use-image";
 
+import { followStep, settled, viewFor, type Box } from "@/lib/livepath";
+
 type Props = {
   /** Size of the drawing in content pixels (the map image, or a virtual square). */
   width: number;
@@ -15,13 +17,32 @@ type Props = {
   /** Draws in content pixels; ``px(n)`` converts n screen pixels to content pixels. */
   children?: (px: (n: number) => number) => React.ReactNode;
   className?: string;
+  /** Content pixels to keep centred and in frame (camera follow); null leaves the view alone. */
+  focus?: Box | null;
+  /** Called when the person drags or zooms the map themselves. */
+  onManualMove?: () => void;
+  /** Extra buttons next to the zoom buttons. */
+  buttons?: React.ReactNode;
+  /** When this changes, the map fits itself again (e.g. a different set of teams). */
+  resetKey?: string;
 };
 
 const MIN_ZOOM = 0.2;
 const MAX_ZOOM = 12;
 
 /** Zoomable, pannable map. Children are Konva nodes in content pixels. */
-export default function MapCanvas({ width, height, image, onClick, children, className }: Props) {
+export default function MapCanvas({
+  width,
+  height,
+  image,
+  onClick,
+  children,
+  className,
+  focus = null,
+  onManualMove,
+  buttons,
+  resetKey,
+}: Props) {
   const box = useRef<HTMLDivElement>(null);
   const stage = useRef<Konva.Stage>(null);
   const [size, setSize] = useState({ w: 600, h: 600 });
@@ -34,8 +55,39 @@ export default function MapCanvas({ width, height, image, onClick, children, cla
     return { scale, x: (size.w - width * scale) / 2, y: (size.h - height * scale) / 2 };
   }, [size, width, height]);
   const view = moved ?? fitted;
-  const fit = () => setMoved(null);
+  const manual = () => onManualMove?.();
+  const fit = () => {
+    manual();
+    setMoved(null);
+  };
   const setView = (update: (v: typeof view) => typeof view) => setMoved(update(view));
+
+  const lastKey = useRef(resetKey);
+  useEffect(() => {
+    if (lastKey.current === resetKey) return;
+    lastKey.current = resetKey;
+    if (!focus) setMoved(null);
+  }, [resetKey, focus]);
+
+  // Camera follow: glide towards the focus box every frame (see followStep).
+  const live = useRef({ view, focus, size });
+  live.current = { view, focus, size };
+  const following = focus != null;
+  useEffect(() => {
+    if (!following) return;
+    let last: number | null = null;
+    let frame = requestAnimationFrame(function loop(now) {
+      const dt = last == null ? 1 / 60 : Math.min(0.1, (now - last) / 1000);
+      last = now;
+      const { view: current, focus: box, size: s } = live.current;
+      if (box) {
+        const target = viewFor(box, s, 0.35, MAX_ZOOM);
+        if (!settled(current, target)) setMoved(followStep(current, target, box, s, dt));
+      }
+      frame = requestAnimationFrame(loop);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [following]);
 
   useEffect(() => {
     const el = box.current;
@@ -58,6 +110,7 @@ export default function MapCanvas({ width, height, image, onClick, children, cla
 
   function onWheel(e: Konva.KonvaEventObject<WheelEvent>) {
     e.evt.preventDefault();
+    manual();
     const pointer = stage.current?.getPointerPosition();
     if (pointer) zoomAt(e.evt.deltaY < 0 ? 1.15 : 1 / 1.15, pointer);
   }
@@ -92,6 +145,9 @@ export default function MapCanvas({ width, height, image, onClick, children, cla
         scaleX={view.scale}
         scaleY={view.scale}
         onWheel={onWheel}
+        onDragStart={(e) => {
+          if (e.target === stage.current) manual();
+        }}
         onDragEnd={(e) => {
           if (e.target === stage.current) setView((v) => ({ ...v, x: e.target.x(), y: e.target.y() }));
         }}
@@ -106,10 +162,25 @@ export default function MapCanvas({ width, height, image, onClick, children, cla
         <Layer>{children?.((n) => n / view.scale)}</Layer>
       </Stage>
       <div className="absolute right-2 bottom-2 flex gap-1">
-        <button className="btn px-2 py-1" onClick={() => zoomAt(1.3, { x: size.w / 2, y: size.h / 2 })} aria-label="Zoom in">
+        {buttons}
+        <button
+          className="btn px-2 py-1"
+          onClick={() => {
+            manual();
+            zoomAt(1.3, { x: size.w / 2, y: size.h / 2 });
+          }}
+          aria-label="Zoom in"
+        >
           +
         </button>
-        <button className="btn px-2 py-1" onClick={() => zoomAt(1 / 1.3, { x: size.w / 2, y: size.h / 2 })} aria-label="Zoom out">
+        <button
+          className="btn px-2 py-1"
+          onClick={() => {
+            manual();
+            zoomAt(1 / 1.3, { x: size.w / 2, y: size.h / 2 });
+          }}
+          aria-label="Zoom out"
+        >
           -
         </button>
         <button className="btn px-2 py-1" onClick={fit}>

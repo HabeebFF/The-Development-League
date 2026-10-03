@@ -7,6 +7,10 @@ bridged in a straight line (no detours are invented); a longer hole splits the p
 The centre is smoothed to remove jitter, then simplified so it stays light on phones.
 
 Zone, drop and end markers are read off the same path, so they sit on the line.
+
+Each player also gets a path of their own (``player_paths``): the same track from the
+moment they land (again after a respawn drop), with holes bridged, lightly smoothed and
+simplified, plus where they died.
 """
 
 from __future__ import annotations
@@ -16,7 +20,7 @@ from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 
 from apps.league.models import Match
-from apps.results.models import ZonePhase
+from apps.results.models import MatchEvent, ZonePhase
 
 from .models import MAX_ZONES, PlayerTrack
 
@@ -36,6 +40,8 @@ FIRST_DROP_S = 30.0  # tracks starting this long after the first one are respawn
 # instead of drawing a straight line nobody walked.
 MAX_JUMP_M = 150.0
 MIN_SEGMENT = 4  # shorter pieces (2 s) are noise
+PLAYER_SMOOTH_S = 1.5  # a player's own line keeps more of its turns than the team's
+PLAYER_SIMPLIFY_M = 2.5
 
 Point = tuple[float, float, float]  # t, x, z (seconds, world units)
 
@@ -132,6 +138,87 @@ def _group_centre(
         anchor = max(positions, key=lambda a: len(near(a)))
     group = near(anchor)
     return (sum(p[0] for p in group) / len(group), sum(p[1] for p in group) / len(group))
+
+
+@dataclass
+class PlayerPath:
+    entity_id: int
+    segments: list[list[Point]]  # smoothed, not simplified
+    deaths: list[Point]
+
+    def simplified(self, tolerance: float = PLAYER_SIMPLIFY_M) -> list[list[list[float]]]:
+        return TeamPath(self.segments, None).simplified(tolerance)
+
+
+def _landed_from(piece: list[Point], step: float) -> int:
+    """Index in a piece of path where the player is on the ground (skips a parachute glide)."""
+    ahead = max(1, round(LANDED_WINDOW_S / step))
+    limit = min(len(piece), round(LANDING_SEARCH_S / step))
+    for i in range(limit):
+        if i + ahead >= len(piece):
+            break
+        a, b = piece[i], piece[i + ahead]
+        if math.hypot(b[1] - a[1], b[2] - a[2]) / (b[0] - a[0]) < LANDED_SPEED:
+            return i
+    return 0
+
+
+def player_segments(track: Track) -> list[list[Point]]:
+    """A player's own path: pieces split at long holes and impossible jumps, each from
+    where they touched down, smoothed a little."""
+    step = track.step_s
+    pieces: list[list[Point]] = [[]]
+    previous = None
+    for i, p in enumerate(bridged(track.points, round(MAX_BRIDGE_S / step))):
+        if p is None:
+            if pieces[-1]:
+                pieces.append([])
+            previous = None
+            continue
+        if previous and math.hypot(p[0] - previous[0], p[1] - previous[1]) > MAX_JUMP_M:
+            pieces.append([])
+        pieces[-1].append((round(track.start_s + i * step, 3), p[0], p[1]))
+        previous = p
+    window = max(1, round(PLAYER_SMOOTH_S / step))
+    out = []
+    for piece in pieces:
+        piece = piece[_landed_from(piece, step) :] if piece else piece
+        if len(piece) >= MIN_SEGMENT:
+            out.append(smooth(piece, window))
+    return out
+
+
+def player_paths(match: Match) -> dict[int, list[tuple[PlayerTrack, PlayerPath]]]:
+    """Each team's players and their paths, keyed by team id."""
+    deaths: dict[int, list[Point]] = {}
+    events = MatchEvent.objects.filter(match=match, game_time_s__isnull=False)
+    K = MatchEvent.Kind
+    if events.filter(kind=K.DEATH, actor_entity__isnull=False).exists():
+        for e in events.filter(kind=K.DEATH, actor_entity__isnull=False):
+            deaths.setdefault(e.actor_entity, []).append((e.game_time_s, e.x, e.z))
+    else:
+        for e in events.filter(kind=K.KILL, target_entity__isnull=False):
+            deaths.setdefault(e.target_entity, []).append((e.game_time_s, e.tx, e.tz))
+
+    out: dict[int, list[tuple[PlayerTrack, PlayerPath]]] = {}
+    rows = PlayerTrack.objects.filter(match=match, team__isnull=False).select_related("player")
+    for row in rows.order_by("entity_id"):
+        segments = player_segments(Track(row.start_s, row.step_s, row.points))
+        path = PlayerPath(row.entity_id, segments, [])
+        for t, x, z in sorted(deaths.get(row.entity_id, []), key=lambda d: d[0]):
+            if x is None or z is None:
+                at = TeamPath(segments, None).at(t) or _last_before(segments, t)
+                if at is None:
+                    continue
+                x, z = at[1], at[2]
+            path.deaths.append((round(t, 1), round(x, 1), round(z, 1)))
+        out.setdefault(row.team_id, []).append((row, path))
+    return out
+
+
+def _last_before(segments: list[list[Point]], t: float) -> Point | None:
+    before = [p for seg in segments for p in seg if p[0] <= t]
+    return before[-1] if before else None
 
 
 def team_path(tracks: Iterable[Track]) -> TeamPath:

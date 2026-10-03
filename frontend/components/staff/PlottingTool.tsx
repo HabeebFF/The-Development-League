@@ -5,6 +5,8 @@ import { useCallback, useEffect, useEffectEvent, useMemo, useState } from "react
 import { Circle, Group, Line, Text } from "react-konva";
 
 import MapCanvas from "@/components/map/MapCanvas";
+import { MapLabels, type LabelSpec } from "@/components/map/MapLabel";
+import { Cross } from "@/components/team/RotationsView";
 import {
   api,
   type AdminMatch,
@@ -14,6 +16,7 @@ import {
 } from "@/lib/api";
 import { teamColor } from "@/lib/colors";
 import { fitBounds, toPixel, toWorld, type Transform } from "@/lib/coordinates";
+import { lighten, type TPoint } from "@/lib/livepath";
 import {
   CHECKPOINT_KEYS,
   CHECKPOINTS,
@@ -43,6 +46,7 @@ export default function PlottingTool({ matchId }: { matchId: number }) {
   const [data, setData] = useState<Loaded | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState(0);
+  const [lines, setLines] = useState<"team" | "players" | "both">("both");
   const [edits, setEdits] = useState<Record<string, RotationPoint[]>>({});
   const [history, setHistory] = useState<Record<string, RotationPoint[][]>>({});
   const [dirty, setDirty] = useState<Set<string>>(new Set());
@@ -274,6 +278,24 @@ export default function PlottingTool({ matchId }: { matchId: number }) {
         <Link href="/staff/matches" className="hidden px-2 pb-2 text-xs text-muted hover:text-text lg:block">
           &larr; {data.match.label}
         </Link>
+        <Link
+          href={`/staff/matches/${matchId}/rotations`}
+          className="hidden px-2 pb-2 text-xs text-accent hover:text-text lg:block"
+        >
+          Watch the rotations play out &rarr;
+        </Link>
+        <div className="flex shrink-0 gap-1 px-1 pb-1" role="group" aria-label="Lines to show">
+          {(["team", "players", "both"] as const).map((m) => (
+            <button
+              key={m}
+              className={`btn px-2 py-1 text-xs capitalize ${m === lines ? "ring-1 ring-accent text-white" : "text-muted"}`}
+              onClick={() => setLines(m)}
+              aria-pressed={m === lines}
+            >
+              {m}
+            </button>
+          ))}
+        </div>
         {rotations.map((r, i) => (
           <button
             key={r.team.slug}
@@ -310,10 +332,37 @@ export default function PlottingTool({ matchId }: { matchId: number }) {
                 <Path key={r.team.slug} points={edits[r.team.slug] ?? []} path={r.path} t={view.t} color={teamColor(i, r.team.primary_color)} px={px} faint />
               ),
             )}
+            {current &&
+              lines !== "team" &&
+              (current.players ?? []).map((p, j) => {
+                const shade = lighten(teamColor(selected, current.team.primary_color), 0.3 + 0.12 * (j % 4));
+                return (
+                  <Group key={p.entity_id} listening={false}>
+                    {(p.path as TPoint[][]).map((seg, k) => (
+                      <Line
+                        key={k}
+                        points={seg.flatMap(([, x, z]) => {
+                          const q = toPixel(view.t, x, z);
+                          return [q.px, q.py];
+                        })}
+                        stroke={shade}
+                        strokeWidth={px(1.5)}
+                        opacity={0.9}
+                        lineCap="round"
+                        lineJoin="round"
+                      />
+                    ))}
+                    {p.deaths.map((d, k) => (
+                      <Cross key={k} at={toPixel(view.t, d[1], d[2])} color={shade} px={px} />
+                    ))}
+                  </Group>
+                );
+              })}
             {current && (
               <Path
                 points={points}
-                path={current.path}
+                path={lines === "players" ? [] : current.path}
+                hideLine={lines === "players"}
                 t={view.t}
                 color={teamColor(selected, current.team.primary_color)}
                 px={px}
@@ -324,6 +373,7 @@ export default function PlottingTool({ matchId }: { matchId: number }) {
                 onRemove={(index) => update(removePoint(points, index))}
               />
             )}
+            <MapLabels px={px} labels={labelsFor(rotations, edits, selected, lines, view.t)} />
           </>
         )}
       </MapCanvas>
@@ -408,9 +458,60 @@ export default function PlottingTool({ matchId }: { matchId: number }) {
   );
 }
 
+/** Team badges at each team's end spot, and the selected team's players where they finished. */
+function labelsFor(
+  rotations: TeamRotation[],
+  edits: Record<string, RotationPoint[]>,
+  selected: number,
+  lines: "team" | "players" | "both",
+  t: Transform,
+): LabelSpec[] {
+  const out: LabelSpec[] = [];
+  rotations.forEach((r, i) => {
+    const color = teamColor(i, r.team.primary_color);
+    const pts = edits[r.team.slug] ?? [];
+    const end = pts[pts.length - 1];
+    if (end && lines !== "players") {
+      const q = toPixel(t, end.x, end.z);
+      out.push({
+        id: `team-${r.team.slug}`,
+        x: q.px,
+        y: q.py,
+        kind: "team",
+        text: r.team.name,
+        tag: r.team.tag || r.team.name,
+        logo: r.team.logo,
+        color,
+        focus: i === selected,
+      });
+    }
+    if (i !== selected || lines === "team") return;
+    for (const p of r.players ?? []) {
+      const lastSeg = p.path[p.path.length - 1];
+      const at = lastSeg?.[lastSeg.length - 1];
+      if (!at) continue;
+      const q = toPixel(t, at[1], at[2]);
+      out.push({
+        id: `p-${p.entity_id}`,
+        x: q.px,
+        y: q.py,
+        kind: "player",
+        text: p.name,
+        tag: r.team.tag || r.team.name,
+        logo: r.team.logo,
+        color,
+        status: p.deaths.some((d) => d[0] >= at[0] - 3) ? "out" : "ok",
+        focus: true,
+      });
+    }
+  });
+  return out;
+}
+
 function Path({
   points,
   path,
+  hideLine,
   t,
   color,
   px,
@@ -420,6 +521,7 @@ function Path({
 }: {
   points: RotationPoint[];
   path?: ReplayPath;
+  hideLine?: boolean;
   t: Transform;
   color: string;
   px: (n: number) => number;
@@ -431,7 +533,7 @@ function Path({
   const r = px(faint ? 4 : 10);
   return (
     <Group opacity={faint ? 0.35 : 1} listening={!faint}>
-      {routeLines(points, path, t).map((line, i) => (
+      {!hideLine && routeLines(points, path, t).map((line, i) => (
         <Line
           key={i}
           points={line}

@@ -16,7 +16,7 @@ from common.permissions import HasFeature, IsStaff
 
 from .auto import draft_rotations
 from .models import PlayerTrack, ReplayObject, RotationPoint, TeamRotation
-from .paths import match_paths
+from .paths import match_paths, player_paths
 from .serializers import RotationSaveSerializer, TeamRotationSerializer, ZonePhaseSerializer
 
 
@@ -68,9 +68,34 @@ class MatchRotationsView(APIView):
         ).data
         # The real path each team took (from the replay), as segments of [t, x, z].
         paths = match_paths(match)
+        # Each player's own path and where they died.
+        players = player_paths(match)
+        names = dict(
+            PlayerMatchResult.objects.filter(match=match).values_list("entity_id", "display_name")
+        )
+        knocks: dict[int, list[float]] = {}
+        for entity, t in (
+            MatchEvent.objects.filter(
+                match=match, kind=MatchEvent.Kind.KNOCK, game_time_s__isnull=False
+            )
+            .order_by("game_time_s")
+            .values_list("target_entity", "game_time_s")
+        ):
+            knocks.setdefault(entity, []).append(round(t, 1))
         for rotation, item in zip(rotations, data, strict=True):
             path = paths.get(rotation.team_id)
             item["path"] = path.simplified() if path else []
+            item["players"] = [
+                {
+                    "entity_id": row.entity_id,
+                    "name": names.get(row.entity_id)
+                    or (row.player.display_name if row.player else str(row.entity_id)),
+                    "path": p.simplified(),
+                    "deaths": [list(d) for d in p.deaths],
+                    "knocks": knocks.get(row.entity_id, []),
+                }
+                for row, p in players.get(rotation.team_id, [])
+            ]
         return Response({"match": match.pk, "map": _map_info(match), "rotations": data})
 
 
@@ -139,6 +164,9 @@ class MatchReplayView(APIView):
                         "name": r.team.name,
                         "tag": r.team.tag,
                         "color": r.team.primary_color or None,
+                        "logo": request.build_absolute_uri(r.team.logo.url)
+                        if r.team.logo
+                        else None,
                         "placement": r.placement,
                         "has_tracks": r.team.slug in teams_with_tracks,
                     }
