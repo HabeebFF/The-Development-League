@@ -100,3 +100,25 @@ class CoachReport(TimeStampedModel):
 
     def __str__(self) -> str:
         return f"{self.team}: week of {self.week_start}"
+
+
+class CounterPlan(models.Model):
+    """How ``team`` can play against ``opponent``, made when first asked for in a week and
+    remade when the opponent has played new matches. The plays cite ``facts``."""
+
+    team = models.ForeignKey("league.Team", on_delete=models.CASCADE, related_name="counter_plans")
+    opponent = models.ForeignKey("league.Team", on_delete=models.CASCADE, related_name="+")
+    week_start = models.DateField()
+    matches = models.JSONField(default=list, help_text="The opponent's matches: [{id, label, map}]")
+    facts = models.JSONField(default=list)
+    plays = models.JSONField(default=list, help_text="[{title, why, facts: [ids], matches}]")
+    head_to_head = models.JSONField(default=dict)
+    writer = models.CharField(max_length=40, default="template")
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-week_start", "opponent__name"]
+        unique_together = [("team", "opponent", "week_start")]
+
+    def __str__(self) -> str:
+        return f"{self.team} vs {self.opponent}: week of {self.week_start}"

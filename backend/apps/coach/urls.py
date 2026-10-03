@@ -12,6 +12,12 @@ urlpatterns = [
     path("coach/weapons/<int:weapon_id>", views.WeaponNameView.as_view(), name="coach-weapon"),
     path("coach/teams/<slug:slug>/profile", views.TeamProfileView.as_view(), name="coach-profile"),
     path("coach/teams/<slug:slug>/reports", views.TeamReportsView.as_view(), name="coach-reports"),
+    path(
+        "coach/teams/<slug:slug>/counter/<slug:opponent>",
+        views.CounterPlanView.as_view(),
+        name="coach-counter",
+    ),
+    path("coach/maps/<slug:slug>/rotate", views.RotationAdviceView.as_view(), name="coach-rotate"),
     path("coach/reports", views.ReportListView.as_view(), name="coach-report-list"),
     path("coach/reports/<int:pk>", views.ReportView.as_view(), name="coach-report"),
 ]

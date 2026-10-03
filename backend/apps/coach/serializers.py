@@ -2,7 +2,7 @@ from rest_framework import serializers
 
 from apps.maps.models import Map, MapArea
 
-from .models import CoachReport, KnowledgeEntry, WeaponName
+from .models import CoachReport, CounterPlan, KnowledgeEntry, WeaponName
 
 
 class KnowledgeEntrySerializer(serializers.ModelSerializer):
@@ -98,3 +98,24 @@ class CoachReportSerializer(serializers.ModelSerializer):
                 }
             )
         return out
+
+
+class CounterPlanSerializer(serializers.ModelSerializer):
+    team = serializers.CharField(source="team.name", read_only=True)
+    opponent = serializers.CharField(source="opponent.name", read_only=True)
+    opponent_slug = serializers.CharField(source="opponent.slug", read_only=True)
+
+    class Meta:
+        model = CounterPlan
+        fields = [
+            "team",
+            "opponent",
+            "opponent_slug",
+            "week_start",
+            "matches",
+            "facts",
+            "plays",
+            "head_to_head",
+            "writer",
+            "updated_at",
+        ]
