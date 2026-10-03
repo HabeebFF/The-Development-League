@@ -69,6 +69,9 @@ class TeamGame:
     eliminated_s: float | None
     path: TeamPath | None
     deaths: list[tuple[float, float, float]] = field(default_factory=list)  # final deaths t, x, z
+    # The official scoreboard kills. The kill events miss some (e.g. while the observer
+    # was disconnected), so they are only the fallback.
+    kills: int | None = None
 
 
 @dataclass
@@ -244,7 +247,11 @@ def measure(game: Game, team_id: int) -> TeamMatch:
         entries=zone_entries(game, team),
         fights=fights(game, team_id),
         deaths=[Spot(area_at(game.areas, x, z), x, z) for _, x, z in team.deaths],
-        kills=sum(1 for h in game.hits if h.kind == "KILL" and h.actor_team == team_id),
+        kills=(
+            team.kills
+            if team.kills is not None
+            else sum(1 for h in game.hits if h.kind == "KILL" and h.actor_team == team_id)
+        ),
         knocks=sum(1 for h in game.hits if h.kind == "KNOCK" and h.actor_team == team_id),
         played_on=game.played_on,
     )
@@ -678,6 +685,7 @@ def load_games(match_ids: Iterable[int] | None = None) -> list[Game]:
                 r.eliminated_at_s,
                 paths.get(r.team_id),
                 deaths.get(r.team_id, []),
+                r.kills,
             )
             for r in TeamMatchResult.objects.filter(match=match)
         }

@@ -37,7 +37,7 @@ export default function ReportView({ report, matchHref }: { report: CoachReport;
 
       <h2 className="mt-6 font-display text-2xl uppercase">This week&apos;s tasks</h2>
       {report.tasks.length === 0 ? (
-        <p className="mt-2 text-sm text-muted">Nothing stands out in the data yet. Tasks appear once a pattern shows up in at least 3 matches.</p>
+        <p className="mt-2 text-sm text-muted">Nothing stands out in the data yet. A task needs the same pattern in at least 3 matches, and most patterns (drops, zones, death spots) are counted per map, so they need 3 matches on one map.</p>
       ) : (
         <ol className="mt-3 space-y-3">
           {report.tasks.map((t, i) => (

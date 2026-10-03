@@ -11,6 +11,11 @@ from datetime import date, timedelta
 from .engine import MIN_MATCHES, Game, TeamMatch, measure, profile
 
 MAX_TASKS = 5
+MIN_TASKS = 3
+# How bad a pattern must be to become a task. When the strict bar gives fewer than
+# MIN_TASKS, the looser one fills the gap, so a steady team still gets something to work on.
+STRICT = {"late": 0.4, "contested": 0.4, "vs_ratio": 2.0, "drop_gap": 2.0, "deaths": 2}
+LOOSE = {"late": 0.25, "contested": 0.25, "vs_ratio": 1.01, "drop_gap": 1.0, "deaths": 3}
 # Changes smaller than these aren't worth reporting.
 PLACEMENT_STEP = 1.0
 SHARE_STEP = 0.15
@@ -26,6 +31,15 @@ def _where(fact: dict) -> str:
 
 def tasks_from(facts: Sequence[dict]) -> list[dict]:
     """3 to 5 tasks, the biggest problems first. Fewer when the data doesn't show more."""
+    tasks = _pick(_candidates(facts, STRICT))
+    if len(tasks) < MIN_TASKS:
+        titles = {t["title"] for t in tasks}
+        extra = [t for t in _pick(_candidates(facts, LOOSE)) if t["title"] not in titles]
+        tasks += extra[: MIN_TASKS - len(tasks)]
+    return tasks
+
+
+def _candidates(facts: Sequence[dict], bar: dict) -> list[tuple[float, str, dict]]:
     by_id = {f["id"]: f for f in facts}
     candidates: list[tuple[float, str, dict]] = []  # score, dedupe key, task
 
@@ -50,7 +64,7 @@ def tasks_from(facts: Sequence[dict]) -> list[dict]:
         d = f.get("data", {})
         where = _where(f)
         prefix = f"{f['map']}:" if f.get("map") else ""
-        if key.startswith("rotation.z") and key.endswith(".late") and f["value"] >= 0.4:
+        if key.startswith("rotation.z") and key.endswith(".late") and f["value"] >= bar["late"]:
             zone = d["zone"]
             lead = by_id.get(f"{prefix}rotation.z{zone}.lead")
             task(
@@ -67,21 +81,25 @@ def tasks_from(facts: Sequence[dict]) -> list[dict]:
                 f"Pick your fights during Zone {d['zone']}{where}: you lose more than you win",
                 f,
             )
-        elif key.startswith("fights.vs") and d.get("lost", 0) >= 2 * max(1, d.get("won", 0)):
+        elif key.startswith("fights.vs") and d.get("lost", 0) >= bar["vs_ratio"] * max(
+            1, d.get("won", 0)
+        ):
             task(
                 d["lost"] / max(1, d["won"] + d["lost"]) * f["n"],
                 f"vs{d['opponent']}",
                 f"Have a plan for {d['opponent_name']}{where}",
                 f,
             )
-        elif key in ("deaths.top1", "deaths.top2") and f["n"] >= MIN_MATCHES:
+        elif key in [f"deaths.top{i}" for i in range(1, bar["deaths"] + 1)] and (
+            f["n"] >= MIN_MATCHES
+        ):
             task(
                 f["n"] / f["of"] * f["n"],
                 f"die{d['place']}",
                 f"Stop dying at {d['place']}{where}",
                 f,
             )
-        elif key == "drops.contested" and f["value"] >= 0.4:
+        elif key == "drops.contested" and f["value"] >= bar["contested"]:
             task(
                 f["value"] * f["n"],
                 f"contest{f.get('map')}",
@@ -90,7 +108,7 @@ def tasks_from(facts: Sequence[dict]) -> list[dict]:
             )
         elif key == "drops.usual":
             overall = by_id.get("results.placement")
-            if overall and d["placement"] - overall["value"] >= 2:
+            if overall and d["placement"] - overall["value"] >= bar["drop_gap"]:
                 task(
                     (d["placement"] - overall["value"]) * f["n"] / 2,
                     f"drop{f.get('map')}",
@@ -98,7 +116,10 @@ def tasks_from(facts: Sequence[dict]) -> list[dict]:
                     f,
                     overall,
                 )
+    return candidates
 
+
+def _pick(candidates: list[tuple[float, str, dict]]) -> list[dict]:
     best: dict[str, tuple[float, dict]] = {}
     for score, key, t in candidates:
         if key not in best or score > best[key][0]:

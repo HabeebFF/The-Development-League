@@ -117,6 +117,14 @@ def test_facts_cite_their_matches_and_need_enough_of_them():
     )
 
 
+def test_kills_come_from_the_scoreboard_when_known():
+    hits = [Hit(100, "KILL", 1, 2, 21, 0, 0)]
+    teams = {1: TeamGame(1, 1, None, None), 2: TeamGame(2, 2, None, None)}
+    assert measure(game(teams=teams, hits=hits), 1).kills == 1  # events only
+    teams[1].kills = 4  # the scoreboard counts kills the logs missed
+    assert measure(game(teams=teams, hits=hits), 1).kills == 4
+
+
 def test_without_zone_data_fights_have_no_zone():
     from apps.coach.engine import zone_at
 
