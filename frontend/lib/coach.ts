@@ -65,3 +65,57 @@ export function parseData(text: string): Record<string, unknown> | null {
     return null;
   }
 }
+
+export type Fact = {
+  id: string;
+  topic: string;
+  text: string;
+  value: number;
+  n: number;
+  of: number;
+  matches: number[];
+  map: string | null;
+  data: Record<string, unknown>;
+};
+
+export type CoachTask = { title: string; why: string[]; facts: string[]; matches: number[] };
+export type CoachChange = { text: string; better: boolean; matches: number[] };
+export type ReportMatch = { id: number; label: string; map: string; played_on: string | null };
+
+export type CoachReport = {
+  id: number;
+  team: string;
+  team_slug: string;
+  week_start: string;
+  matches: ReportMatch[];
+  facts: Fact[];
+  tasks: CoachTask[];
+  changes: CoachChange[];
+  writer: string;
+  is_published: boolean;
+  edited_by: string | null;
+  updated_at: string;
+};
+
+export const TOPICS: { key: string; label: string }[] = [
+  { key: "results", label: "Results" },
+  { key: "style", label: "Playstyle" },
+  { key: "rotation", label: "Rotations" },
+  { key: "position", label: "Position in the zone" },
+  { key: "fights", label: "Fights" },
+  { key: "deaths", label: "Where you die" },
+  { key: "drops", label: "Drops" },
+];
+
+/** Facts grouped by topic in reading order; overall facts before per-map ones. */
+export function factsByTopic(facts: Fact[]): { key: string; label: string; facts: Fact[] }[] {
+  return TOPICS.map((t) => ({
+    ...t,
+    facts: facts.filter((f) => f.topic === t.key).sort((a, b) => Number(!!a.map) - Number(!!b.map) || (a.map ?? "").localeCompare(b.map ?? "")),
+  })).filter((g) => g.facts.length > 0);
+}
+
+export function weekLabel(weekStart: string): string {
+  const d = new Date(`${weekStart}T00:00:00`);
+  return `Week of ${d.toLocaleDateString(undefined, { day: "numeric", month: "short" })}`;
+}

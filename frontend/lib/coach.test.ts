@@ -17,3 +17,36 @@ describe("knowledge base data box", () => {
     assert.equal(parseData("12"), null);
   });
 });
+
+import { factsByTopic, type Fact } from "./coach.ts";
+
+describe("report facts", () => {
+  const f = (id: string, topic: string, map: string | null = null): Fact => ({
+    id,
+    topic,
+    text: id,
+    value: 0,
+    n: 3,
+    of: 3,
+    matches: [1],
+    map,
+    data: {},
+  });
+
+  it("groups facts by topic in reading order, overall before each map", () => {
+    const groups = factsByTopic([
+      f("kalahari:drops.usual", "drops", "kalahari"),
+      f("fights.record", "fights"),
+      f("bermuda:fights.record", "fights", "bermuda"),
+      f("results.placement", "results"),
+    ]);
+    assert.deepEqual(
+      groups.map((g) => [g.key, g.facts.map((x) => x.id)]),
+      [
+        ["results", ["results.placement"]],
+        ["fights", ["fights.record", "bermuda:fights.record"]],
+        ["drops", ["kalahari:drops.usual"]],
+      ],
+    );
+  });
+});

@@ -1,16 +1,21 @@
+from datetime import date
+
 from django.db.models import Count, Q
+from django.http import Http404
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
 from rest_framework import generics, status, viewsets
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.league.models import Team
 from apps.results.models import MatchEvent
-from common.permissions import IsStaff
+from common.permissions import HasFeature, IsStaff, IsTeamMemberOrStaff
 
 from .engine import team_profile
-from .models import KnowledgeEntry, WeaponName
-from .serializers import KnowledgeEntrySerializer, WeaponNameSerializer
+from .models import CoachReport, KnowledgeEntry, WeaponName
+from .reports import week_of, write_reports
+from .serializers import CoachReportSerializer, KnowledgeEntrySerializer, WeaponNameSerializer
 
 
 class KnowledgeEntryViewSet(viewsets.ModelViewSet):
@@ -87,3 +92,78 @@ class TeamProfileView(APIView):
     def get(self, request, slug: str):
         team = get_object_or_404(Team, slug=slug)
         return Response({"team": team.name, **team_profile(team.pk)})
+
+
+COACH = "assistant"  # the plan feature that turns the coach on for a team
+
+
+class TeamReportsView(APIView):
+    """A team's weekly reports, newest first. Only that team (and staff) can see them."""
+
+    permission_classes = [HasFeature(COACH), IsTeamMemberOrStaff]
+
+    def get_team(self) -> Team:
+        return get_object_or_404(Team, slug=self.kwargs["slug"])
+
+    def get(self, request, slug: str):
+        reports = CoachReport.objects.filter(team=self.get_team()).select_related(
+            "team", "edited_by"
+        )
+        if not request.user.is_league_staff:
+            reports = reports.filter(is_published=True)
+        return Response(CoachReportSerializer(reports, many=True).data)
+
+
+class ReportView(generics.RetrieveUpdateAPIView):
+    """One report. Staff can reword, drop or reorder its tasks, or hide it."""
+
+    serializer_class = CoachReportSerializer
+    queryset = CoachReport.objects.select_related("team", "edited_by")
+    http_method_names = ["get", "patch"]
+    permission_classes = [IsStaff]  # reading is wider: see get_permissions
+
+    def get_permissions(self):
+        if self.request.method == "GET":
+            return [HasFeature(COACH)(), IsTeamMemberOrStaff()]
+        return [IsStaff()]
+
+    def get_team(self) -> Team:
+        return self.get_object().team
+
+    def get_object(self):
+        report = super().get_object()
+        user = self.request.user
+        if not report.is_published and not user.is_league_staff:
+            raise Http404
+        return report
+
+    def perform_update(self, serializer):
+        serializer.save(edited_by=self.request.user)
+
+
+class ReportListView(APIView):
+    """Staff: every team's report for a week (``?week=YYYY-MM-DD``, default this week).
+    ``POST`` writes them (reports staff have edited are kept)."""
+
+    permission_classes = [IsStaff]
+
+    def _week(self, request):
+        raw = request.data.get("week") if request.method == "POST" else None
+        raw = raw or request.query_params.get("week")
+        try:
+            day = date.fromisoformat(raw) if raw else timezone.localdate()
+        except (TypeError, ValueError):
+            day = timezone.localdate()
+        return week_of(day)
+
+    def get(self, request):
+        week = self._week(request)
+        reports = CoachReport.objects.filter(week_start=week).select_related("team", "edited_by")
+        return Response(
+            {"week_start": week, "reports": CoachReportSerializer(reports, many=True).data}
+        )
+
+    def post(self, request):
+        week = self._week(request)
+        written = write_reports(week)
+        return Response({"week_start": week, "written": written}, status=status.HTTP_201_CREATED)
