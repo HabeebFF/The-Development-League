@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
-import { describe, it } from "node:test";
+import { describe, it, test } from "node:test";
 
-import { dataText, parseData } from "./coach.ts";
+import { dataText, headToHeadText, parseData } from "./coach.ts";
 
 describe("knowledge base data box", () => {
   it("round-trips named values", () => {
@@ -49,4 +49,14 @@ describe("report facts", () => {
       ],
     );
   });
+});
+
+test("head-to-head line covers never met, met without fighting, and a record", () => {
+  const none = { met: [], fights: 0, won: 0, lost: 0, matches: [] };
+  assert.equal(headToHeadText(none, "Cliq"), "You haven't played in the same match as Cliq yet.");
+  assert.equal(headToHeadText({ ...none, met: [3] }, "Cliq"), "You've been in 1 match with Cliq but haven't fought them.");
+  assert.equal(
+    headToHeadText({ met: [1, 2], fights: 3, won: 1, lost: 2, matches: [1, 2] }, "Cliq"),
+    "Against Cliq: won 1, lost 2 of 3 fights over 2 matches.",
+  );
 });
