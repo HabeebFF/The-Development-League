@@ -1,5 +1,7 @@
 // Plotting-tool state: pure functions, so they can be tested without a browser.
 
+import type { Transform } from "./coordinates";
+
 export const ZONE_CHECKPOINTS = [
   "ZONE_1",
   "ZONE_2",
@@ -129,4 +131,18 @@ export function nextCheckpoint(points: RotationPoint[], zoneCount: number): Chec
 
 function round(v: number): number {
   return Math.round(v * 100) / 100;
+}
+
+/** A team's path from the replay: segments of [game seconds, x, z]. */
+export type ReplayPath = [number, number, number][][];
+
+/**
+ * The lines to draw for a team, as flat pixel arrays for Konva: its real path from the
+ * replay when there is one, else straight lines between its checkpoints (extras skipped).
+ */
+export function routeLines(points: RotationPoint[], path: ReplayPath | undefined, t: Transform): number[][] {
+  const flat = (xz: { x: number; z: number }[]) =>
+    xz.flatMap((p) => [t.a * p.x + t.b * p.z + t.c, t.d * p.x + t.e * p.z + t.f]); // toPixel
+  if (path?.length) return path.filter((s) => s.length > 1).map((s) => flat(s.map(([, x, z]) => ({ x, z }))));
+  return [flat(points.filter((p) => p.checkpoint !== "EXTRA"))];
 }

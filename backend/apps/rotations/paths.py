@@ -91,7 +91,9 @@ def landed_index(track: Track) -> int:
     return 0
 
 
-def bridged(points: Sequence[Sequence[int] | None], max_steps: int) -> list[tuple[float, float] | None]:
+def bridged(
+    points: Sequence[Sequence[int] | None], max_steps: int
+) -> list[tuple[float, float] | None]:
     """World-unit points with holes of up to ``max_steps`` filled in a straight line."""
     out: list[tuple[float, float] | None] = [
         (p[0] / 10, p[1] / 10) if p is not None else None for p in points

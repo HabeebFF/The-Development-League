@@ -9,6 +9,11 @@ point (the winner) or ELIMINATED point (everyone else).
 The drop is only suggested: the median of the team's fights (kills and deaths, not
 respawns) before the first zone shrinks, which is usually near where it landed.
 
+When the replay .bin was uploaded, the team's real path (``paths.py``) is used instead:
+the drop is where the team was once everyone had landed, each zone point is where it was
+when that zone finished closing, and the end is the last point of its path. These points
+sit on the line drawn from the same path.
+
 Only rotations still in AUTO status are rebuilt; anything staff touched is kept.
 """
 
@@ -25,6 +30,7 @@ from apps.maps.models import MapArea
 from apps.results.models import MatchEvent, TeamMatchResult, ZonePhase
 
 from .models import MAX_ZONES, Checkpoint, RotationPoint, TeamRotation
+from .paths import TeamPath, match_paths, zone_close_times
 
 # A team's elimination position may be logged a moment after the elimination event.
 ELIMINATION_SLACK_S = 2.0
@@ -114,6 +120,31 @@ def draft_points(
     return points
 
 
+def path_points(result: TeamMatchResult, path: TeamPath, closes: list[float]) -> list[DraftPoint]:
+    """Drop, zone and end points read off a team's replay path."""
+    evidence = {"replay": 1}
+    points = []
+    first = path.segments[0][0]
+    drop = path.at(path.landed_s) if path.landed_s is not None else None
+    drop = drop or first
+    points.append(
+        DraftPoint(Checkpoint.DROP, round(drop[1], 2), round(drop[2], 2), drop[0], evidence)
+    )
+    end = path.end
+    for index, t in enumerate(closes, start=1):
+        if t > end[0]:
+            break
+        at = path.at(t)
+        if at is not None:
+            points.append(
+                DraftPoint(f"ZONE_{index}", round(at[1], 2), round(at[2], 2), round(t, 2), evidence)
+            )
+    if result.placement == 1 or result.eliminated_at_s is not None:
+        checkpoint = Checkpoint.FINAL if result.placement == 1 else Checkpoint.ELIMINATED
+        points.append(DraftPoint(checkpoint, round(end[1], 2), round(end[2], 2), end[0], evidence))
+    return points
+
+
 @transaction.atomic
 def draft_rotations(match: Match, *, team_ids: set[int] | None = None) -> int:
     """(Re)build AUTO rotations of a match. Returns how many rotations were drafted.
@@ -123,6 +154,8 @@ def draft_rotations(match: Match, *, team_ids: set[int] | None = None) -> int:
     """
     seen = sightings(match)
     windows = zone_windows(match)
+    paths = match_paths(match)
+    closes = zone_close_times(match) if paths else []
     areas = list(MapArea.objects.filter(map_id=match.map_id)) if match.map_id else []
     results = TeamMatchResult.objects.filter(match=match)
     if team_ids is not None:
@@ -154,7 +187,11 @@ def draft_rotations(match: Match, *, team_ids: set[int] | None = None) -> int:
                 source=RotationPoint.Source.AUTO,
                 evidence=p.evidence,
             )
-            for order, p in enumerate(draft_points(result, seen.get(result.team_id, []), windows))
+            for order, p in enumerate(
+                path_points(result, paths[result.team_id], closes)
+                if result.team_id in paths
+                else draft_points(result, seen.get(result.team_id, []), windows)
+            )
         )
         drafted += 1
     return drafted

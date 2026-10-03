@@ -26,6 +26,8 @@ import {
   SHORT,
   type Checkpoint,
   type RotationPoint,
+  routeLines,
+  type ReplayPath,
 } from "@/lib/rotation";
 
 const CANVAS = 1024;
@@ -82,6 +84,7 @@ export default function PlottingTool({ matchId }: { matchId: number }) {
     }
     const world = [
       ...Object.values(edits).flat(),
+      ...(data?.rotations ?? []).flatMap((r) => (r.path ?? []).flat().map(([, x, z]) => ({ x, z }))),
       ...shrinks.flatMap((z) => [
         { x: z.inner_x - z.inner_radius, z: z.inner_z - z.inner_radius },
         { x: z.inner_x + z.inner_radius, z: z.inner_z + z.inner_radius },
@@ -116,7 +119,7 @@ export default function PlottingTool({ matchId }: { matchId: number }) {
     setData((d) =>
       d && {
         ...d,
-        rotations: d.rotations.map((r) => (r.team.slug === saved.team.slug ? saved : r)),
+        rotations: d.rotations.map((r) => (r.team.slug === saved.team.slug ? { ...saved, path: saved.path ?? r.path } : r)),
       },
     );
     setEdits((e) => ({ ...e, [saved.team.slug]: saved.points }));
@@ -304,12 +307,13 @@ export default function PlottingTool({ matchId }: { matchId: number }) {
             })}
             {rotations.map((r, i) =>
               i === selected ? null : (
-                <Path key={r.team.slug} points={edits[r.team.slug] ?? []} t={view.t} color={teamColor(i, r.team.primary_color)} px={px} faint />
+                <Path key={r.team.slug} points={edits[r.team.slug] ?? []} path={r.path} t={view.t} color={teamColor(i, r.team.primary_color)} px={px} faint />
               ),
             )}
             {current && (
               <Path
                 points={points}
+                path={current.path}
                 t={view.t}
                 color={teamColor(selected, current.team.primary_color)}
                 px={px}
@@ -406,6 +410,7 @@ export default function PlottingTool({ matchId }: { matchId: number }) {
 
 function Path({
   points,
+  path,
   t,
   color,
   px,
@@ -414,6 +419,7 @@ function Path({
   onRemove,
 }: {
   points: RotationPoint[];
+  path?: ReplayPath;
   t: Transform;
   color: string;
   px: (n: number) => number;
@@ -422,11 +428,20 @@ function Path({
   onRemove?: (index: number) => void;
 }) {
   const pixels = points.map((p) => toPixel(t, p.x, p.z));
-  const route = pixels.filter((_, i) => points[i].checkpoint !== "EXTRA").flatMap((p) => [p.px, p.py]);
   const r = px(faint ? 4 : 10);
   return (
     <Group opacity={faint ? 0.35 : 1} listening={!faint}>
-      <Line points={route} stroke={color} strokeWidth={px(faint ? 1.5 : 3)} lineCap="round" lineJoin="round" />
+      {routeLines(points, path, t).map((line, i) => (
+        <Line
+          key={i}
+          points={line}
+          stroke={color}
+          strokeWidth={px(faint ? 1.5 : 3)}
+          lineCap="round"
+          lineJoin="round"
+          listening={false}
+        />
+      ))}
       {points.map((p, i) => (
         <Group
           key={`${p.checkpoint}-${i}`}

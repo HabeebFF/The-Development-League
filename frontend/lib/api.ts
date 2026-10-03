@@ -196,6 +196,8 @@ export type TeamRotation = {
   confirmed_at: string | null;
   updated_at: string;
   points: import("./rotation").RotationPoint[];
+  /** The team's real path from the replay: segments of [game seconds, x, z]; empty without one. */
+  path?: import("./rotation").ReplayPath;
 };
 
 export type AdminMatch = {

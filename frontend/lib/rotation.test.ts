@@ -7,6 +7,7 @@ import {
   nextCheckpoint,
   placePoint,
   removePoint,
+  routeLines,
   type RotationPoint,
 } from "./rotation.ts";
 
@@ -66,5 +67,38 @@ describe("plotting", () => {
     points = placePoint(points, "ZONE_2", 1, 1);
     points = placePoint(points, "ZONE_3", 1, 1);
     assert.equal(nextCheckpoint(points, 3), null);
+  });
+});
+
+describe("routeLines", () => {
+  const t = { a: 1, b: 0, c: 0, d: 0, e: 1, f: 0 };
+  const pts: RotationPoint[] = [
+    { checkpoint: "DROP", x: 0, z: 0, game_time_s: null, source: "AUTO" } as RotationPoint,
+    { checkpoint: "EXTRA", x: 5, z: 5, game_time_s: null, source: "AUTO" } as RotationPoint,
+    { checkpoint: "ZONE_1", x: 10, z: 0, game_time_s: null, source: "AUTO" } as RotationPoint,
+  ];
+
+  it("follows the replay path, one line per segment", () => {
+    const path: [number, number, number][][] = [
+      [
+        [0, 0, 0],
+        [1, 2, 3],
+        [2, 4, 1],
+      ],
+      [[9, 7, 7]], // a lone point draws nothing
+      [
+        [20, 8, 8],
+        [21, 9, 9],
+      ],
+    ];
+    assert.deepEqual(routeLines(pts, path, t), [
+      [0, 0, 2, 3, 4, 1],
+      [8, 8, 9, 9],
+    ]);
+  });
+
+  it("joins the checkpoints without a path, skipping extras", () => {
+    assert.deepEqual(routeLines(pts, [], t), [[0, 0, 10, 0]]);
+    assert.deepEqual(routeLines(pts, undefined, t), [[0, 0, 10, 0]]);
   });
 });
