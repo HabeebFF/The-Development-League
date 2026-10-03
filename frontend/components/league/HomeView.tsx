@@ -165,7 +165,7 @@ export default function HomeView() {
               {replays.map((m) => (
                 <Link
                   key={m.id}
-                  href={m.vod_url ?? `/matches/${m.id}/replay`}
+                  href={m.vod_url || `/matches/${m.id}/replay`}
                   {...(m.vod_url ? { target: "_blank", rel: "noreferrer" } : {})}
                   className="card card-hover group flex aspect-[4/3] flex-col justify-between overflow-hidden p-3 sm:p-4"
                 >
