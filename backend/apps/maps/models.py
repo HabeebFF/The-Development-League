@@ -72,14 +72,31 @@ class CalibrationPoint(TimeStampedModel):
         return f"{self.map}: {self.label or self.pk}"
 
 
+class MapAreaQuerySet(models.QuerySet):
+    def confirmed(self):
+        return self.filter(status=MapArea.Status.CONFIRMED)
+
+
 class MapArea(TimeStampedModel):
-    """A named place ("Clock Tower") as a polygon in world coordinates."""
+    """A named place ("Clock Tower") as a polygon in world coordinates.
+
+    A SUGGESTED area was outlined from guides, not by staff: it is only shown to staff
+    until one of them confirms it, and nothing is labelled with it before then.
+    """
+
+    class Status(models.TextChoices):
+        CONFIRMED = "CONFIRMED", "Confirmed"
+        SUGGESTED = "SUGGESTED", "Suggested"
 
     map = models.ForeignKey(Map, on_delete=models.CASCADE, related_name="areas")
     name = models.CharField(max_length=80)
     polygon = models.JSONField(help_text="[[x, z], ...] world coordinates, at least 3")
     centre_x = models.FloatField()
     centre_z = models.FloatField()
+    status = models.CharField(max_length=10, choices=Status.choices, default=Status.CONFIRMED)
+    note = models.TextField(blank=True, help_text="Where a suggested outline came from")
+
+    objects = MapAreaQuerySet.as_manager()
 
     class Meta:
         ordering = ["map", "name"]
@@ -100,7 +117,7 @@ class MapArea(TimeStampedModel):
         """The area containing (x, z); the smallest one when areas overlap."""
         if map_id is None and areas is None:
             return None
-        candidates = areas if areas is not None else cls.objects.filter(map_id=map_id)
+        candidates = areas if areas is not None else cls.objects.confirmed().filter(map_id=map_id)
         hits = [a for a in candidates if a.contains(x, z)]
         return min(hits, key=lambda a: _polygon_area(a.polygon)) if hits else None
 

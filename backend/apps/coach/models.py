@@ -2,6 +2,7 @@
 
 Coaching claims about a team come from match data only; these entries are the general
 knowledge (what a Gloo Wall is for, where the Clock Tower is) the coach may add to them.
+When an entry and our own match data disagree (a UAV radius, a zone timing), match data wins.
 """
 
 from django.conf import settings
@@ -10,7 +11,25 @@ from django.db import models
 from common.models import TimeStampedModel
 
 
+class KnowledgeQuerySet(models.QuerySet):
+    def for_coach(self):
+        """What the coach may use: entries staff wrote or approved, never drafts."""
+        return self.filter(status=KnowledgeEntry.Status.APPROVED).exclude(body="")
+
+
 class KnowledgeEntry(TimeStampedModel):
+    """One piece of general knowledge. Entries researched online arrive as DRAFTs with their
+    sources and patch; staff approve, edit or reject them before the coach uses them."""
+
+    class Status(models.TextChoices):
+        DRAFT = "DRAFT", "Draft"
+        APPROVED = "APPROVED", "Approved"
+        REJECTED = "REJECTED", "Rejected"
+
+    class Origin(models.TextChoices):
+        STAFF = "STAFF", "Written by staff"
+        RESEARCH = "RESEARCH", "Researched online"
+
     class Kind(models.TextChoices):
         WEAPON = "WEAPON", "Weapon"
         ATTACHMENT = "ATTACHMENT", "Attachment"
@@ -39,6 +58,23 @@ class KnowledgeEntry(TimeStampedModel):
     updated_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
     )
+    status = models.CharField(max_length=10, choices=Status.choices, default=Status.APPROVED)
+    origin = models.CharField(max_length=10, choices=Origin.choices, default=Origin.STAFF)
+    sources = models.JSONField(
+        default=list, blank=True, help_text="[{title, url, publisher, published, accessed}]"
+    )
+    patch = models.CharField(
+        max_length=20, blank=True, help_text="Game patch it applies to, e.g. OB55"
+    )
+    conflicts = models.TextField(blank=True, help_text="Where sources (or our data) disagree")
+    weak_sources = models.BooleanField(default=False)
+    weak_reason = models.CharField(max_length=300, blank=True)
+    reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+
+    objects = KnowledgeQuerySet.as_manager()
 
     class Meta:
         ordering = ["kind", "map", "title"]

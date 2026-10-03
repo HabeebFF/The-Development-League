@@ -9,10 +9,12 @@ import { fitBounds, toPixel, toWorld } from "@/lib/coordinates";
 
 const CANVAS = 1000;
 const ACCENT = "#ff6a1a";
+const SUGGESTED = "#ffc23d";
 
 /**
  * Named places on a map (drop spots, high ground, route landmarks): click the map to
  * outline one, name it and save. The coach and the rotation pages use these names.
+ * Outlines suggested from guides are dashed until staff confirm them.
  */
 export default function AreaEditor({ maps, onChanged }: { maps: GameMap[]; onChanged: () => void }) {
   const [slug, setSlug] = useState(maps[0]?.slug ?? "");
@@ -99,6 +101,9 @@ export default function AreaEditor({ maps, onChanged }: { maps: GameMap[]; onCha
             body: { name: name.trim(), polygon: points },
           }),
     );
+  const confirmArea = (area: MapArea) => run(() => api(`/admin/maps/${slug}/areas/${area.id}`, { method: "PATCH", body: { status: "CONFIRMED" } }));
+  const suggested = shown.filter((a) => a.status === "SUGGESTED");
+  const confirmed = shown.filter((a) => a.status !== "SUGGESTED");
   const remove = (area: MapArea) => confirm(`Delete "${area.name}"?`) && run(() => api(`/admin/maps/${slug}/areas/${area.id}`, { method: "DELETE" }));
 
   const flat = (poly: [number, number][]) =>
@@ -123,14 +128,16 @@ export default function AreaEditor({ maps, onChanged }: { maps: GameMap[]; onCha
               {shown.map((a) => {
                 const c = toPixel(view.t, a.centre_x, a.centre_z);
                 const lit = a.id === selected;
+                const guess = a.status === "SUGGESTED";
                 return (
                   <Group key={a.id} listening={false}>
                     <Line
                       points={flat(a.polygon)}
                       closed
-                      stroke={lit ? ACCENT : "#ffffffcc"}
+                      stroke={lit ? ACCENT : guess ? SUGGESTED : "#ffffffcc"}
                       strokeWidth={px(lit ? 2.5 : 1.5)}
-                      fill={lit ? "#ff6a1a33" : "#ffffff14"}
+                      dash={guess ? [px(6), px(4)] : undefined}
+                      fill={lit ? "#ff6a1a33" : guess ? "#ffc23d14" : "#ffffff14"}
                     />
                     <Text
                       x={c.px}
@@ -201,12 +208,45 @@ export default function AreaEditor({ maps, onChanged }: { maps: GameMap[]; onCha
           </div>
         </div>
 
+        {suggested.length > 0 && (
+          <div>
+            <p className="mb-1 text-xs text-accent-2">
+              {suggested.length} suggested from guides. Check each one against the map, move it if needed (delete and redraw), then confirm it.
+            </p>
+            <ul className="space-y-1">
+              {suggested.map((a) => (
+                <li key={a.id} className={`rounded border border-dashed px-2 py-1 ${a.id === selected ? "border-accent" : "border-accent-2/50"}`}>
+                  <div className="flex items-center gap-2">
+                    <button
+                      className="min-w-0 flex-1 truncate text-left"
+                      onClick={() => {
+                        setSelected(a.id);
+                        setName(a.name);
+                        setPoints([]);
+                      }}
+                    >
+                      {a.name}
+                    </button>
+                    <button className="text-xs text-ok" disabled={busy} onClick={() => confirmArea(a)}>
+                      Confirm
+                    </button>
+                    <button className="text-xs text-bad" disabled={busy} onClick={() => remove(a)}>
+                      Delete
+                    </button>
+                  </div>
+                  {a.id === selected && a.note && <p className="mt-1 text-xs text-muted">{a.note}</p>}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
         <div>
           <p className="mb-2 text-xs text-muted">
-            {shown.length} named {shown.length === 1 ? "area" : "areas"} on {map?.name}
+            {confirmed.length} named {confirmed.length === 1 ? "area" : "areas"} on {map?.name}
           </p>
           <ul className="space-y-1">
-            {shown.map((a) => (
+            {confirmed.map((a) => (
               <li key={a.id} className={`flex items-center gap-2 rounded border px-2 py-1 ${a.id === selected ? "border-accent" : "border-line"}`}>
                 <button
                   className="min-w-0 flex-1 truncate text-left"

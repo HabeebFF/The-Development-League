@@ -17,8 +17,8 @@ def _finite(value: float, field: str) -> float:
 class MapAreaSerializer(serializers.ModelSerializer):
     class Meta:
         model = MapArea
-        fields = ["id", "name", "polygon", "centre_x", "centre_z"]
-        read_only_fields = ["centre_x", "centre_z"]
+        fields = ["id", "name", "polygon", "centre_x", "centre_z", "status", "note"]
+        read_only_fields = ["centre_x", "centre_z", "note"]
         validators = []
 
     def validate_polygon(self, value):
@@ -51,7 +51,7 @@ class MapAreaSerializer(serializers.ModelSerializer):
 class MapSerializer(serializers.ModelSerializer):
     """What the site needs to draw a map: image, size, transform and named areas."""
 
-    areas = MapAreaSerializer(many=True, read_only=True)
+    areas = serializers.SerializerMethodField()
     is_calibrated = serializers.SerializerMethodField()
 
     class Meta:
@@ -68,6 +68,14 @@ class MapSerializer(serializers.ModelSerializer):
             "is_calibrated",
             "areas",
         ]
+
+    def get_areas(self, map_: Map) -> list[dict]:
+        """Staff also see suggested outlines waiting for them; everyone else only confirmed."""
+        request = self.context.get("request")
+        areas = map_.areas.all()
+        if not getattr(getattr(request, "user", None), "is_league_staff", False):
+            areas = [a for a in areas if a.status == MapArea.Status.CONFIRMED]
+        return MapAreaSerializer(areas, many=True, context=self.context).data
 
     def get_is_calibrated(self, map_: Map) -> bool:
         return bool(map_.transform and map_.image)

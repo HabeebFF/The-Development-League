@@ -3,7 +3,17 @@
 import { useEffect, useState } from "react";
 
 import { api, ApiError, type GameMap } from "@/lib/api";
-import { dataText, KINDS, parseData, type KnowledgeEntry, type KnowledgeKind } from "@/lib/coach";
+import {
+  dataText,
+  KINDS,
+  matchesReview,
+  parseData,
+  sourceLine,
+  type KnowledgeEntry,
+  type KnowledgeKind,
+  type KnowledgeStatus,
+  type ReviewFilter,
+} from "@/lib/coach";
 
 type Draft = {
   id: number | null;
@@ -13,6 +23,25 @@ type Draft = {
   data: string;
   map: string;
   area: string;
+  patch: string;
+  conflicts: string;
+  status: KnowledgeStatus;
+  entry: KnowledgeEntry | null;
+};
+
+const REVIEW: { key: ReviewFilter; label: string }[] = [
+  { key: "DRAFT", label: "Drafts to review" },
+  { key: "WEAK", label: "Weak sources" },
+  { key: "WRITE", label: "Needs writing" },
+  { key: "APPROVED", label: "Approved" },
+  { key: "REJECTED", label: "Rejected" },
+  { key: "ALL", label: "All" },
+];
+
+const STATUS_BADGE: Record<KnowledgeStatus, string> = {
+  DRAFT: "border-accent-2/40 text-accent-2",
+  APPROVED: "border-ok/40 text-ok",
+  REJECTED: "border-bad/40 text-bad",
 };
 
 const BLANK: Draft = {
@@ -23,6 +52,10 @@ const BLANK: Draft = {
   data: "",
   map: "",
   area: "",
+  patch: "",
+  conflicts: "",
+  status: "APPROVED",
+  entry: null,
 };
 
 function draftOf(e: KnowledgeEntry): Draft {
@@ -34,6 +67,10 @@ function draftOf(e: KnowledgeEntry): Draft {
     data: dataText(e.data),
     map: e.map ?? "",
     area: e.area ? String(e.area) : "",
+    patch: e.patch,
+    conflicts: e.conflicts,
+    status: e.status,
+    entry: e,
   };
 }
 
@@ -41,10 +78,14 @@ function message(e: unknown): string {
   return e instanceof ApiError ? e.message : "Something went wrong. Try again.";
 }
 
-/** The coach's general Free Fire knowledge, grouped by kind. Entries with no text are flagged. */
+/**
+ * The coach's general Free Fire knowledge. Researched entries arrive as drafts with their
+ * sources; staff approve, edit or reject them, and the coach only uses approved ones.
+ */
 export default function KnowledgeEditor({ maps }: { maps: GameMap[] }) {
   const [entries, setEntries] = useState<KnowledgeEntry[] | null>(null);
   const [kind, setKind] = useState<KnowledgeKind | "ALL">("ALL");
+  const [review, setReview] = useState<ReviewFilter | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -52,15 +93,22 @@ export default function KnowledgeEditor({ maps }: { maps: GameMap[] }) {
 
   useEffect(() => {
     api<KnowledgeEntry[]>("/coach/knowledge")
-      .then(setEntries)
+      .then((list) => {
+        setEntries(list);
+        // Open on the drafts while there are any.
+        setReview((r) => r ?? (list.some((e) => e.status === "DRAFT") ? "DRAFT" : "ALL"));
+      })
       .catch((e) => setError(message(e)));
   }, [version]);
 
-  const shown = (entries ?? []).filter((e) => kind === "ALL" || e.kind === kind);
+  const filter = review ?? "ALL";
+  const ofKind = (entries ?? []).filter((e) => kind === "ALL" || e.kind === kind);
+  const shown = ofKind.filter((e) => matchesReview(e, filter));
+  const count = (f: ReviewFilter) => ofKind.filter((e) => matchesReview(e, f)).length;
   const areas = maps.find((m) => m.slug === draft?.map)?.areas ?? [];
   const mapName = (slug: string | null) => maps.find((m) => m.slug === slug)?.name;
 
-  async function save() {
+  async function save(status?: KnowledgeStatus) {
     if (!draft) return;
     const data = parseData(draft.data);
     if (data === null) {
@@ -77,6 +125,9 @@ export default function KnowledgeEditor({ maps }: { maps: GameMap[] }) {
         data,
         map: draft.map || null,
         area: draft.area ? Number(draft.area) : null,
+        patch: draft.patch.trim(),
+        conflicts: draft.conflicts.trim(),
+        status: status ?? draft.status,
       };
       if (draft.id) await api(`/coach/knowledge/${draft.id}`, { method: "PUT", body });
       else await api("/coach/knowledge", { method: "POST", body });
@@ -105,6 +156,19 @@ export default function KnowledgeEditor({ maps }: { maps: GameMap[] }) {
 
   return (
     <div>
+      <div className="mb-3 flex flex-wrap gap-1" role="tablist" aria-label="Review">
+        {REVIEW.map((r) => (
+          <button
+            key={r.key}
+            role="tab"
+            aria-selected={filter === r.key}
+            className={`rounded border px-2 py-1 text-xs ${filter === r.key ? "border-accent text-white" : "border-line text-muted hover:text-white"}`}
+            onClick={() => setReview(r.key)}
+          >
+            {r.label} <span className="text-muted">{entries ? count(r.key) : ""}</span>
+          </button>
+        ))}
+      </div>
       <div className="flex flex-wrap items-center gap-2">
         <select className="input max-w-xs" value={kind} onChange={(e) => setKind(e.target.value as KnowledgeKind | "ALL")} aria-label="Show">
           <option value="ALL">Everything</option>
@@ -177,10 +241,44 @@ export default function KnowledgeEditor({ maps }: { maps: GameMap[] }) {
               onChange={(e) => setDraft({ ...draft, data: e.target.value })}
             />
           </label>
+          <div className="grid gap-3 sm:grid-cols-[8rem_1fr]">
+            <label className="text-sm">
+              <span className="mb-1 block text-muted">Patch</span>
+              <input className="input" value={draft.patch} onChange={(e) => setDraft({ ...draft, patch: e.target.value })} placeholder="OB55" />
+            </label>
+            <label className="text-sm">
+              <span className="mb-1 block text-muted">Where sources disagree</span>
+              <textarea
+                className="input min-h-10 text-xs"
+                value={draft.conflicts}
+                onChange={(e) => setDraft({ ...draft, conflicts: e.target.value })}
+              />
+            </label>
+          </div>
+          {draft.entry && <Sources entry={draft.entry} />}
           <div className="flex flex-wrap gap-2">
-            <button className="btn btn-primary" disabled={busy || !draft.title.trim()} onClick={save}>
-              Save
+            {draft.status !== "APPROVED" && (
+              <button className="btn btn-primary" disabled={busy || !draft.title.trim() || !draft.body.trim()} onClick={() => save("APPROVED")}>
+                Approve
+              </button>
+            )}
+            <button
+              className={`btn ${draft.status === "APPROVED" ? "btn-primary" : ""}`}
+              disabled={busy || !draft.title.trim()}
+              onClick={() => save()}
+            >
+              {draft.status === "DRAFT" ? "Save draft" : "Save"}
             </button>
+            {draft.id && draft.status !== "REJECTED" && (
+              <button className="btn text-bad" disabled={busy} onClick={() => save("REJECTED")}>
+                Reject
+              </button>
+            )}
+            {draft.status === "REJECTED" && (
+              <button className="btn" disabled={busy} onClick={() => save("DRAFT")}>
+                Back to drafts
+              </button>
+            )}
             <button className="btn" disabled={busy} onClick={() => setDraft(null)}>
               Cancel
             </button>
@@ -208,11 +306,48 @@ export default function KnowledgeEditor({ maps }: { maps: GameMap[] }) {
                     {e.area_name ? `, ${e.area_name}` : ""}
                   </span>
                 )}
-                {!e.body && <span className="ml-auto rounded border border-accent-2/40 px-1.5 text-xs text-accent-2">Needs writing</span>}
+                <span className="ml-auto flex flex-wrap gap-1">
+                  {e.patch && <span className="rounded border border-line px-1.5 text-xs text-muted">{e.patch}</span>}
+                  {e.weak_sources && <span className="rounded border border-accent-2/40 px-1.5 text-xs text-accent-2">Weak sources</span>}
+                  {e.conflicts && <span className="rounded border border-accent-2/40 px-1.5 text-xs text-accent-2">Sources disagree</span>}
+                  {!e.body && <span className="rounded border border-accent-2/40 px-1.5 text-xs text-accent-2">Needs writing</span>}
+                  {e.body && (
+                    <span className={`rounded border px-1.5 text-xs ${STATUS_BADGE[e.status]}`}>
+                      {e.status === "DRAFT" ? "Draft" : e.status === "APPROVED" ? "Approved" : "Rejected"}
+                    </span>
+                  )}
+                </span>
               </span>
               {e.body && <span className="mt-1 line-clamp-2 block text-sm text-muted">{e.body}</span>}
               {Object.keys(e.data).length > 0 && <span className="mt-1 block font-mono text-xs text-muted">{JSON.stringify(e.data)}</span>}
             </button>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+/** Where a researched entry came from, with links and dates. */
+function Sources({ entry }: { entry: KnowledgeEntry }) {
+  if (!entry.sources.length && !entry.weak_sources && entry.origin === "STAFF") return null;
+  return (
+    <div className="rounded border border-line p-3 text-sm">
+      <p className="text-muted">
+        {entry.origin === "RESEARCH" ? "Researched online" : "Written by staff"}
+        {entry.reviewed_by ? ` · reviewed by ${entry.reviewed_by}` : ""}
+      </p>
+      {entry.weak_sources && <p className="mt-1 text-xs text-accent-2">Weak sources: {entry.weak_reason || "check before approving"}</p>}
+      {entry.area_status === "SUGGESTED" && (
+        <p className="mt-1 text-xs text-accent-2">Its place outline is only suggested: confirm or move it on the Map areas tab.</p>
+      )}
+      <ul className="mt-2 space-y-1">
+        {entry.sources.map((s) => (
+          <li key={s.url} className="text-xs">
+            <a href={s.url} target="_blank" rel="noreferrer noopener" className="text-accent hover:underline">
+              {s.title || s.url}
+            </a>
+            <span className="text-muted"> · {sourceLine(s)}</span>
           </li>
         ))}
       </ul>

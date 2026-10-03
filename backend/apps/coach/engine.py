@@ -617,7 +617,7 @@ def load_games(match_ids: Iterable[int] | None = None) -> list[Game]:
     if match_ids is not None:
         qs = qs.filter(pk__in=list(match_ids))
     areas_by_map: dict[int, list[Area]] = defaultdict(list)
-    for a in MapArea.objects.all():
+    for a in MapArea.objects.confirmed():
         areas_by_map[a.map_id].append(Area(a.name, a.polygon))
 
     K = MatchEvent.Kind

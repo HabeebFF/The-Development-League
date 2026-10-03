@@ -158,7 +158,16 @@ export type TeamRef = {
   primary_color: string;
 };
 
-export type MapArea = { id: number; name: string; polygon: [number, number][]; centre_x: number; centre_z: number };
+export type MapArea = {
+  id: number;
+  name: string;
+  polygon: [number, number][];
+  centre_x: number;
+  centre_z: number;
+  /** SUGGESTED outlines come from guides and only count once staff confirm them. */
+  status?: "CONFIRMED" | "SUGGESTED";
+  note?: string;
+};
 
 export type GameMap = {
   id: number;

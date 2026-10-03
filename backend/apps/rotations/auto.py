@@ -156,7 +156,7 @@ def draft_rotations(match: Match, *, team_ids: set[int] | None = None) -> int:
     windows = zone_windows(match)
     paths = match_paths(match)
     closes = zone_close_times(match) if paths else []
-    areas = list(MapArea.objects.filter(map_id=match.map_id)) if match.map_id else []
+    areas = list(MapArea.objects.confirmed().filter(map_id=match.map_id)) if match.map_id else []
     results = TeamMatchResult.objects.filter(match=match)
     if team_ids is not None:
         results = results.filter(team_id__in=team_ids)
