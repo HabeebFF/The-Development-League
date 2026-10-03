@@ -1,11 +1,15 @@
 """Merging two teams that are really one (an in-game name variant)."""
 
+from datetime import date
+
 import pytest
 from rest_framework.test import APIClient
 
 from apps.accounts.models import Membership, User
+from apps.coach.models import CoachReport
 from apps.league.models import Group, Match, MatchDay, ScoringRule, Season, Stage, Team, TeamAlias
-from apps.results.models import StandingRow, TeamMatchResult
+from apps.results.models import MatchEvent, StandingRow, TeamMatchResult
+from apps.rotations.models import ReplayObject
 
 pytestmark = pytest.mark.django_db
 
@@ -75,6 +79,39 @@ def test_merge_moves_results_and_names(staff_client, setup, django_capture_on_co
     assert kept in setup["group"].teams.all()
     row = StandingRow.objects.get(season=setup["season"], scope="season", team=kept)
     assert row.matches_played == 2
+
+
+def test_merge_keeps_events_replay_objects_and_coach_reports(staff_client, setup):
+    kept, variant, other = setup["kept"], setup["variant"], setup["other"]
+    m2 = TeamMatchResult.objects.get(team=variant).match
+    K = MatchEvent.Kind
+    killed = MatchEvent.objects.create(
+        match=m2, kind=K.KILL, source="DEBUGGER", actor_team=variant, target_team=other
+    )
+    died = MatchEvent.objects.create(
+        match=m2, kind=K.KILL, source="DEBUGGER", actor_team=other, target_team=variant
+    )
+    uav = ReplayObject.objects.create(
+        match=m2, kind=ReplayObject.Kind.PLAYER_UAV, team=variant, start_s=1, end_s=2, x=0, z=0
+    )
+    week, old_week = date(2026, 9, 28), date(2026, 9, 21)
+    CoachReport.objects.create(team=kept, week_start=week)
+    CoachReport.objects.create(team=variant, week_start=week)
+    moved_report = CoachReport.objects.create(team=variant, week_start=old_week)
+
+    resp = staff_client.post(
+        f"/api/v1/admin/teams/{variant.slug}/merge", {"into": kept.slug}, format="json"
+    )
+    assert resp.status_code == 200, resp.content
+    assert resp.json()["events"] == 2 and resp.json()["replay_objects"] == 1
+    killed.refresh_from_db()
+    died.refresh_from_db()
+    uav.refresh_from_db()
+    assert killed.actor_team == kept and died.target_team == kept and uav.team == kept
+    # One report per team and week: the kept team's stays, the old week moves across.
+    assert CoachReport.objects.filter(team=kept, week_start=week).count() == 1
+    moved_report.refresh_from_db()
+    assert moved_report.team == kept
 
 
 def test_merge_refuses_teams_that_met(staff_client, setup):

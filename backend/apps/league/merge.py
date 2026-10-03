@@ -1,7 +1,8 @@
 """Merge one team into another (two names for the same team).
 
 Everything that pointed at the old team moves to the kept one: match results, player
-results, rotations, replay tracks, aliases, roster, group places, members and invites.
+results, rotations, replay tracks and objects, match events, coach reports, aliases,
+roster, group places, members and invites.
 The old team's name becomes an alias of the kept one, so the next upload with that
 in-game name lands on the kept team. Then the old team is deleted.
 """
@@ -11,9 +12,10 @@ from __future__ import annotations
 from django.db import transaction
 
 from apps.accounts.models import Invite, Membership
-from apps.results.models import PlayerMatchResult, StandingRow, TeamMatchResult
+from apps.coach.models import CoachReport
+from apps.results.models import MatchEvent, PlayerMatchResult, StandingRow, TeamMatchResult
 from apps.results.standings import schedule_rebuild
-from apps.rotations.models import PlayerTrack, TeamRotation
+from apps.rotations.models import PlayerTrack, ReplayObject, TeamRotation
 
 from .models import Player, RosterEntry, Season, Team, TeamAlias
 
@@ -44,8 +46,18 @@ def merge_teams(source: Team, target: Team) -> dict:
         "results": TeamMatchResult.objects.filter(team=source).update(team=target),
         "player_results": PlayerMatchResult.objects.filter(team=source).update(team=target),
         "rotations": TeamRotation.objects.filter(team=source).update(team=target),
+        # These would otherwise lose their team when the old team is deleted (SET_NULL).
+        "events": MatchEvent.objects.filter(actor_team=source).update(actor_team=target)
+        + MatchEvent.objects.filter(target_team=source).update(target_team=target),
+        "replay_objects": ReplayObject.objects.filter(team=source).update(team=target),
     }
     PlayerTrack.objects.filter(team=source).update(team=target)
+    # One coach report per team and week: the kept team's wins (staff rewrite it to cover
+    # both), the rest move.
+    CoachReport.objects.filter(
+        team=source, week_start__in=CoachReport.objects.filter(team=target).values("week_start")
+    ).delete()
+    CoachReport.objects.filter(team=source).update(team=target)
     Player.objects.filter(current_team=source).update(current_team=target)
 
     # Rows the kept team already has win: a player has one roster entry per season and a
