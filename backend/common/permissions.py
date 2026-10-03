@@ -1,5 +1,6 @@
 """Permission classes. Every API view names its permissions explicitly."""
 
+from django.conf import settings
 from rest_framework.permissions import SAFE_METHODS, BasePermission
 
 
@@ -31,13 +32,30 @@ class ReadOnly(BasePermission):
         return request.method in SAFE_METHODS
 
 
-def HasFeature(code: str) -> type[BasePermission]:  # noqa: N802 - reads like a class
-    """Allow users whose team plan includes ``code`` (staff always pass)."""
+def public_read(request) -> bool:
+    """A read that anyone may make while the site is public (``PUBLIC_SITE``)."""
+    return settings.PUBLIC_SITE and request.method in SAFE_METHODS
+
+
+class PublicRead(BasePermission):
+    """League pages: anyone can read while the site is public, else signed-in users."""
+
+    def has_permission(self, request, view) -> bool:
+        return public_read(request) or _user(request) is not None
+
+
+def HasFeature(code: str, public: bool = False) -> type[BasePermission]:  # noqa: N802
+    """Allow users whose team plan includes ``code`` (staff always pass).
+
+    ``public`` features are open to anyone for reading while the site is public.
+    """
 
     class _HasFeature(BasePermission):
         message = "Your team's plan does not include this page."
 
         def has_permission(self, request, view) -> bool:
+            if public and public_read(request):
+                return True
             user = _user(request)
             return bool(user and user.has_feature(code))
 

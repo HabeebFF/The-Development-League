@@ -326,20 +326,35 @@ def test_one_active_season(staff_client):
     assert list(Season.objects.filter(is_active=True).values_list("slug", flat=True)) == ["s2"]
 
 
-def test_league_data_needs_sign_in(league):
-    # The whole site is login-only (Habeeb, 2026-10-02): no league data without an account.
+LEAGUE_URLS = [
+    "/api/v1/seasons",
+    "/api/v1/seasons/season-one/standings",
+    "/api/v1/seasons/season-one/fixtures",
+    "/api/v1/match-days",
+    "/api/v1/matches",
+    "/api/v1/teams",
+    "/api/v1/maps",
+]
+
+
+def test_league_data_is_public_for_now(league):
+    # Habeeb, 2026-10-03: open the site to everyone for now (PUBLIC_SITE, on by default).
     anon = APIClient()
-    for url in [
-        "/api/v1/seasons",
-        "/api/v1/seasons/season-one/standings",
-        "/api/v1/seasons/season-one/fixtures",
-        "/api/v1/match-days",
-        "/api/v1/matches",
-        "/api/v1/teams",
-        "/api/v1/maps",
-    ]:
+    for url in LEAGUE_URLS:
+        assert anon.get(url).status_code == 200, url
+    assert anon.post("/api/v1/matches", {}).status_code in (401, 405)
+    assert anon.get("/api/v1/admin/matches").status_code == 401
+    assert anon.get("/api/v1/site").json() == {"public": True}
+
+
+def test_league_data_needs_sign_in_when_locked(league, settings):
+    # With PUBLIC_SITE off the site is login-only again (Habeeb, 2026-10-02).
+    settings.PUBLIC_SITE = False
+    anon = APIClient()
+    for url in LEAGUE_URLS:
         assert anon.get(url).status_code == 401, url
         assert signed_in_client().get(url).status_code == 200, url
+    assert anon.get("/api/v1/site").json() == {"public": False}
 
 
 def test_staff_only(league):

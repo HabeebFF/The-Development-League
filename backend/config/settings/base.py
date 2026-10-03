@@ -127,6 +127,10 @@ UPLOAD_MAX_FILE_BYTES = int(env("UPLOAD_MAX_FILE_BYTES", str(300 * 1024 * 1024))
 DATA_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024
 FILE_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024
 
+# Open the league pages, replays and rotations to visitors without an account. Staff
+# pages, team areas and coach reports still need a sign-in. Set to false to lock it again.
+PUBLIC_SITE = env_bool("PUBLIC_SITE", True)
+
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
         "common.authentication.CookieJWTAuthentication",

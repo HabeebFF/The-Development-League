@@ -173,7 +173,7 @@ def test_password_reset_flow():
 # -- me, roles and features -------------------------------------------------------------------
 
 
-def test_me_shows_roles_memberships_and_features(team, manager, staff, superadmin):
+def test_me_shows_roles_memberships_and_features(team, manager, staff, superadmin, settings):
     me = as_user(manager).get("/api/v1/me").json()
     assert me["staff_role"] is None
     assert me["memberships"][0]["team"]["slug"] == team.slug
@@ -185,6 +185,9 @@ def test_me_shows_roles_memberships_and_features(team, manager, staff, superadmi
     assert admin["staff_role"] == "SUPER_ADMIN" and admin["is_super_admin"]
 
     outsider = make_user("x@tdl.test")
+    # While the site is public everyone can open replays and rotations.
+    assert as_user(outsider).get("/api/v1/me").json()["features"] == ["rotations.view"]
+    settings.PUBLIC_SITE = False
     assert as_user(outsider).get("/api/v1/me").json()["features"] == []
 
 

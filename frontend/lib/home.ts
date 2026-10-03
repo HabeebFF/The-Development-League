@@ -9,3 +9,8 @@ export function homeFor(me: Pick<Me, "staff_role">): string {
 export function isOpenPath(path: string): boolean {
   return /^\/(auth|invite)(\/|$)/.test(path);
 }
+
+/** League pages visitors can read without an account while the site is public. */
+export function isPublicPath(path: string): boolean {
+  return path === "/" || /^\/(standings|results|teams|matches)(\/|$)/.test(path);
+}

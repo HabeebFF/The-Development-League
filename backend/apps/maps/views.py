@@ -5,11 +5,10 @@ from django.shortcuts import get_object_or_404
 from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
-from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from apps.results.models import MatchEvent
-from common.permissions import IsStaff, IsSuperAdmin
+from common.permissions import IsStaff, IsSuperAdmin, PublicRead
 
 from . import bundled, calibration
 from .models import CalibrationPoint, Map, MapArea
@@ -24,7 +23,7 @@ MAX_REFERENCE_POINTS = 5000
 
 
 class MapViewSet(viewsets.ReadOnlyModelViewSet):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [PublicRead]
     serializer_class = MapSerializer
     lookup_field = "slug"
     queryset = Map.objects.filter(is_active=True).prefetch_related("areas")

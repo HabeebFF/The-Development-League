@@ -10,6 +10,7 @@ router.register("admin/player-claims", views.PlayerClaimViewSet, basename="playe
 router.register("admin/staff", views.StaffViewSet, basename="staff")
 
 urlpatterns = [
+    path("site", views.SiteView.as_view(), name="site"),
     path("auth/csrf", views.CsrfView.as_view(), name="auth-csrf"),
     path("auth/login", views.LoginView.as_view(), name="auth-login"),
     path("auth/refresh", views.RefreshView.as_view(), name="auth-refresh"),

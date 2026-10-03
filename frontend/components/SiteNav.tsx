@@ -32,13 +32,16 @@ function Icon({ d }: { d: string }) {
 /** The top bar (all links on desktop) and, on phones, a bottom tab bar plus a menu for the rest. */
 export default function SiteNav() {
   const path = usePathname();
-  const { status, signOut } = useAuth();
+  const { status, publicSite, signOut } = useAuth();
   const signedIn = status === "in";
+  // Visitors see the league pages too while the site is public.
+  const shown = signedIn || publicSite === true;
+  const more = signedIn ? MORE : [];
   const [open, setOpen] = useState(false);
   // Close the phone menu whenever the page changes.
-  const [shown, setShown] = useState(path);
-  if (shown !== path) {
-    setShown(path);
+  const [openedOn, setOpenedOn] = useState(path);
+  if (openedOn !== path) {
+    setOpenedOn(path);
     setOpen(false);
   }
   useEffect(() => {
@@ -63,7 +66,7 @@ export default function SiteNav() {
               Development <span className="text-accent">League</span>
             </span>
           </Link>
-          <div className={`hidden h-full flex-1 items-center gap-1 ${signedIn ? "md:flex" : ""}`}>
+          <div className={`hidden h-full flex-1 items-center gap-1 ${shown ? "md:flex" : ""}`}>
             {MAIN.slice(1).map((l) => (
               <Link
                 key={l.href}
@@ -77,7 +80,7 @@ export default function SiteNav() {
               </Link>
             ))}
             <span className="flex-1" />
-            {MORE.map((l) => (
+            {more.map((l) => (
               <Link
                 key={l.href}
                 href={l.href}
@@ -86,13 +89,19 @@ export default function SiteNav() {
                 {l.label}
               </Link>
             ))}
-            <button type="button" onClick={signOut} className="px-3 text-sm font-medium text-muted transition-colors hover:text-white">
-              Sign out
-            </button>
+            {signedIn ? (
+              <button type="button" onClick={signOut} className="px-3 text-sm font-medium text-muted transition-colors hover:text-white">
+                Sign out
+              </button>
+            ) : (
+              <Link href={`/auth/login?next=${encodeURIComponent(path)}`} className="px-3 text-sm font-medium text-muted transition-colors hover:text-white">
+                Sign in
+              </Link>
+            )}
           </div>
           <button
             type="button"
-            className={`ml-auto h-10 w-10 items-center justify-center text-muted hover:text-white md:hidden ${signedIn ? "flex" : "hidden"}`}
+            className={`ml-auto h-10 w-10 items-center justify-center text-muted hover:text-white md:hidden ${shown ? "flex" : "hidden"}`}
             aria-label={open ? "Close menu" : "Open menu"}
             aria-expanded={open}
             onClick={() => setOpen((o) => !o)}
@@ -104,14 +113,14 @@ export default function SiteNav() {
         </nav>
       </header>
 
-      {open && signedIn && (
+      {open && shown && (
         <div className="fixed inset-0 z-20 md:hidden" onClick={() => setOpen(false)}>
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
           <div
             className="page-enter absolute inset-x-0 top-[var(--header-h)] border-b border-line bg-panel p-4"
             onClick={(e) => e.stopPropagation()}
           >
-            {[...MAIN, ...MORE].map((l) => (
+            {[...MAIN, ...more].map((l) => (
               <Link
                 key={l.href}
                 href={l.href}
@@ -123,19 +132,28 @@ export default function SiteNav() {
                 <span className="text-muted">&rsaquo;</span>
               </Link>
             ))}
-            <button
-              type="button"
-              onClick={signOut}
-              className="flex w-full items-center justify-between pt-3.5 font-display text-2xl text-muted uppercase"
-            >
-              Sign out
-            </button>
+            {signedIn ? (
+              <button
+                type="button"
+                onClick={signOut}
+                className="flex w-full items-center justify-between pt-3.5 font-display text-2xl text-muted uppercase"
+              >
+                Sign out
+              </button>
+            ) : (
+              <Link
+                href={`/auth/login?next=${encodeURIComponent(path)}`}
+                className="flex w-full items-center justify-between pt-3.5 font-display text-2xl text-muted uppercase"
+              >
+                Sign in
+              </Link>
+            )}
           </div>
         </div>
       )}
 
       <nav
-        className={`fixed inset-x-0 bottom-0 z-30 ${signedIn ? "" : "hidden"} border-t border-line bg-bg/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-md md:hidden`}
+        className={`fixed inset-x-0 bottom-0 z-30 ${shown ? "" : "hidden"} border-t border-line bg-bg/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-md md:hidden`}
         aria-label="Main"
       >
         <div className="grid h-[var(--bottom-nav-h)] grid-cols-4">

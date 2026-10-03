@@ -1,9 +1,13 @@
 import secrets
 from datetime import timedelta
 
+from django.conf import settings
 from django.contrib.auth.models import AbstractUser, UserManager
 from django.db import models
 from django.utils import timezone
+
+# Plan features everyone gets while the site is public (``PUBLIC_SITE``).
+PUBLIC_FEATURES = {"rotations.view"}
 
 
 class EmailUserManager(UserManager):
@@ -65,11 +69,13 @@ class User(AbstractUser):
         """Feature codes this user can use (staff can use everything)."""
         if self.is_league_staff:
             return set(Feature.objects.values_list("code", flat=True))
-        return set(
+        codes = set(
             Feature.objects.filter(
                 plans__teams__memberships__user=self, plans__teams__memberships__is_active=True
             ).values_list("code", flat=True)
         )
+        # While the site is public, replays and rotations are open to every account too.
+        return codes | PUBLIC_FEATURES if settings.PUBLIC_SITE else codes
 
     def has_feature(self, code: str) -> bool:
         return code in self.features()
