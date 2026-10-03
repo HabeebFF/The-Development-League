@@ -15,6 +15,7 @@ import statistics
 from collections import Counter, defaultdict
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
+from datetime import date
 
 from apps.maps.calibration import point_in_polygon
 from apps.rotations.paths import TeamPath
@@ -79,6 +80,7 @@ class Game:
     hits: list[Hit]
     teams: dict[int, TeamGame]
     areas: list[Area] = field(default_factory=list)
+    played_on: date | None = None
 
 
 # -- Per-match measures ---------------------------------------------------------------------
@@ -128,6 +130,7 @@ class TeamMatch:
     deaths: list[Spot]
     kills: int
     knocks: int
+    played_on: date | None = None
 
 
 def area_at(areas: Sequence[Area], x: float, z: float) -> str | None:
@@ -243,6 +246,7 @@ def measure(game: Game, team_id: int) -> TeamMatch:
         deaths=[Spot(area_at(game.areas, x, z), x, z) for _, x, z in team.deaths],
         kills=sum(1 for h in game.hits if h.kind == "KILL" and h.actor_team == team_id),
         knocks=sum(1 for h in game.hits if h.kind == "KNOCK" and h.actor_team == team_id),
+        played_on=game.played_on,
     )
 
 
@@ -259,6 +263,7 @@ class Fact:
     of: int  # matches it could have rested on
     matches: list[int]
     map: str | None = None
+    data: dict = field(default_factory=dict)  # the numbers behind the text (zone, opponent...)
 
     def as_dict(self) -> dict:
         return {
@@ -270,6 +275,7 @@ class Fact:
             "of": self.of,
             "matches": self.matches,
             "map": self.map,
+            "data": self.data,
         }
 
 
@@ -320,9 +326,9 @@ def team_facts(
         return facts
     ids = [m.match for m in ms]
 
-    def add(key, topic, text, value, k, of, matches_):
+    def add(key, topic, text, value, k, of, matches_, **data):
         facts.append(
-            Fact(f"{prefix}{key}", topic, text, round(value, 2), k, of, list(matches_), scope)
+            Fact(f"{prefix}{key}", topic, text, round(value, 2), k, of, list(matches_), scope, data)
         )
 
     # Results
@@ -405,6 +411,7 @@ def team_facts(
                 len(late),
                 len(rows),
                 late,
+                zone=zone,
             )
         if leads:
             med = statistics.median(leads)
@@ -487,6 +494,9 @@ def team_facts(
                 len({mid for mid, _ in rows}),
                 n,
                 sorted({mid for mid, _ in rows}),
+                zone=zone,
+                won=w,
+                lost=lo,
             )
         by_opp: dict[int, list[tuple[int, Fight]]] = defaultdict(list)
         for mid, f in all_fights:
@@ -505,11 +515,15 @@ def team_facts(
                 len({mid for mid, _ in rows}),
                 n,
                 sorted({mid for mid, _ in rows}),
+                opponent=opp,
+                opponent_name=names.get(opp, f"team {opp}"),
+                won=w,
+                lost=lo,
             )
 
     # Where they die (final deaths only; early respawned deaths don't count)
     deaths = [(s, m.match) for m in ms for s in m.deaths]
-    for i, (label, count, mids, _) in enumerate(_spots(deaths)[:3]):
+    for i, (label, count, mids, (x, z)) in enumerate(_spots(deaths)[:3]):
         if len(mids) < 2:
             break
         add(
@@ -520,6 +534,9 @@ def team_facts(
             len(mids),
             n,
             mids,
+            place=label,
+            x=round(x),
+            z=round(z),
         )
 
     # Drops (per map only: a drop spot means nothing across maps)
@@ -527,7 +544,7 @@ def team_facts(
         drops = [(m.drop, m.match) for m in ms if m.drop]
         spots = _spots(drops)
         if spots:
-            label, count, mids, _ = spots[0]
+            label, count, mids, (x, z) = spots[0]
             if count >= 2:
                 placements = [m.placement for m in ms if m.match in mids]
                 add(
@@ -539,6 +556,10 @@ def team_facts(
                     count,
                     n,
                     mids,
+                    place=label,
+                    placement=round(statistics.fmean(placements), 1),
+                    x=round(x),
+                    z=round(z),
                 )
         contested = [m.match for m in ms if m.contested_by]
         if contested:
@@ -553,6 +574,8 @@ def team_facts(
                 len(contested),
                 n,
                 contested,
+                rival=top,
+                rival_name=names.get(top, f"team {top}"),
             )
     return facts
 
@@ -668,6 +691,7 @@ def load_games(match_ids: Iterable[int] | None = None) -> list[Game]:
                 hits,
                 teams,
                 areas_by_map.get(match.map_id, []),
+                match.started_at.date() if match.started_at else match.match_day.date,
             )
         )
     return games

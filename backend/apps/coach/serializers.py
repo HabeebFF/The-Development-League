@@ -2,7 +2,7 @@ from rest_framework import serializers
 
 from apps.maps.models import Map, MapArea
 
-from .models import KnowledgeEntry, WeaponName
+from .models import CoachReport, KnowledgeEntry, WeaponName
 
 
 class KnowledgeEntrySerializer(serializers.ModelSerializer):
@@ -51,3 +51,50 @@ class WeaponNameSerializer(serializers.ModelSerializer):
         model = WeaponName
         fields = ["weapon_id", "name", "weapon_class", "note"]
         read_only_fields = ["weapon_id"]
+
+
+class CoachReportSerializer(serializers.ModelSerializer):
+    team = serializers.CharField(source="team.name", read_only=True)
+    team_slug = serializers.CharField(source="team.slug", read_only=True)
+    edited_by = serializers.EmailField(source="edited_by.email", read_only=True, default=None)
+
+    class Meta:
+        model = CoachReport
+        fields = [
+            "id",
+            "team",
+            "team_slug",
+            "week_start",
+            "matches",
+            "facts",
+            "tasks",
+            "changes",
+            "writer",
+            "is_published",
+            "edited_by",
+            "updated_at",
+        ]
+        read_only_fields = ["week_start", "matches", "facts", "changes", "writer"]
+
+    def validate_tasks(self, value):
+        """Staff may reword, drop or reorder tasks, but each must still cite real facts."""
+        facts = {f["id"] for f in (self.instance.facts if self.instance else [])}
+        if not isinstance(value, list) or len(value) > 8:
+            raise serializers.ValidationError("A list of up to 8 tasks.")
+        out = []
+        for t in value:
+            if not isinstance(t, dict) or not str(t.get("title", "")).strip():
+                raise serializers.ValidationError("Each task needs a title.")
+            cited = t.get("facts") or []
+            if not cited or not set(cited) <= facts:
+                raise serializers.ValidationError("Each task must cite this report's facts.")
+            known = {f["id"]: f for f in self.instance.facts}
+            out.append(
+                {
+                    "title": str(t["title"]).strip()[:160],
+                    "why": [known[c]["text"] for c in cited],
+                    "facts": cited,
+                    "matches": sorted({m for c in cited for m in known[c]["matches"]}),
+                }
+            )
+        return out

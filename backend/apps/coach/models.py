@@ -73,3 +73,30 @@ class WeaponName(TimeStampedModel):
 
     def __str__(self) -> str:
         return f"{self.weapon_id}: {self.name}"
+
+
+class CoachReport(TimeStampedModel):
+    """A team's weekly report: 3 to 5 tasks drawn from its facts, and what changed.
+
+    ``facts`` is the snapshot the tasks cite, so a report keeps its evidence even after
+    later matches change the numbers.
+    """
+
+    team = models.ForeignKey("league.Team", on_delete=models.CASCADE, related_name="coach_reports")
+    week_start = models.DateField(help_text="Monday of the week the report covers")
+    matches = models.JSONField(default=list, help_text="[{id, label, map, played_on}] behind it")
+    facts = models.JSONField(default=list)
+    tasks = models.JSONField(default=list, help_text="[{title, why, facts: [ids], matches}]")
+    changes = models.JSONField(default=list, help_text="[{text, better, facts}] vs earlier weeks")
+    writer = models.CharField(max_length=40, default="template")
+    is_published = models.BooleanField(default=True)
+    edited_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+
+    class Meta:
+        ordering = ["-week_start", "team__name"]
+        unique_together = [("team", "week_start")]
+
+    def __str__(self) -> str:
+        return f"{self.team}: week of {self.week_start}"
