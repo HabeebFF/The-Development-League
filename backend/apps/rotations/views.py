@@ -16,6 +16,7 @@ from common.permissions import HasFeature, IsStaff
 
 from .auto import draft_rotations
 from .models import PlayerTrack, ReplayObject, RotationPoint, TeamRotation
+from .paths import match_paths
 from .serializers import RotationSaveSerializer, TeamRotationSerializer, ZonePhaseSerializer
 
 
@@ -65,6 +66,11 @@ class MatchRotationsView(APIView):
         data = TeamRotationSerializer(
             rotations, many=True, context={"request": request, "placements": placements}
         ).data
+        # The real path each team took (from the replay), as segments of [t, x, z].
+        paths = match_paths(match)
+        for rotation, item in zip(rotations, data, strict=True):
+            path = paths.get(rotation.team_id)
+            item["path"] = path.simplified() if path else []
         return Response({"match": match.pk, "map": _map_info(match), "rotations": data})
 
 
