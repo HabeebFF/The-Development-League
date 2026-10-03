@@ -10,4 +10,5 @@ urlpatterns = [
     *router.urls,
     path("coach/weapons", views.WeaponListView.as_view(), name="coach-weapons"),
     path("coach/weapons/<int:weapon_id>", views.WeaponNameView.as_view(), name="coach-weapon"),
+    path("coach/teams/<slug:slug>/profile", views.TeamProfileView.as_view(), name="coach-profile"),
 ]

@@ -1,11 +1,14 @@
 from django.db.models import Count, Q
+from django.shortcuts import get_object_or_404
 from rest_framework import generics, status, viewsets
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.league.models import Team
 from apps.results.models import MatchEvent
 from common.permissions import IsStaff
 
+from .engine import team_profile
 from .models import KnowledgeEntry, WeaponName
 from .serializers import KnowledgeEntrySerializer, WeaponNameSerializer
 
@@ -73,3 +76,14 @@ class WeaponNameView(generics.GenericAPIView):
     def delete(self, request, weapon_id: int):
         WeaponName.objects.filter(weapon_id=weapon_id).delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class TeamProfileView(APIView):
+    """What the analysis engine found about a team: facts with the matches behind them.
+    Staff only for now; teams get their own reports in a later step."""
+
+    permission_classes = [IsStaff]
+
+    def get(self, request, slug: str):
+        team = get_object_or_404(Team, slug=slug)
+        return Response({"team": team.name, **team_profile(team.pk)})
