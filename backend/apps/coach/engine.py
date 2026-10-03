@@ -138,9 +138,11 @@ def area_at(areas: Sequence[Area], x: float, z: float) -> str | None:
 
 
 def zone_at(zones: Sequence[Zone], t: float) -> int:
-    """The zone being played at t: 1 until Zone 1 closes, then 2, ..."""
+    """The zone being played at t: 1 until Zone 1 closes, then 2, ... (0: no zone data)."""
+    if not zones:
+        return 0  # no zone data for this match
     closed = sum(1 for z in zones if z.closes_s <= t)
-    return min(closed + 1, max(len(zones), 1))
+    return min(closed + 1, len(zones))
 
 
 def _landing(path: TeamPath | None) -> tuple[float, float, float] | None:
@@ -473,7 +475,7 @@ def team_facts(
         for mid, f in all_fights:
             by_fight_zone[f.zone].append((mid, f))
         for zone, rows in sorted(by_fight_zone.items()):
-            if len(rows) < MIN_MATCHES:
+            if zone == 0 or len({mid for mid, _ in rows}) < MIN_MATCHES:
                 continue
             w = sum(1 for _, f in rows if f.result == "won")
             lo = sum(1 for _, f in rows if f.result == "lost")
@@ -490,7 +492,7 @@ def team_facts(
         for mid, f in all_fights:
             by_opp[f.opponent].append((mid, f))
         for opp, rows in sorted(by_opp.items(), key=lambda r: -len(r[1])):
-            if len(rows) < MIN_MATCHES:
+            if len({mid for mid, _ in rows}) < MIN_MATCHES:
                 continue
             w = sum(1 for _, f in rows if f.result == "won")
             lo = sum(1 for _, f in rows if f.result == "lost")
@@ -558,8 +560,12 @@ def team_facts(
 def profile(matches: Sequence[TeamMatch], names: dict[int, str] | None = None) -> dict:
     """Every fact about a team: all maps together, then each map with enough matches."""
     facts = team_facts(matches, names)
-    for map_slug in sorted({m.map for m in matches}):
-        facts += team_facts(matches, names, scope=map_slug)
+    maps = sorted({m.map for m in matches})
+    if len(maps) > 1:  # with one map, the per-map facts would repeat the overall ones
+        for map_slug in maps:
+            facts += team_facts(matches, names, scope=map_slug)
+    elif maps:
+        facts += [f for f in team_facts(matches, names, scope=maps[0]) if f.topic == "drops"]
     return {
         "matches": len(matches),
         "maps": dict(Counter(m.map for m in matches)),
@@ -575,7 +581,7 @@ def load_games(match_ids: Iterable[int] | None = None) -> list[Game]:
     from apps.league.models import Match
     from apps.maps.models import MapArea
     from apps.results.models import MatchEvent, TeamMatchResult, ZonePhase
-    from apps.rotations.paths import match_paths, zone_close_times
+    from apps.rotations.paths import match_paths
 
     qs = Match.objects.filter(status=Match.Status.PUBLISHED).select_related("map", "match_day")
     if match_ids is not None:
@@ -587,30 +593,33 @@ def load_games(match_ids: Iterable[int] | None = None) -> list[Game]:
     K = MatchEvent.Kind
     games = []
     for match in qs:
-        closes = zone_close_times(match)
-        first_phase: dict[int, ZonePhase] = {}
+        # Each stage's target circle is its SHRINK phase's inner circle; the stage was first
+        # shown at its earliest phase with a real circle (a STABLE phase has radius 0).
+        shown: dict[int, float] = {}
+        shrink: dict[int, ZonePhase] = {}
         for p in ZonePhase.objects.filter(match=match, game_time_s__isnull=False).order_by(
             "game_time_s"
         ):
-            first_phase.setdefault(p.stage_index, p)
-        shrink_stages = sorted(
-            {
-                p.stage_index
-                for p in ZonePhase.objects.filter(
-                    match=match, state=ZonePhase.State.SHRINK, game_time_s__isnull=False
-                )
-            }
-        )
+            if p.inner_radius > 0:
+                shown.setdefault(p.stage_index, p.game_time_s)
+            if p.state == ZonePhase.State.SHRINK:
+                shrink.setdefault(p.stage_index, p)
+        # A zone has fully closed once the next one starts shrinking (checked on real
+        # matches: the fewest living teams are then outside it); the last one at the end.
+        stages = sorted(shrink)
+        paths = match_paths(match)
+        end = max((p.end[0] for p in paths.values()), default=0.0)
+        closes = [shrink[s].game_time_s for s in stages[1:]] + [end] if stages else []
         zones = [
             Zone(
                 i + 1,
-                first_phase[s].inner_x,
-                first_phase[s].inner_z,
-                first_phase[s].inner_radius,
-                first_phase[s].game_time_s,
-                close,
+                shrink[s].inner_x,
+                shrink[s].inner_z,
+                shrink[s].inner_radius,
+                shown.get(s, shrink[s].game_time_s),
+                max(close, shrink[s].game_time_s),
             )
-            for i, (s, close) in enumerate(zip(shrink_stages, closes, strict=False))
+            for i, (s, close) in enumerate(zip(stages, closes, strict=True))
         ]
 
         events = list(MatchEvent.objects.filter(match=match, game_time_s__isnull=False))
@@ -639,7 +648,6 @@ def load_games(match_ids: Iterable[int] | None = None) -> list[Game]:
                 continue  # came back: an early-game respawn
             deaths[e.actor_team_id].append((e.game_time_s, e.x, e.z))
 
-        paths = match_paths(match)
         teams = {
             r.team_id: TeamGame(
                 r.team_id,

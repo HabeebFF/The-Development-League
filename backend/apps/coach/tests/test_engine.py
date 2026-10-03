@@ -115,3 +115,42 @@ def test_facts_cite_their_matches_and_need_enough_of_them():
     assert facts["kalahari:drops.usual"]["text"].startswith(
         "Usual drop on Kalahari: Refinery, in 4 of 4"
     )
+
+
+def test_without_zone_data_fights_have_no_zone():
+    from apps.coach.engine import zone_at
+
+    assert zone_at([], 100) == 0
+    assert zone_at(ZONES, 299) == 1 and zone_at(ZONES, 300) == 2 and zone_at(ZONES, 9999) == 2
+
+
+def test_loading_zones_uses_each_shrink_circle_and_the_next_shrink_as_close(db):
+    from apps.coach.engine import load_games
+    from apps.league.models import Match, MatchDay, ScoringRule, Season, Stage
+    from apps.maps.models import Map
+    from apps.results.models import ZonePhase
+
+    season = Season.objects.create(name="S1", scoring_rule=ScoringRule.objects.first())
+    day = MatchDay.objects.create(stage=Stage.objects.create(season=season, name="L"), number=1)
+    match = Match.objects.create(
+        match_day=day,
+        number=1,
+        map=Map.objects.get(slug="purgatory"),
+        status=Match.Status.PUBLISHED,
+    )
+    rows = [
+        (0, "STABLE", 30, 0),  # no circle yet
+        (0, "PRE_SHRINK", 84, 550),
+        (0, "SHRINK", 204, 550),
+        (1, "PRE_SHRINK", 444, 300),
+        (1, "SHRINK", 484, 300),
+    ]
+    for stage, state, t, r in rows:
+        ZonePhase.objects.create(
+            match=match, stage_index=stage, state=state, game_time_s=t,
+            outer_x=0, outer_z=0, inner_x=5, inner_z=6, inner_radius=r,
+        )  # fmt: skip
+    (game,) = load_games([match.pk])
+    z1, z2 = game.zones
+    assert (z1.number, z1.r, z1.announced_s, z1.closes_s) == (1, 550, 84, 484)
+    assert (z2.number, z2.r, z2.announced_s) == (2, 300, 444)
