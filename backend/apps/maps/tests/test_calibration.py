@@ -188,10 +188,16 @@ def test_areas_and_permissions(boss):
     public = signed_in_client().get("/api/v1/maps/purgatory").json()
     assert public["areas"][0]["name"] == "Brasilia"
 
+    # Staff draw areas (they are part of the coach's knowledge base); images and
+    # calibration stay with the Super Admin. Players can do neither.
     staff = APIClient()
     staff.force_authenticate(User.objects.create_user(email="s@tdl.test", is_staff=True))
-    assert staff.get(url).status_code == 403
+    assert staff.get(url).status_code == 200
     assert staff.get("/api/v1/admin/maps").status_code == 403
+    assert staff.get("/api/v1/admin/maps/bermuda/calibration-points").status_code == 403
+    player = APIClient()
+    player.force_authenticate(User.objects.create_user(email="p@tdl.test"))
+    assert player.get(url).status_code == 403
     assert APIClient().get("/api/v1/admin/maps/bermuda/calibration-points").status_code == 401
     assert boss.get("/api/v1/admin/maps/nowhere/areas").status_code == 404
 
