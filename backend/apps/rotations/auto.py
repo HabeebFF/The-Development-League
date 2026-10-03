@@ -9,7 +9,13 @@ point (the winner) or ELIMINATED point (everyone else).
 The drop is only suggested: the median of the team's fights (kills and deaths, not
 respawns) before the first zone shrinks, which is usually near where it landed.
 
-Only rotations still in AUTO status are rebuilt; anything staff touched is kept.
+When the replay .bin gave us player tracks, they win: every team gets its real route
+(``TeamRotation.path``, see ``paths.py``) and the points sit on it: the drop where the
+team landed, zone N where it was when circle N finished closing, and the end spot
+where its route stops.
+
+Only rotations still in AUTO status get new points; anything staff touched is kept.
+Every rotation's route is rebuilt, since it comes straight from the replay.
 """
 
 from __future__ import annotations
@@ -24,7 +30,8 @@ from apps.league.models import Match
 from apps.maps.models import MapArea
 from apps.results.models import MatchEvent, TeamMatchResult, ZonePhase
 
-from .models import MAX_ZONES, Checkpoint, RotationPoint, TeamRotation
+from .models import MAX_ZONES, Checkpoint, PlayerTrack, RotationPoint, TeamRotation
+from .paths import TeamPath, team_path
 
 # A team's elimination position may be logged a moment after the elimination event.
 ELIMINATION_SLACK_S = 2.0
@@ -80,6 +87,55 @@ def zone_windows(match: Match) -> list[tuple[float, float]]:
     return list(zip(starts, ends, strict=True))
 
 
+def zone_closes(match: Match) -> list[float]:
+    """Game seconds at which each zone finished closing (when the next phase began)."""
+    phases = list(
+        ZonePhase.objects.filter(match=match, game_time_s__isnull=False)
+        .order_by("game_time_s")
+        .values_list("state", "game_time_s")
+    )
+    closes = []
+    for i, (state, t) in enumerate(phases):
+        if state != ZonePhase.State.SHRINK:
+            continue
+        later = [u for _s, u in phases[i + 1 :] if u > t]
+        closes.append(later[0] if later else t + LAST_SHRINK_S)
+    return closes[:MAX_ZONES]
+
+
+# A match's last shrink has no next phase to end it; assume it takes about this long.
+LAST_SHRINK_S = 60.0
+
+
+def path_points(result: TeamMatchResult, path: TeamPath, closes: list[float]) -> list[DraftPoint]:
+    """Drop, zone and end points on the team's route."""
+    start, end = path.start, path.end
+    if start is None or end is None:
+        return []
+    evidence = {"replay": 1}
+    points = [
+        DraftPoint(
+            Checkpoint.DROP, round(start[1], 2), round(start[2], 2), round(start[0], 2), evidence
+        )
+    ]
+    for index, t in enumerate(closes, start=1):
+        if t > end[0]:
+            break
+        spot = path.at(t)
+        if spot is not None:
+            points.append(
+                DraftPoint(
+                    f"ZONE_{index}", round(spot[1], 2), round(spot[2], 2), round(t, 2), evidence
+                )
+            )
+    if result.placement == 1 or result.eliminated_at_s is not None:
+        checkpoint = Checkpoint.FINAL if result.placement == 1 else Checkpoint.ELIMINATED
+        points.append(
+            DraftPoint(checkpoint, round(end[1], 2), round(end[2], 2), round(end[0], 2), evidence)
+        )
+    return points
+
+
 def _point(checkpoint: str, items: list[Sighting]) -> DraftPoint:
     return DraftPoint(
         checkpoint=checkpoint,
@@ -123,6 +179,10 @@ def draft_rotations(match: Match, *, team_ids: set[int] | None = None) -> int:
     """
     seen = sightings(match)
     windows = zone_windows(match)
+    closes = zone_closes(match)
+    tracks: dict[int, list[PlayerTrack]] = defaultdict(list)
+    for track in PlayerTrack.objects.filter(match=match, team__isnull=False):
+        tracks[track.team_id].append(track)
     areas = list(MapArea.objects.filter(map_id=match.map_id)) if match.map_id else []
     results = TeamMatchResult.objects.filter(match=match)
     if team_ids is not None:
@@ -136,7 +196,11 @@ def draft_rotations(match: Match, *, team_ids: set[int] | None = None) -> int:
     drafted = 0
     for result in results:
         rotation, _ = TeamRotation.objects.get_or_create(match=match, team_id=result.team_id)
+        until = result.eliminated_at_s + ELIMINATION_SLACK_S if result.eliminated_at_s else None
+        path = team_path(tracks.get(result.team_id, []), until_s=until)
+        rotation.path = path.simplified()
         if team_ids is None and rotation.status != TeamRotation.Status.AUTO:
+            rotation.save(update_fields=["path"])
             continue
         rotation.points.all().delete()
         rotation.status = TeamRotation.Status.AUTO
@@ -154,7 +218,11 @@ def draft_rotations(match: Match, *, team_ids: set[int] | None = None) -> int:
                 source=RotationPoint.Source.AUTO,
                 evidence=p.evidence,
             )
-            for order, p in enumerate(draft_points(result, seen.get(result.team_id, []), windows))
+            for order, p in enumerate(
+                path_points(result, path, closes)
+                if path.pieces
+                else draft_points(result, seen.get(result.team_id, []), windows)
+            )
         )
         drafted += 1
     return drafted

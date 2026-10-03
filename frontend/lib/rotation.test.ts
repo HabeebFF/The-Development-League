@@ -7,6 +7,7 @@ import {
   nextCheckpoint,
   placePoint,
   removePoint,
+  routeLines,
   type RotationPoint,
 } from "./rotation.ts";
 
@@ -67,4 +68,33 @@ describe("plotting", () => {
     points = placePoint(points, "ZONE_3", 1, 1);
     assert.equal(nextCheckpoint(points, 3), null);
   });
+});
+
+it("routeLines draws the replay route, with gaps between its pieces", () => {
+  const toPixel = (x: number, z: number) => ({ px: x, py: z });
+  const path = [
+    [
+      [0, 0],
+      [100, 0],
+    ],
+    [
+      [300, 50],
+      [400, 50],
+    ],
+  ];
+  const { lines, gaps } = routeLines(path, [], toPixel);
+  assert.deepEqual(lines, [
+    [0, 0, 10, 0],
+    [30, 5, 40, 5],
+  ]);
+  assert.deepEqual(gaps, [[10, 0, 30, 5]]);
+});
+
+it("routeLines falls back to the plotted points without a replay route", () => {
+  const toPixel = (x: number, z: number) => ({ px: x, py: z });
+  let points = placePoint([], "DROP", 1, 2);
+  points = placePoint(points, "EXTRA", 9, 9);
+  points = placePoint(points, "ZONE_1", 3, 4);
+  assert.deepEqual(routeLines(undefined, points, toPixel), { lines: [[1, 2, 3, 4]], gaps: [] });
+  assert.deepEqual(routeLines([], [], toPixel), { lines: [], gaps: [] });
 });

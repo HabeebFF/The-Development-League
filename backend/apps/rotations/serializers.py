@@ -75,6 +75,7 @@ class TeamRotationSerializer(serializers.ModelSerializer):
             "confirmed_at",
             "updated_at",
             "points",
+            "path",
         ]
 
     def get_placement(self, rotation: TeamRotation) -> int | None:

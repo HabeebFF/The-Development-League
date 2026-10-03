@@ -338,7 +338,6 @@ def _build(match: Match, assignment: Assignment, run: ParseRun) -> tuple[dict[st
     MatchEvent.objects.bulk_create(events, batch_size=500)
     zones = _zones(match, block, timeline)
     ZonePhase.objects.bulk_create(zones)
-    draft_rotations(match)
     tracks = objects = 0
     if sources.replay_bin is not None:
         replay_data = storage.read_bytes(sources.replay_bin.storage_key)
@@ -349,6 +348,7 @@ def _build(match: Match, assignment: Assignment, run: ParseRun) -> tuple[dict[st
     else:
         PlayerTrack.objects.filter(match=match).delete()
         ReplayObject.objects.filter(match=match).delete()
+    draft_rotations(match)  # after the tracks: routes follow them
 
     # -- consistency checks ----------------------------------------------------------------------
     result_kills = sum(p.kills for p in mr.players)

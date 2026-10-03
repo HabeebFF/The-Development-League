@@ -9,7 +9,7 @@ import { api, type GameMap, type TeamRotation, type Zone } from "@/lib/api";
 import { teamColor } from "@/lib/colors";
 import { fitBounds, toPixel, type Transform } from "@/lib/coordinates";
 import { clock } from "@/lib/replay";
-import { LABELS, SHORT, type RotationPoint } from "@/lib/rotation";
+import { LABELS, SHORT, pathWorld, routeLines, type RotationPoint } from "@/lib/rotation";
 
 const CANVAS = 1024;
 
@@ -52,7 +52,7 @@ export default function RotationsView({ matchId, focusTeam }: { matchId: number;
       return { t: map.transform, w: map.image_width, h: map.image_height, image: map.image };
     }
     const world = [
-      ...rotations.flatMap((r) => r.points),
+      ...rotations.flatMap((r) => [...r.points, ...pathWorld(r.path)]),
       ...shrinks.flatMap((z) => [
         { x: z.inner_x - z.inner_radius, z: z.inner_z - z.inner_radius },
         { x: z.inner_x + z.inner_radius, z: z.inner_z + z.inner_radius },
@@ -131,7 +131,7 @@ export default function RotationsView({ matchId, focusTeam }: { matchId: number;
               );
             })}
             {shown.map((r) => (
-              <Route key={r.team.slug} points={r.points} t={view.t} color={colors[r.team.slug]} px={px} />
+              <Route key={r.team.slug} points={r.points} path={r.path} t={view.t} color={colors[r.team.slug]} px={px} />
             ))}
           </>
         )}
@@ -163,21 +163,28 @@ export default function RotationsView({ matchId, focusTeam }: { matchId: number;
 
 function Route({
   points,
+  path,
   t,
   color,
   px,
 }: {
   points: RotationPoint[];
+  path?: number[][][];
   t: Transform;
   color: string;
   px: (n: number) => number;
 }) {
   const pixels = points.map((p) => toPixel(t, p.x, p.z));
-  const route = pixels.filter((_, i) => points[i].checkpoint !== "EXTRA").flatMap((p) => [p.px, p.py]);
+  const { lines, gaps } = routeLines(path, points, (x, z) => toPixel(t, x, z));
   const r = px(9);
   return (
     <Group listening={false}>
-      <Line points={route} stroke={color} strokeWidth={px(3)} lineCap="round" lineJoin="round" />
+      {lines.map((line, i) => (
+        <Line key={`l${i}`} points={line} stroke={color} strokeWidth={px(3)} lineCap="round" lineJoin="round" />
+      ))}
+      {gaps.map((line, i) => (
+        <Line key={`g${i}`} points={line} stroke={color} strokeWidth={px(2)} dash={[px(4), px(4)]} opacity={0.6} />
+      ))}
       {points.map((p, i) => (
         <Group key={`${p.checkpoint}-${i}`} x={pixels[i].px} y={pixels[i].py}>
           <Circle radius={r} fill="#0b0b0f" stroke={color} strokeWidth={px(2.5)} />

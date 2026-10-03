@@ -21,8 +21,10 @@ import {
   LABELS,
   movePoint,
   nextCheckpoint,
+  pathWorld,
   placePoint,
   removePoint,
+  routeLines,
   SHORT,
   type Checkpoint,
   type RotationPoint,
@@ -82,6 +84,7 @@ export default function PlottingTool({ matchId }: { matchId: number }) {
     }
     const world = [
       ...Object.values(edits).flat(),
+      ...rotations.flatMap((r) => pathWorld(r.path)),
       ...shrinks.flatMap((z) => [
         { x: z.inner_x - z.inner_radius, z: z.inner_z - z.inner_radius },
         { x: z.inner_x + z.inner_radius, z: z.inner_z + z.inner_radius },
@@ -304,12 +307,13 @@ export default function PlottingTool({ matchId }: { matchId: number }) {
             })}
             {rotations.map((r, i) =>
               i === selected ? null : (
-                <Path key={r.team.slug} points={edits[r.team.slug] ?? []} t={view.t} color={teamColor(i, r.team.primary_color)} px={px} faint />
+                <Path key={r.team.slug} points={edits[r.team.slug] ?? []} path={r.path} t={view.t} color={teamColor(i, r.team.primary_color)} px={px} faint />
               ),
             )}
             {current && (
               <Path
                 points={points}
+                path={current.path}
                 t={view.t}
                 color={teamColor(selected, current.team.primary_color)}
                 px={px}
@@ -406,6 +410,7 @@ export default function PlottingTool({ matchId }: { matchId: number }) {
 
 function Path({
   points,
+  path,
   t,
   color,
   px,
@@ -414,6 +419,7 @@ function Path({
   onRemove,
 }: {
   points: RotationPoint[];
+  path?: number[][][];
   t: Transform;
   color: string;
   px: (n: number) => number;
@@ -422,11 +428,16 @@ function Path({
   onRemove?: (index: number) => void;
 }) {
   const pixels = points.map((p) => toPixel(t, p.x, p.z));
-  const route = pixels.filter((_, i) => points[i].checkpoint !== "EXTRA").flatMap((p) => [p.px, p.py]);
+  const { lines, gaps } = routeLines(path, points, (x, z) => toPixel(t, x, z));
   const r = px(faint ? 4 : 10);
   return (
     <Group opacity={faint ? 0.35 : 1} listening={!faint}>
-      <Line points={route} stroke={color} strokeWidth={px(faint ? 1.5 : 3)} lineCap="round" lineJoin="round" />
+      {lines.map((line, i) => (
+        <Line key={`l${i}`} points={line} stroke={color} strokeWidth={px(faint ? 1.5 : 3)} lineCap="round" lineJoin="round" listening={false} />
+      ))}
+      {gaps.map((line, i) => (
+        <Line key={`g${i}`} points={line} stroke={color} strokeWidth={px(faint ? 1 : 2)} dash={[px(4), px(4)]} opacity={0.6} listening={false} />
+      ))}
       {points.map((p, i) => (
         <Group
           key={`${p.checkpoint}-${i}`}
@@ -483,6 +494,7 @@ function clock(seconds: number): string {
 }
 
 function evidence(p: RotationPoint): string {
+  if (p.evidence?.replay) return "From the replay";
   const parts = Object.entries(p.evidence ?? {}).map(([k, n]) => `${n} ${k}`);
   return parts.length ? `From ${parts.join(", ")}` : "Auto";
 }

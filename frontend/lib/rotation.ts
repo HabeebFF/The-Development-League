@@ -127,6 +127,45 @@ export function nextCheckpoint(points: RotationPoint[], zoneCount: number): Chec
   return wanted.find((c) => !points.some((p) => p.checkpoint === c)) ?? null;
 }
 
+type ToPixel = (x: number, z: number) => { px: number; py: number };
+
+/** What to draw for a team's route, in pixels: the replay route when there is one
+ * (``gaps`` join its pieces across stretches the replay doesn't cover), otherwise
+ * straight lines between the plotted points. */
+export function routeLines(
+  path: number[][][] | undefined,
+  points: RotationPoint[],
+  toPixel: ToPixel,
+): { lines: number[][]; gaps: number[][] } {
+  const pieces = (path ?? [])
+    .map((piece) =>
+      piece.flatMap(([x, z]) => {
+        const p = toPixel(x / 10, z / 10);
+        return [p.px, p.py];
+      }),
+    )
+    .filter((line) => line.length >= 2);
+  if (pieces.length) {
+    const gaps = pieces.slice(1).map((line, i) => {
+      const prev = pieces[i];
+      return [prev[prev.length - 2], prev[prev.length - 1], line[0], line[1]];
+    });
+    return { lines: pieces, gaps };
+  }
+  const plotted = points
+    .filter((p) => p.checkpoint !== "EXTRA")
+    .flatMap((p) => {
+      const q = toPixel(p.x, p.z);
+      return [q.px, q.py];
+    });
+  return { lines: plotted.length ? [plotted] : [], gaps: [] };
+}
+
+/** World [x, z] of every point on a route, for fitting the view when there's no map. */
+export function pathWorld(path: number[][][] | undefined): { x: number; z: number }[] {
+  return (path ?? []).flat().map(([x, z]) => ({ x: x / 10, z: z / 10 }));
+}
+
 function round(v: number): number {
   return Math.round(v * 100) / 100;
 }

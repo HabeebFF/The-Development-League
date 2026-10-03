@@ -196,6 +196,8 @@ export type TeamRotation = {
   confirmed_at: string | null;
   updated_at: string;
   points: import("./rotation").RotationPoint[];
+  /** The team's real route from the replay: pieces of [x, z] in world decimetres. */
+  path?: number[][][];
 };
 
 export type AdminMatch = {

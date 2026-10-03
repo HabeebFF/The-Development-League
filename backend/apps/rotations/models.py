@@ -44,6 +44,11 @@ class TeamRotation(TimeStampedModel):
         related_name="+",
     )
     confirmed_at = models.DateTimeField(null=True, blank=True)
+    path = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="The team's real route from the replay: pieces of [x, z] in world decimetres",
+    )
 
     class Meta:
         ordering = ["match", "team__name"]
