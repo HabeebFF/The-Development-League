@@ -5,9 +5,11 @@ import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import { Circle, Group, Line, Rect, Text } from "react-konva";
 
 import MapCanvas from "@/components/map/MapCanvas";
+import { MapLabels, type LabelSpec } from "@/components/map/MapLabel";
 import { api, type GameMap } from "@/lib/api";
 import { teamColor } from "@/lib/colors";
 import { fitBounds, toPixel } from "@/lib/coordinates";
+import { boxOf, statusAt } from "@/lib/livepath";
 import {
   clock,
   enemiesInScan,
@@ -32,6 +34,8 @@ const NEUTRAL = "#e5e7eb";
 const BOLT = "#fde047";
 const SCAN = "#34d399";
 const SCAN_SHOW_S = 8; // a Dinoculars scan lasts 3 s; keep it up longer so it's seen at speed
+const FOLLOW_MIN_M = 160; // the followed team is framed at least this wide
+const OUT_SHOW_S = 20; // an eliminated player's greyed label stays this long (always for watched teams)
 
 type FeedItem = { t: number; kind: "KILL" | "KNOCK" | "UAV" | "BOLT" | "SCAN"; text: string; headshot?: boolean };
 
@@ -57,6 +61,8 @@ export default function ReplayViewer({
   const [speed, setSpeed] = useState(4);
   const [labels, setLabels] = useState(true);
   const [gadgets, setGadgets] = useState(true);
+  const [follow, setFollow] = useState(true);
+  const [held, setHeld] = useState(false); // following paused because the map was moved by hand
 
   useEffect(() => {
     (async () => {
@@ -146,6 +152,8 @@ export default function ReplayViewer({
   }
 
   function toggleTeam(slug: string, only: boolean) {
+    setFollow(true);
+    setHeld(false);
     setChosen((current) => {
       if (only) return new Set([slug]);
       const next = new Set(current);
@@ -208,6 +216,40 @@ export default function ReplayViewer({
     .slice(-8)
     .reverse();
   const alive = players.filter((p) => positionAt(p, step, t)).length;
+  const teamOf = Object.fromEntries(replay.teams.map((x) => [x.slug, x]));
+  const single = chosen.size === 1 ? [...chosen][0] : null;
+
+  // Knocks and deaths per player, for the labels.
+  const knocksOf: Record<number, number[]> = {};
+  const deathsOf: Record<number, number[]> = {};
+  for (const e of replay.events) {
+    if (e.target == null) continue;
+    (e.kind === "KNOCK" ? knocksOf : deathsOf)[e.target] ??= [];
+    (e.kind === "KNOCK" ? knocksOf : deathsOf)[e.target].push(e.t);
+  }
+  /** Where a player was last seen at or before t, and whether they are on the map now. */
+  const seen = (p: (typeof players)[number]) => {
+    const now = positionAt(p, step, t);
+    if (now) return { at: now, onMap: true };
+    for (let i = Math.min(p.points.length - 1, Math.floor((t - p.start_s) / step)); i >= 0; i--) {
+      const v = p.points[i];
+      if (v) return { at: { x: v[0] / 10, z: v[1] / 10 }, onMap: false };
+    }
+    return null;
+  };
+
+  // Camera follow: keep the picked team's living players centred and in frame.
+  const focus =
+    single && follow && !held
+      ? boxOf(
+          players
+            .filter((p) => p.team === single)
+            .map((p) => positionAt(p, step, t))
+            .filter((w): w is { x: number; z: number } => w != null)
+            .map((w) => toPixel(view.t, w.x, w.z)),
+          FOLLOW_MIN_M * unit,
+        )
+      : null;
 
   return (
     <div className="flex h-[calc(100dvh-var(--header-h)-var(--bottom-nav-h))] flex-col lg:flex-row">
@@ -249,7 +291,22 @@ export default function ReplayViewer({
 
       <div className="flex min-h-[60dvh] flex-1 flex-col">
         {/* Map */}
-        <MapCanvas width={view.w} height={view.h} image={view.image} className="flex-1">
+        <MapCanvas
+          width={view.w}
+          height={view.h}
+          image={view.image}
+          className="flex-1"
+          focus={focus}
+          resetKey={[...chosen].sort().join(",")}
+          onManualMove={() => single && follow && setHeld(true)}
+          buttons={
+            single && follow && held ? (
+              <button className="btn px-2 py-1 text-xs" onClick={() => setHeld(false)}>
+                Re-centre
+              </button>
+            ) : null
+          }
+        >
           {(px) => (
             <>
               {zone.next && (
@@ -358,23 +415,38 @@ export default function ReplayViewer({
                 if (!w) return null;
                 const q = toPixel(view.t, w.x, w.z);
                 return (
-                  <Group key={p.entity_id} x={q.px} y={q.py} listening={false}>
-                    <Circle radius={px(6)} fill={colors[p.team]} stroke="#000" strokeWidth={px(1.5)} />
-                    {labels && (
-                      <Text
-                        text={p.name}
-                        x={px(9)}
-                        y={-px(7)}
-                        fontSize={px(12)}
-                        fill="#fff"
-                        shadowColor="#000"
-                        shadowBlur={px(3)}
-                        shadowOpacity={1}
-                      />
-                    )}
-                  </Group>
+                  <Circle key={p.entity_id} x={q.px} y={q.py} radius={px(6)} fill={colors[p.team]} stroke="#000" strokeWidth={px(1.5)} listening={false} />
                 );
               })}
+              {labels && (
+                <MapLabels
+                  px={px}
+                  labels={players.flatMap((p): LabelSpec[] => {
+                    const now = seen(p);
+                    if (!now) return [];
+                    const status = statusAt(t, now.onMap, deathsOf[p.entity_id] ?? [], knocksOf[p.entity_id] ?? []);
+                    if (!now.onMap && status !== "out") return [];
+                    const died = Math.max(...(deathsOf[p.entity_id] ?? [0]).filter((d) => d <= t));
+                    if (status === "out" && p.team !== single && t - died > OUT_SHOW_S) return [];
+                    const q = toPixel(view.t, now.at.x, now.at.z);
+                    const team = teamOf[p.team];
+                    return [
+                      {
+                        id: `p-${p.entity_id}`,
+                        x: q.px,
+                        y: q.py,
+                        kind: "player",
+                        text: p.name,
+                        tag: team?.tag || team?.name || "",
+                        logo: team?.logo ?? null,
+                        color: colors[p.team],
+                        status,
+                        focus: p.team === single,
+                      },
+                    ];
+                  })}
+                />
+              )}
               {liveObjects
                 .filter((o) => o.kind === "PLAYER_UAV" || o.kind === "GENERAL_UAV")
                 .map((o, i) => {
@@ -464,6 +536,19 @@ export default function ReplayViewer({
               </button>
             ))}
           </div>
+          {single && (
+            <label className="flex items-center gap-1.5 text-xs text-muted">
+              <input
+                type="checkbox"
+                checked={follow}
+                onChange={(e) => {
+                  setFollow(e.target.checked);
+                  setHeld(false);
+                }}
+              />
+              Follow team
+            </label>
+          )}
           <span className="text-xs text-muted">
             {alive} of {players.length} players on the map
           </span>

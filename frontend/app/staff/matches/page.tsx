@@ -44,6 +44,12 @@ export default function StaffMatches() {
                 </span>
               </Link>
               <Link
+                href={`/staff/matches/${m.id}/rotations`}
+                className="self-stretch border-l border-line px-4 py-3 text-sm text-accent hover:bg-panel-2"
+              >
+                Rotations
+              </Link>
+              <Link
                 href={`/staff/matches/${m.id}/replay`}
                 className="self-stretch border-l border-line px-4 py-3 text-sm text-accent hover:bg-panel-2"
               >

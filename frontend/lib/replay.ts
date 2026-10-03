@@ -28,6 +28,7 @@ export type ReplayTeam = {
   name: string;
   tag: string;
   color: string | null;
+  logo?: string | null;
   placement: number;
   has_tracks: boolean;
 };

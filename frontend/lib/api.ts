@@ -198,6 +198,16 @@ export type TeamRotation = {
   points: import("./rotation").RotationPoint[];
   /** The team's real path from the replay: segments of [game seconds, x, z]; empty without one. */
   path?: import("./rotation").ReplayPath;
+  /** Each player's own path (same format), where they died and when they were knocked. */
+  players?: RotationPlayer[];
+};
+
+export type RotationPlayer = {
+  entity_id: number;
+  name: string;
+  path: import("./rotation").ReplayPath;
+  deaths: [number, number, number][];
+  knocks: number[];
 };
 
 export type AdminMatch = {
