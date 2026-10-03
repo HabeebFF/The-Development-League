@@ -119,3 +119,50 @@ export function weekLabel(weekStart: string): string {
   const d = new Date(`${weekStart}T00:00:00`);
   return `Week of ${d.toLocaleDateString(undefined, { day: "numeric", month: "short" })}`;
 }
+
+export type CoachPlay = CoachTask;
+export type HeadToHead = { met: number[]; fights: number; won: number; lost: number; matches: number[] };
+
+export type CounterPlan = {
+  team: string;
+  opponent: string;
+  opponent_slug: string;
+  week_start: string;
+  matches: ReportMatch[];
+  facts: Fact[];
+  plays: CoachPlay[];
+  head_to_head: HeadToHead;
+  writer: string;
+  updated_at: string;
+};
+
+/** One line on how two teams have done against each other, from the asking team's side. */
+export function headToHeadText(h: HeadToHead, opponent: string): string {
+  if (h.met.length === 0) return `You haven't played in the same match as ${opponent} yet.`;
+  const games = `${h.met.length} match${h.met.length === 1 ? "" : "es"}`;
+  if (h.fights === 0) return `You've been in ${games} with ${opponent} but haven't fought them.`;
+  return `Against ${opponent}: won ${h.won}, lost ${h.lost} of ${h.fights} fight${h.fights === 1 ? "" : "s"} over ${games}.`;
+}
+
+export type RotateRoute = { team: string; match: number; label: string; placement: number; path: number[][][] };
+export type RotateDrop = {
+  place: string;
+  x: number;
+  z: number;
+  team_matches: number;
+  matches: number[];
+  avg_placement: number;
+  top_finishes: number;
+  left_s: number | null;
+  inside_s: Record<string, number>;
+  advice: string[];
+  top_matches: number[];
+  routes: RotateRoute[];
+};
+export type RotationAdvice = {
+  map: string;
+  name: string;
+  matches: { id: number; label: string }[];
+  zone_ends: { match: number; label: string; zone: number; x: number; z: number; r: number }[];
+  drops: RotateDrop[];
+};
