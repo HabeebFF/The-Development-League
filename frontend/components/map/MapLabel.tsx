@@ -152,7 +152,6 @@ function Pill({
           fontSize={fontSize}
           fontFamily={font}
           fontStyle="bold"
-          letterSpacing={0.2 * k}
           fill={out ? "#9ca3af" : spec.focus ? "#ffffff" : "#e5e7eb"}
         />
       </Group>
