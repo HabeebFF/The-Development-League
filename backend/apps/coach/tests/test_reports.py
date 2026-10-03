@@ -113,6 +113,20 @@ def test_tasks_come_from_facts_and_cite_them():
     assert drop["facts"] == ["kalahari:drops.usual", "results.placement"]
 
 
+def test_a_steady_team_still_gets_tasks_from_the_looser_bar():
+    facts = [
+        fact("results.placement", "Average placement: 4.0 over 7 matches", 4.0, 7, 7, [1, 2]),
+        # Late into Zone 2 in 3 of 10 entries: under the strict 40%, over the loose 25%.
+        fact("rotation.z2.late", "Late into Zone 2 in 3 of 10", 0.3, 3, 10, [1, 2, 3], zone=2),
+        fact("fights.vs4", "Against Cliq: won 1, lost 2", 2 / 3, 3, 3, [1, 2, 3],
+             opponent=4, opponent_name="Cliq", won=1, lost=2),
+        fact("fights.vs5", "Against Hydra: won 2, lost 2", 0.5, 4, 4, [1, 2, 3], opponent=5,
+             opponent_name="Hydra", won=2, lost=2),
+    ]  # fmt: skip
+    titles = [t["title"] for t in tasks_from(facts)]
+    assert sorted(titles) == ["Have a plan for Cliq", "Rotate earlier into Zone 2"]  # Hydra is even
+
+
 def tm(match, placement, late=False, played_on=None):
     entry = ZoneEntry(2, -10.0 if late else 60.0, 0.5)
     return TeamMatch(
