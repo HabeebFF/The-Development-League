@@ -160,7 +160,7 @@ export default function HomeView() {
 
         {replays.length > 0 && (
           <section>
-            <SectionHead title="Watch replays" href="/team" link="2D replays for teams" />
+            <SectionHead title="Watch replays" href="/results" link="All 2D replays" />
             <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
               {replays.map((m) => (
                 <Link
