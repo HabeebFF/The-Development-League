@@ -6794,6 +6794,46 @@
    "weak_reason": "Post-OB51 high-ground layout not described by any source; locations from launch-era guides."
   },
   {
+   "kind": "ZONE",
+   "title": "Zone timings in our matches",
+   "map": null,
+   "body": "Measured from our own league match logs (37 published matches across the five maps), not from articles, so this wins where a guide disagrees. On Bermuda, Purgatory and Kalahari every match runs the same schedule: Zone 1 starts shrinking at about 3:25, Zone 2 at about 8:05, Zone 3 at about 11:20, Zone 4 at about 13:43 and Zone 5 at about 15:30 of game time. NeXTerra and Solara use smaller circles and their own timings. Plan rotations around these times: a team that wants to be inside Zone 2 before it moves has until roughly 8:00, and Zone 3 and 4 come in quick succession, so late rotations get punished hardest between 11:00 and 14:00.",
+   "data": {
+    "shrink_starts_s": {
+     "zone_1": 205,
+     "zone_2": 485,
+     "zone_3": 680,
+     "zone_4": 822,
+     "zone_5": 929
+    },
+    "maps": [
+     "bermuda",
+     "purgatory",
+     "kalahari"
+    ]
+   },
+   "patch": "OB55",
+   "sources": [
+    {
+     "title": "Our league match logs (37 published matches, zone phases from the SafeZone data)",
+     "url": "https://141-147-116-231.sslip.io/results",
+     "publisher": "The Development League",
+     "published": "2026-10-03",
+     "accessed": "2026-10-03"
+    },
+    {
+     "title": "OB55 patch notes (Solara safe zone timing aligned with other maps)",
+     "url": "https://ff.garena.com/en/article/1712/",
+     "publisher": "Garena",
+     "published": "2026-09-10",
+     "accessed": "2026-10-03"
+    }
+   ],
+   "conflicts": "Garena's OB55 notes say Solara's shrink timing now matches the other maps, but in our matches NeXTerra and Solara still use smaller circles and different timings. Our data is used.",
+   "weak": false,
+   "weak_reason": ""
+  },
+  {
    "kind": "GENERAL",
    "title": "FFWS points system and Champion Rush",
    "map": null,
