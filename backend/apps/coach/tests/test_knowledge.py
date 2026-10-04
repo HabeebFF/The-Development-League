@@ -51,9 +51,10 @@ def test_staff_write_entries_and_players_cannot(analyst, player):
     assert made.data["map"] == "bermuda"
     assert made.data["updated_by"] == "analyst@tdl.test"
 
-    listed = analyst.get("/api/v1/coach/knowledge?kind=MAP&map=bermuda").data
+    # Researched drafts are loaded too; staff-written entries are approved straight away.
+    listed = analyst.get("/api/v1/coach/knowledge?kind=MAP&map=bermuda&status=APPROVED").data
     assert [e["title"] for e in listed] == ["Clock Tower drop"]
-    assert analyst.get("/api/v1/coach/knowledge?map=purgatory").data == []
+    assert analyst.get("/api/v1/coach/knowledge?map=purgatory&status=APPROVED").data == []
 
 
 def test_an_entry_about_an_area_takes_its_map(analyst):

@@ -13,7 +13,9 @@ class KnowledgeEntrySerializer(serializers.ModelSerializer):
         queryset=MapArea.objects.all(), allow_null=True, required=False
     )
     area_name = serializers.CharField(source="area.name", read_only=True, default=None)
+    area_status = serializers.CharField(source="area.status", read_only=True, default=None)
     updated_by = serializers.EmailField(source="updated_by.email", read_only=True, default=None)
+    reviewed_by = serializers.EmailField(source="reviewed_by.email", read_only=True, default=None)
 
     class Meta:
         model = KnowledgeEntry
@@ -26,9 +28,27 @@ class KnowledgeEntrySerializer(serializers.ModelSerializer):
             "map",
             "area",
             "area_name",
+            "area_status",
+            "status",
+            "origin",
+            "sources",
+            "patch",
+            "conflicts",
+            "weak_sources",
+            "weak_reason",
             "updated_by",
             "updated_at",
+            "reviewed_by",
+            "reviewed_at",
         ]
+        read_only_fields = ["origin", "weak_sources", "weak_reason", "reviewed_at"]
+
+    def validate_sources(self, value):
+        if not isinstance(value, list) or not all(
+            isinstance(s, dict) and isinstance(s.get("url", ""), str) for s in value
+        ):
+            raise serializers.ValidationError("A list of {title, url, published} sources.")
+        return value
 
     def validate_data(self, value):
         if not isinstance(value, dict):

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it, test } from "node:test";
 
-import { dataText, headToHeadText, parseData } from "./coach.ts";
+import { dataText, headToHeadText, matchesReview, parseData, sourceLine } from "./coach.ts";
 
 describe("knowledge base data box", () => {
   it("round-trips named values", () => {
@@ -59,4 +59,22 @@ test("head-to-head line covers never met, met without fighting, and a record", (
     headToHeadText({ met: [1, 2], fights: 3, won: 1, lost: 2, matches: [1, 2] }, "Cliq"),
     "Against Cliq: won 1, lost 2 of 3 fights over 2 matches.",
   );
+});
+
+describe("knowledge review", () => {
+  const e = (status: "DRAFT" | "APPROVED" | "REJECTED", body = "x", weak_sources = false) => ({ status, body, weak_sources });
+
+  it("filters by review state", () => {
+    assert.equal(matchesReview(e("DRAFT"), "DRAFT"), true);
+    assert.equal(matchesReview(e("APPROVED"), "DRAFT"), false);
+    assert.equal(matchesReview(e("APPROVED", ""), "WRITE"), true);
+    assert.equal(matchesReview(e("DRAFT", "x", true), "WEAK"), true);
+    assert.equal(matchesReview(e("REJECTED", "x", true), "WEAK"), false);
+    assert.equal(matchesReview(e("REJECTED"), "ALL"), true);
+  });
+
+  it("describes a source by publisher and date", () => {
+    assert.equal(sourceLine({ url: "https://ff.garena.com/en/article/1712/", publisher: "Garena", published: "2026-09-10" }), "Garena, 2026-09-10");
+    assert.equal(sourceLine({ url: "https://www.vandal.net/x", accessed: "2026-10-03" }), "vandal.net, no date, read 2026-10-03");
+  });
 });

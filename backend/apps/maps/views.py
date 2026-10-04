@@ -185,7 +185,7 @@ def relabel_points(map_: Map) -> int:
     """Set the area of every rotation point on this map. Returns points changed."""
     from apps.rotations.models import RotationPoint
 
-    areas = list(MapArea.objects.filter(map=map_))
+    areas = list(MapArea.objects.confirmed().filter(map=map_))
     changed = []
     for point in RotationPoint.objects.filter(rotation__match__map=map_):
         area = MapArea.find(None, point.x, point.z, areas=areas)

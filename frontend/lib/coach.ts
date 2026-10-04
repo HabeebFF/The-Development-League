@@ -22,9 +22,48 @@ export type KnowledgeEntry = {
   map: string | null;
   area: number | null;
   area_name: string | null;
+  area_status: "CONFIRMED" | "SUGGESTED" | null;
+  status: KnowledgeStatus;
+  origin: "STAFF" | "RESEARCH";
+  sources: KnowledgeSource[];
+  patch: string;
+  conflicts: string;
+  weak_sources: boolean;
+  weak_reason: string;
   updated_by: string | null;
   updated_at: string;
+  reviewed_by: string | null;
+  reviewed_at: string | null;
 };
+
+export type KnowledgeStatus = "DRAFT" | "APPROVED" | "REJECTED";
+
+export type KnowledgeSource = { title?: string; url: string; publisher?: string; published?: string | null; accessed?: string };
+
+/** Which entries a staff filter shows. "WRITE" = no text yet. */
+export type ReviewFilter = "ALL" | "DRAFT" | "APPROVED" | "REJECTED" | "WRITE" | "WEAK";
+
+export function matchesReview(e: Pick<KnowledgeEntry, "status" | "body" | "weak_sources">, f: ReviewFilter): boolean {
+  if (f === "ALL") return true;
+  if (f === "WRITE") return !e.body.trim();
+  if (f === "WEAK") return e.weak_sources && e.status !== "REJECTED";
+  return e.status === f;
+}
+
+/** "Fandom wiki, 2026-09-10" for a source line. */
+export function sourceLine(s: KnowledgeSource): string {
+  const who = s.publisher || hostOf(s.url);
+  const when = s.published ? s.published : s.accessed ? `no date, read ${s.accessed}` : "no date";
+  return `${who}, ${when}`;
+}
+
+function hostOf(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return url;
+  }
+}
 
 export type WeaponClass = "" | "AR" | "SMG" | "SHOTGUN" | "SNIPER" | "MARKSMAN" | "LMG" | "PISTOL" | "MELEE" | "THROWABLE" | "OTHER";
 

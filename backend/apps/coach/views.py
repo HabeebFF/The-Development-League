@@ -27,14 +27,17 @@ from .serializers import (
 
 
 class KnowledgeEntryViewSet(viewsets.ModelViewSet):
-    """The coach's knowledge base. Filter with ``?kind=`` and ``?map=<slug>``."""
+    """The coach's knowledge base. Filter with ``?kind=``, ``?map=<slug>`` and ``?status=``.
+    Changing an entry's status records who reviewed it."""
 
     permission_classes = [IsStaff]
     serializer_class = KnowledgeEntrySerializer
     pagination_class = None
 
     def get_queryset(self):
-        qs = KnowledgeEntry.objects.select_related("map", "area", "updated_by")
+        qs = KnowledgeEntry.objects.select_related("map", "area", "updated_by", "reviewed_by")
+        if wanted := self.request.query_params.get("status"):
+            qs = qs.filter(status=wanted)
         if kind := self.request.query_params.get("kind"):
             qs = qs.filter(kind=kind)
         if map_slug := self.request.query_params.get("map"):
@@ -45,7 +48,11 @@ class KnowledgeEntryViewSet(viewsets.ModelViewSet):
         serializer.save(updated_by=self.request.user)
 
     def perform_update(self, serializer):
-        serializer.save(updated_by=self.request.user)
+        extra = {}
+        new = serializer.validated_data.get("status")
+        if new and new != serializer.instance.status:
+            extra = {"reviewed_by": self.request.user, "reviewed_at": timezone.now()}
+        serializer.save(updated_by=self.request.user, **extra)
 
 
 class WeaponListView(APIView):

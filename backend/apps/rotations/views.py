@@ -244,7 +244,9 @@ class TeamRotationView(APIView):
         match, rotation, result = self._load(pk, team_slug)
         serializer = RotationSaveSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        areas = list(MapArea.objects.filter(map_id=match.map_id)) if match.map_id else []
+        areas = (
+            list(MapArea.objects.confirmed().filter(map_id=match.map_id)) if match.map_id else []
+        )
         # A point sent back unchanged keeps where it came from (auto evidence).
         before = {(p.checkpoint, round(p.x, 2), round(p.z, 2)): p for p in rotation.points.all()}
         with transaction.atomic():
