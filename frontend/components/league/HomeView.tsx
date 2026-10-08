@@ -4,8 +4,10 @@ import Link from "next/link";
 
 import type { MatchDay, Paged } from "@/lib/api";
 import { currentSeason, dayName, mapName, playedNewestFirst, rows, shortDate, type Season, type Standings, type StandingRow } from "@/lib/league";
+import { periodLabel, type Awards } from "@/lib/awards";
 import { useApi } from "@/lib/useApi";
 
+import { AwardCard } from "./AwardsView";
 import { Skeleton, SkeletonRows } from "./Loading";
 import MatchDayCard from "./MatchDayCard";
 import { RankBadge } from "./StandingsTable";
@@ -118,7 +120,12 @@ export default function HomeView() {
           <div className="grid gap-10 lg:grid-cols-[3fr_2fr] [&>*]:min-w-0">
             <section>
               <SectionHead title="Top 5" href="/standings" link="Full table" />
-              {latest && <p className="mt-1 text-sm text-muted">{dayName(latest)}{latest.date ? ` · ${shortDate(latest.date)}` : ""}</p>}
+              {latest && (
+                <p className="mt-1 text-sm text-muted">
+                  {dayName(latest)}
+                  {latest.date ? ` · ${shortDate(latest.date)}` : ""}
+                </p>
+              )}
               <div className="mt-4 space-y-2">
                 {days.data && !latest ? (
                   <p className="text-sm text-muted">No matches played yet.</p>
@@ -146,6 +153,8 @@ export default function HomeView() {
             </section>
           </div>
         )}
+
+        {season && <WeekAwards />}
 
         {next.length > 0 && (
           <section>
@@ -195,5 +204,22 @@ export default function HomeView() {
         )}
       </div>
     </>
+  );
+}
+
+/** This week's award winners (the latest week with matches), linking to the Awards page. */
+function WeekAwards() {
+  const awards = useApi<Awards>("/awards?period=week");
+  if (!awards.data || awards.data.matches === 0) return null;
+  return (
+    <section>
+      <SectionHead title="Awards of the week" href="/awards" link="All awards" />
+      <p className="mt-1 text-sm text-muted">{periodLabel(awards.data)}</p>
+      <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {awards.data.awards.map((a) => (
+          <AwardCard key={a.key} award={a} compact />
+        ))}
+      </div>
+    </section>
   );
 }

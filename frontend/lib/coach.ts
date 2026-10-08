@@ -65,7 +65,7 @@ function hostOf(url: string): string {
   }
 }
 
-export type WeaponClass = "" | "AR" | "SMG" | "SHOTGUN" | "SNIPER" | "MARKSMAN" | "LMG" | "PISTOL" | "MELEE" | "THROWABLE" | "OTHER";
+export type WeaponClass = "" | "AR" | "SMG" | "SHOTGUN" | "SNIPER" | "MARKSMAN" | "LMG" | "PISTOL" | "MELEE" | "THROWABLE" | "EXPLOSIVE" | "OTHER";
 
 export const WEAPON_CLASSES: { key: WeaponClass; label: string }[] = [
   { key: "", label: "Class..." },
@@ -78,6 +78,7 @@ export const WEAPON_CLASSES: { key: WeaponClass; label: string }[] = [
   { key: "PISTOL", label: "Pistol" },
   { key: "MELEE", label: "Melee" },
   { key: "THROWABLE", label: "Throwable" },
+  { key: "EXPLOSIVE", label: "Explosive launcher (M79, grenadier)" },
   { key: "OTHER", label: "Other" },
 ];
 

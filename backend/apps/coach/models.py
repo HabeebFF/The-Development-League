@@ -97,6 +97,7 @@ class WeaponName(TimeStampedModel):
         PISTOL = "PISTOL", "Pistol"
         MELEE = "MELEE", "Melee"
         THROWABLE = "THROWABLE", "Throwable"
+        EXPLOSIVE = "EXPLOSIVE", "Explosive launcher (M79, grenadier)"
         OTHER = "OTHER", "Other"
 
     weapon_id = models.IntegerField(unique=True)

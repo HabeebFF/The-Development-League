@@ -1,3 +1,4 @@
+from django.urls import path
 from rest_framework.routers import SimpleRouter
 
 from . import views
@@ -18,4 +19,7 @@ router.register("admin/groups", views.GroupAdminViewSet, basename="admin-group")
 router.register("admin/match-days", views.MatchDayAdminViewSet, basename="admin-match-day")
 router.register("admin/matches", views.MatchAdminViewSet, basename="admin-match")
 
-urlpatterns = router.urls
+urlpatterns = [
+    *router.urls,
+    path("awards", views.AwardsView.as_view(), name="awards"),
+]
