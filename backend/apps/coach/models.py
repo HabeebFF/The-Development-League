@@ -158,3 +158,25 @@ class CounterPlan(models.Model):
 
     def __str__(self) -> str:
         return f"{self.team} vs {self.opponent}: week of {self.week_start}"
+
+
+class AiUsage(models.Model):
+    """One call to the AI writer: what it cost and how much of its text passed the checks."""
+
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    feature = models.CharField(max_length=20, help_text="report or counter")
+    provider = models.CharField(max_length=20)
+    model = models.CharField(max_length=60)
+    input_tokens = models.PositiveIntegerField(default=0)
+    output_tokens = models.PositiveIntegerField(default=0)
+    cost_usd = models.DecimalField(max_digits=10, decimal_places=6, default=0)
+    ok = models.BooleanField(default=True)
+    error = models.CharField(max_length=300, blank=True)
+    items = models.PositiveSmallIntegerField(default=0, help_text="Items asked for")
+    kept = models.PositiveSmallIntegerField(default=0, help_text="Items that passed the checks")
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self) -> str:
+        return f"{self.created_at:%Y-%m-%d %H:%M} {self.feature} {self.model}"

@@ -4,7 +4,8 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { api, ApiError, type Paged, type TeamRef } from "@/lib/api";
-import { headToHeadText, type CounterPlan, type ReportMatch } from "@/lib/coach";
+import { aiWritten, headToHeadText, type CounterPlan, type ReportMatch } from "@/lib/coach";
+import Advice from "./Advice";
 
 const title = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
@@ -84,6 +85,7 @@ export default function CounterPlanView({ teamSlug, matchHref }: { teamSlug: str
                     <span className="font-display text-xl leading-none text-accent">{i + 1}</span>
                     <span>{p.title}</span>
                   </p>
+                  <Advice task={p} />
                   <ul className="mt-2 space-y-1 pl-7 text-sm text-muted">
                     {p.why.map((w) => (
                       <li key={w}>{w}</li>
@@ -94,7 +96,10 @@ export default function CounterPlanView({ teamSlug, matchHref }: { teamSlug: str
               ))}
             </ol>
           )}
-          <p className="mt-8 text-xs text-muted">Every play comes from {plan.opponent}&apos;s recorded matches and links to them.</p>
+          <p className="mt-8 text-xs text-muted">
+            Every play comes from {plan.opponent}&apos;s recorded matches and links to them.
+            {aiWritten(plan.writer) ? " The advice is written by AI and checked against those matches." : ""}
+          </p>
         </div>
       )}
     </div>

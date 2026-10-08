@@ -18,6 +18,7 @@ urlpatterns = [
         name="coach-counter",
     ),
     path("coach/maps/<slug:slug>/rotate", views.RotationAdviceView.as_view(), name="coach-rotate"),
+    path("coach/ai-usage", views.AiUsageView.as_view(), name="coach-ai-usage"),
     path("coach/reports", views.ReportListView.as_view(), name="coach-report-list"),
     path("coach/reports/<int:pk>", views.ReportView.as_view(), name="coach-report"),
 ]

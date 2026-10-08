@@ -215,11 +215,16 @@ def build(team_id: int, week_start: date, games: Sequence[Game], names: dict[int
     }
 
 
-def write_reports(week_start: date, team_ids: Sequence[int] | None = None) -> int:
-    """Create or refresh the template reports for a week. Returns how many were written.
-    Reports staff have edited are left alone."""
+def write_reports(
+    week_start: date, team_ids: Sequence[int] | None = None, *, wait: bool = False
+) -> int:
+    """Create or refresh the reports for a week. Returns how many were written.
+    Reports staff have edited are left alone. When the AI writer is on it rewrites each
+    report's tasks; ``wait`` paces the calls to its per-minute limit instead of leaving the
+    rest of the week in template text (used by the command, not by web requests)."""
     from apps.league.models import Team
 
+    from . import writer
     from .engine import load_games
     from .models import CoachReport
 
@@ -238,8 +243,13 @@ def write_reports(week_start: date, team_ids: Sequence[int] | None = None) -> in
         content = build(team.pk, week_start, games, names)
         for m in content["matches"]:
             m["played_on"] = m["played_on"].isoformat() if m["played_on"] else None
+        content["tasks"], kept = writer.rewrite(
+            "report", content["tasks"], content["facts"], team=team.name, wait=wait
+        )
         CoachReport.objects.update_or_create(
-            team=team, week_start=week_start, defaults={**content, "writer": "template"}
+            team=team,
+            week_start=week_start,
+            defaults={**content, "writer": writer.label() if kept else "template"},
         )
         written += 1
     return written

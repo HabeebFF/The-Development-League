@@ -109,14 +109,22 @@ class CoachReportSerializer(serializers.ModelSerializer):
             if not cited or not set(cited) <= facts:
                 raise serializers.ValidationError("Each task must cite this report's facts.")
             known = {f["id"]: f for f in self.instance.facts}
-            out.append(
-                {
-                    "title": str(t["title"]).strip()[:160],
-                    "why": [known[c]["text"] for c in cited],
-                    "facts": cited,
-                    "matches": sorted({m for c in cited for m in known[c]["matches"]}),
-                }
-            )
+            task = {
+                "title": str(t["title"]).strip()[:160],
+                "why": [known[c]["text"] for c in cited],
+                "facts": cited,
+                "matches": sorted({m for c in cited for m in known[c]["matches"]}),
+            }
+            # The AI writer's advice can be reworded or cleared; its knowledge links can
+            # only be kept or dropped.
+            advice = str(t.get("advice") or "").strip()[:400]
+            if advice:
+                task["advice"] = advice
+            links = {k["id"]: k for old in self.instance.tasks for k in old.get("knowledge", [])}
+            kept = [links[k["id"]] for k in t.get("knowledge") or [] if k.get("id") in links]
+            if kept:
+                task["knowledge"] = kept
+            out.append(task)
         return out
 
 

@@ -117,7 +117,40 @@ export type Fact = {
   data: Record<string, unknown>;
 };
 
-export type CoachTask = { title: string; why: string[]; facts: string[]; matches: number[] };
+export type CoachTask = {
+  title: string;
+  why: string[];
+  facts: string[];
+  matches: number[];
+  /** Written by the AI writer and checked against the facts; missing when the template text stands. */
+  advice?: string;
+  knowledge?: { id: string; title: string }[];
+};
+
+/** Whether the AI writer wrote any of a report's or plan's text. */
+export const aiWritten = (writer: string) => writer.includes("gemini:");
+
+export type AiUsage = {
+  on: boolean;
+  blocked: string | null;
+  model: string;
+  today: number;
+  daily_limit: number;
+  per_minute: number;
+  month_cost_usd: number;
+  monthly_cap_usd: number;
+  recent: {
+    at: string;
+    feature: string;
+    model: string;
+    ok: boolean;
+    error: string;
+    items: number;
+    kept: number;
+    tokens: number;
+    cost_usd: number;
+  }[];
+};
 export type CoachChange = { text: string; better: boolean; matches: number[] };
 export type ReportMatch = { id: number; label: string; map: string; played_on: string | null };
 

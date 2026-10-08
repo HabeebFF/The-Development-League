@@ -131,6 +131,18 @@ FILE_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024
 # pages, team areas and coach reports still need a sign-in. Set to false to lock it again.
 PUBLIC_SITE = env_bool("PUBLIC_SITE", True)
 
+# AI Coach writer: rewrites report tasks and counter plays in plain English. Every claim
+# is checked against our facts; anything that fails (or the writer being off, over its
+# limits or down) falls back to the template text. "off" or "gemini".
+COACH_WRITER = env("COACH_WRITER", "off")
+GEMINI_API_KEY = env("GEMINI_API_KEY", "")
+GEMINI_MODEL = env("GEMINI_MODEL", "gemini-2.5-flash")
+# Stay inside the free tier: at most this many requests a day and per minute.
+COACH_AI_DAILY_REQUESTS = int(env("COACH_AI_DAILY_REQUESTS", "200"))
+COACH_AI_PER_MINUTE = int(env("COACH_AI_PER_MINUTE", "8"))
+# Monthly spending cap in US dollars for paid models; 0 means only free models are used.
+COACH_AI_MONTHLY_CAP_USD = float(env("COACH_AI_MONTHLY_CAP_USD", "0"))
+
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
         "common.authentication.CookieJWTAuthentication",

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it, test } from "node:test";
 
-import { dataText, headToHeadText, matchesReview, parseData, sourceLine } from "./coach.ts";
+import { aiWritten, dataText, headToHeadText, matchesReview, parseData, sourceLine } from "./coach.ts";
 
 describe("knowledge base data box", () => {
   it("round-trips named values", () => {
@@ -77,4 +77,11 @@ describe("knowledge review", () => {
     assert.equal(sourceLine({ url: "https://ff.garena.com/en/article/1712/", publisher: "Garena", published: "2026-09-10" }), "Garena, 2026-09-10");
     assert.equal(sourceLine({ url: "https://www.vandal.net/x", accessed: "2026-10-03" }), "vandal.net, no date, read 2026-10-03");
   });
+});
+
+test("aiWritten spots reports and plans the AI writer touched", () => {
+  assert.equal(aiWritten("template"), false);
+  assert.equal(aiWritten("template-1"), false);
+  assert.equal(aiWritten("gemini:gemini-2.5-flash"), true);
+  assert.equal(aiWritten("template-1+gemini:gemini-2.5-flash"), true);
 });
