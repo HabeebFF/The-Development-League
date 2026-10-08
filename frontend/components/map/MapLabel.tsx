@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import Konva from "konva";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Group, Image as KImage, Line, Rect, Text } from "react-konva";
 
 import { layout, shorten, textWidth, type LabelItem, type Placed } from "@/lib/labels";
@@ -14,6 +15,8 @@ export type LabelStatus = "ok" | "knocked" | "out";
 const GREY = "#6b7280";
 const PILL = "rgba(8, 8, 12, 0.72)";
 const GAP = 4;
+/** How long a label takes to glide to a new spot, in seconds. */
+const GLIDE = 0.3;
 
 type Sizes = { font: number; logo: number; pad: number; max: number };
 const PLAYER: Sizes = { font: 11.5, logo: 12, pad: 3, max: 12 };
@@ -51,8 +54,13 @@ function measure(spec: LabelSpec, compact: boolean) {
   return { s, text, w: Math.max(s.logo, tw) + s.pad * 2, h: s.logo + 1 + s.font + s.pad * 2 };
 }
 
-/** Every label, nudged apart where they would overlap. Focused labels drawn last (on top). */
+/** Every label, nudged apart where they would overlap. Focused labels drawn last (on top).
+ * Each label remembers its last spot (in screen pixels, so zooming doesn't move it) and
+ * keeps it while it's clear; when it must move, it glides there instead of jumping. */
 export function MapLabels({ labels, px }: { labels: LabelSpec[]; px: (n: number) => number }) {
+  // Last placements, kept across renders. A Map held in state is never replaced, only
+  // updated, so it acts as memory without causing renders.
+  const [memory] = useState(() => new Map<string, Placed>());
   const compact = useCompact();
   const font = useDisplayFont();
   const logos = useImages(labels.map((l) => l.logo));
@@ -65,13 +73,20 @@ export function MapLabels({ labels, px }: { labels: LabelSpec[]; px: (n: number)
     h: px(m.h),
     rank: (m.spec.focus ? 10 : 0) + (m.spec.kind === "team" ? 5 : 0) + (m.spec.status === "out" ? -3 : 0),
   }));
-  const placed = layout(items, px(GAP), px(5));
+  const unit = px(1);
+  const prev: Record<string, Placed> = {};
+  for (const [id, p] of memory) prev[id] = { ...p, dx: p.dx * unit, dy: p.dy * unit };
+  const placed = layout(items, px(GAP), px(5), 10, prev);
+  memory.clear();
+  for (const [id, p] of Object.entries(placed)) memory.set(id, { ...p, dx: p.dx / unit, dy: p.dy / unit });
   const order = [...measured].sort((a, b) => Number(!!a.spec.focus) - Number(!!b.spec.focus));
   return (
     <Group listening={false}>
-      {order.filter((m) => !placed[m.spec.id].hidden).map((m) => (
-        <Pill key={m.spec.id} m={m} at={placed[m.spec.id]} px={px} font={font} logo={m.spec.logo ? logos[m.spec.logo] : undefined} />
-      ))}
+      {order
+        .filter((m) => !placed[m.spec.id].hidden)
+        .map((m) => (
+          <Pill key={m.spec.id} m={m} at={placed[m.spec.id]} px={px} font={font} logo={m.spec.logo ? logos[m.spec.logo] : undefined} />
+        ))}
     </Group>
   );
 }
@@ -97,8 +112,10 @@ function Pill({
   const [w, h] = [m.w * k, m.h * k];
   const border = out ? GREY : spec.color;
   const opacity = (spec.status === "knocked" ? 0.55 : out ? 0.7 : spec.focus ? 1 : 0.9) * (at.crowded ? 0.6 : 1);
-  const cx = spec.x + at.dx;
-  const cy = spec.y + at.dy;
+  const unit = px(1);
+  // Offset from the dot in screen pixels.
+  const dx = at.dx / unit;
+  const dy = at.dy / unit;
   const logoSize = s.logo * k;
   const fontSize = s.font * k;
   const pad = s.pad * k;
@@ -108,11 +125,11 @@ function Pill({
   const textX = team ? logoX + logoSize + 4 * k : -w / 2;
   const textY = team ? -fontSize / 2 : logoY + logoSize + 1 * k;
   const textW = team ? w / 2 - pad - textX : w;
-  const unit = px(1);
+  const [pillRef, lineRef] = useGlide(dx, dy);
   return (
-    <Group opacity={opacity}>
-      <Line points={[spec.x, spec.y, cx, cy]} stroke={border} strokeWidth={px(1)} opacity={0.6} />
-      <Group x={cx} y={cy} scaleX={unit} scaleY={unit}>
+    <Group x={spec.x} y={spec.y} scaleX={unit} scaleY={unit} opacity={opacity}>
+      <Line ref={lineRef} stroke={border} strokeWidth={1} opacity={0.6} />
+      <Group ref={pillRef}>
         <Rect
           x={-w / 2}
           y={-h / 2}
@@ -160,6 +177,33 @@ function Pill({
       </Group>
     </Group>
   );
+}
+
+/** Moves a pill and its leader line to (dx, dy): at once the first time, then gliding. */
+function useGlide(dx: number, dy: number) {
+  const pill = useRef<Konva.Group>(null);
+  const line = useRef<Konva.Line>(null);
+  const tweens = useRef<Konva.Tween[]>([]);
+  const placed = useRef(false);
+  useLayoutEffect(() => {
+    const [p, l] = [pill.current, line.current];
+    if (!p || !l) return;
+    if (!placed.current || (Math.abs(p.x() - dx) < 0.5 && Math.abs(p.y() - dy) < 0.5)) {
+      placed.current = true;
+      p.position({ x: dx, y: dy });
+      l.points([0, 0, dx, dy]);
+      return;
+    }
+    for (const t of tweens.current) t.destroy();
+    const easing = Konva.Easings.EaseInOut;
+    tweens.current = [
+      new Konva.Tween({ node: p, x: dx, y: dy, duration: GLIDE, easing }),
+      new Konva.Tween({ node: l, points: [0, 0, dx, dy], duration: GLIDE, easing }),
+    ];
+    for (const t of tweens.current) t.play();
+  }, [dx, dy]);
+  useEffect(() => () => tweens.current.forEach((t) => t.destroy()), []);
+  return [pill, line] as const;
 }
 
 /** Small screens get smaller labels. */
