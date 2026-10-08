@@ -2,8 +2,9 @@
 
 from django.db import migrations, models
 
-# Grenade launchers count for Top grenader (Habeeb, 2026-10-08): M79, MGL140, FGL-24.
-LAUNCHERS = [23, 31, 196]
+# Explosives count for Top grenader (Habeeb, 2026-10-08): the M79, MGL140 and FGL-24
+# launchers, Sensor Mines and the Fiery Kunai. Ids from Garena's Craftland item table.
+LAUNCHERS = [23, 31, 196, 1401, 10050]
 
 
 def mark_launchers(apps, schema_editor):
