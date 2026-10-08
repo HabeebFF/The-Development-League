@@ -28,13 +28,25 @@ const overlaps = (a: Rect, b: Rect) => a.x0 < b.x1 && b.x0 < a.x1 && a.y0 < b.y1
  * then further out, then smaller. With nowhere left, a label of rank ``keep`` or more goes
  * above at its smallest, marked crowded (drawn fainter); any other label is hidden, since
  * its dot is still on the map. Important labels are placed first and keep the best spots.
+ *
+ * ``prev`` is where each label went last time (same units). A label keeps its last spot
+ * while that spot is still clear, so labels don't swap sides from frame to frame as
+ * players move; it only moves when something now covers it. A label pushed out to the
+ * far ring comes back in as soon as a near spot frees up.
  */
-export function layout(items: LabelItem[], gap: number, dot = 0, keep = 10): Record<string, Placed> {
+export function layout(items: LabelItem[], gap: number, dot = 0, keep = 10, prev: Record<string, Placed> = {}): Record<string, Placed> {
   const out: Record<string, Placed> = {};
   const taken: Rect[] = items.map((i) => ({ x0: i.x - dot, y0: i.y - dot, x1: i.x + dot, y1: i.y + dot }));
   const order = [...items].sort((a, b) => b.rank - a.rank);
   for (const item of order) {
     let done: Placed | null = null;
+    const last = prev[item.id];
+    const free = (dx: number, dy: number, w: number, h: number) => {
+      const r = { x0: item.x + dx - w / 2, y0: item.y + dy - h / 2, x1: item.x + dx + w / 2, y1: item.y + dy + h / 2 };
+      if (taken.some((t) => overlaps(r, t))) return false;
+      taken.push(r);
+      return true;
+    };
     for (const scale of [1, 0.85, 0.7]) {
       const w = item.w * scale;
       const h = item.h * scale;
@@ -49,11 +61,18 @@ export function layout(items: LabelItem[], gap: number, dot = 0, keep = 10): Rec
         [-(w / 2 + gap), h / 2 + gap],
       ];
       // A second ring further out; a leader line joins the label to its dot.
-      const sides = [...near, ...near.map(([x, y]): [number, number] => [x * 2, y * 2.4])];
+      const far = near.map(([x, y]): [number, number] => [x * 2, y * 2.4]);
+      // Its last spot first, if it was this size and close in; a far one only after the near ring.
+      const keepLast = last && !last.crowded && !last.hidden && last.scale === scale;
+      const isNear = keepLast && near.some(([x, y]) => Math.abs(x - last.dx) < 0.5 && Math.abs(y - last.dy) < 0.5);
+      const sides: [number, number][] = [
+        ...(isNear ? [[last.dx, last.dy] as [number, number]] : []),
+        ...near,
+        ...(keepLast && !isNear ? [[last.dx, last.dy] as [number, number]] : []),
+        ...far,
+      ];
       for (const [dx, dy] of sides) {
-        const r = { x0: item.x + dx - w / 2, y0: item.y + dy - h / 2, x1: item.x + dx + w / 2, y1: item.y + dy + h / 2 };
-        if (!taken.some((t) => overlaps(r, t))) {
-          taken.push(r);
+        if (free(dx, dy, w, h)) {
           done = { dx, dy, scale, crowded: false, hidden: false };
           break;
         }
