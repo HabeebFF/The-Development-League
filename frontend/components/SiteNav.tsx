@@ -10,6 +10,7 @@ const MAIN = [
   { href: "/", label: "Home", icon: "M3 11 12 4l9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z" },
   { href: "/standings", label: "Standings", icon: "M4 20V10h4v10zm6 0V4h4v16zm6 0v-7h4v7z" },
   { href: "/results", label: "Results", icon: "M7 4h10v3a5 5 0 0 1-10 0zM5 5H3v2a4 4 0 0 0 4 4M19 5h2v2a4 4 0 0 1-4 4M10 14h4v3h3v3H7v-3h3z" },
+  { href: "/awards", label: "Awards", icon: "M12 2l2.9 6.3 6.9.8-5.1 4.7 1.4 6.8L12 17.3 5.9 20.6l1.4-6.8L2.2 9.1l6.9-.8z" },
   { href: "/teams", label: "Teams", icon: "M12 3 4 6v6c0 4.5 3.4 8.3 8 9 4.6-.7 8-4.5 8-9V6z" },
 ];
 const MORE = [
@@ -94,7 +95,10 @@ export default function SiteNav() {
                 Sign out
               </button>
             ) : (
-              <Link href={`/auth/login?next=${encodeURIComponent(path)}`} className="px-3 text-sm font-medium text-muted transition-colors hover:text-white">
+              <Link
+                href={`/auth/login?next=${encodeURIComponent(path)}`}
+                className="px-3 text-sm font-medium text-muted transition-colors hover:text-white"
+              >
                 Sign in
               </Link>
             )}
@@ -116,10 +120,7 @@ export default function SiteNav() {
       {open && shown && (
         <div className="fixed inset-0 z-20 md:hidden" onClick={() => setOpen(false)}>
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
-          <div
-            className="page-enter absolute inset-x-0 top-[var(--header-h)] border-b border-line bg-panel p-4"
-            onClick={(e) => e.stopPropagation()}
-          >
+          <div className="page-enter absolute inset-x-0 top-[var(--header-h)] border-b border-line bg-panel p-4" onClick={(e) => e.stopPropagation()}>
             {[...MAIN, ...more].map((l) => (
               <Link
                 key={l.href}
@@ -156,7 +157,7 @@ export default function SiteNav() {
         className={`fixed inset-x-0 bottom-0 z-30 ${shown ? "" : "hidden"} border-t border-line bg-bg/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-md md:hidden`}
         aria-label="Main"
       >
-        <div className="grid h-[var(--bottom-nav-h)] grid-cols-4">
+        <div className="grid h-[var(--bottom-nav-h)] grid-cols-5">
           {MAIN.map((l) => {
             const on = active(path, l.href);
             return (

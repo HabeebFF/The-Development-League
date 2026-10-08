@@ -1,11 +1,15 @@
 """League API. Public reads (seasons, standings, fixtures, results, teams); staff manage."""
 
+from datetime import date
+
 from django.db.models import Count, F, Prefetch, ProtectedError, Q
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
 from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
+from rest_framework.views import APIView
 
 from apps.results.models import StandingRow
 from apps.results.standings import schedule_rebuild
@@ -427,3 +431,20 @@ class MatchAdminViewSet(RebuildStandingsMixin, viewsets.ModelViewSet):
                 pk=instance.match_day_id
             )
         }
+
+
+class AwardsView(APIView):
+    """Top player, rusher, sniper and grenader of a week or month (``?period=week|month``,
+    ``?date=`` any day in it; default: the period of the latest published match)."""
+
+    permission_classes = [PublicRead]
+
+    def get(self, request):
+        from apps.results.awards import awards, latest_day
+
+        kind = "month" if request.query_params.get("period") == "month" else "week"
+        try:
+            day = date.fromisoformat(request.query_params.get("date", ""))
+        except ValueError:
+            day = latest_day() or timezone.localdate()
+        return Response(awards(kind, day))
