@@ -1,5 +1,6 @@
 from datetime import date
 
+from django.conf import settings
 from django.db.models import Count, Q
 from django.http import Http404
 from django.shortcuts import get_object_or_404
@@ -13,9 +14,9 @@ from apps.maps.models import Map
 from apps.results.models import MatchEvent
 from common.permissions import HasFeature, IsStaff, IsTeamMemberOrStaff
 
-from . import counter
+from . import counter, writer
 from .engine import load_games, team_profile
-from .models import CoachReport, CounterPlan, KnowledgeEntry, WeaponName
+from .models import AiUsage, CoachReport, CounterPlan, KnowledgeEntry, WeaponName
 from .reports import week_of, write_reports
 from .rotate import map_advice
 from .serializers import (
@@ -181,7 +182,47 @@ class ReportListView(APIView):
     def post(self, request):
         week = self._week(request)
         written = write_reports(week)
-        return Response({"week_start": week, "written": written}, status=status.HTTP_201_CREATED)
+        ai = CoachReport.objects.filter(week_start=week, writer__startswith="gemini:").count()
+        return Response(
+            {"week_start": week, "written": written, "ai_written": ai},
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class AiUsageView(APIView):
+    """Staff: whether the AI writer is on, and what it has used today and this month."""
+
+    permission_classes = [IsStaff]
+
+    def get(self, request):
+        today = AiUsage.objects.filter(created_at__date=timezone.localdate())
+        recent = AiUsage.objects.all()[:20]
+        return Response(
+            {
+                "on": settings.COACH_WRITER == "gemini" and bool(settings.GEMINI_API_KEY),
+                "blocked": writer.unavailable(),
+                "model": settings.GEMINI_MODEL,
+                "today": today.count(),
+                "daily_limit": settings.COACH_AI_DAILY_REQUESTS,
+                "per_minute": settings.COACH_AI_PER_MINUTE,
+                "month_cost_usd": float(writer.month_cost()),
+                "monthly_cap_usd": settings.COACH_AI_MONTHLY_CAP_USD,
+                "recent": [
+                    {
+                        "at": u.created_at,
+                        "feature": u.feature,
+                        "model": u.model,
+                        "ok": u.ok,
+                        "error": u.error,
+                        "items": u.items,
+                        "kept": u.kept,
+                        "tokens": u.input_tokens + u.output_tokens,
+                        "cost_usd": float(u.cost_usd),
+                    }
+                    for u in recent
+                ],
+            }
+        )
 
 
 def _played(team: Team) -> list[int]:
@@ -212,11 +253,16 @@ class CounterPlanView(APIView):
         week = week_of(timezone.localdate())
         theirs = _played(rival)
         plan = CounterPlan.objects.filter(team=team, opponent=rival, week_start=week).first()
-        stale = plan is None or plan.writer != counter.RULES
+        stale = plan is None or not plan.writer.startswith(counter.RULES)
         if stale or sorted(m["id"] for m in plan.matches) != theirs:
             games = load_games(sorted(set(theirs) | set(_played(team))))
             names = dict(Team.objects.values_list("pk", "name"))
             content = counter.build(games, team.pk, rival.pk, names)
+            content["plays"], kept = writer.rewrite(
+                "counter", content["plays"], content["facts"], team=team.name, opponent=rival.name
+            )
+            if kept:
+                content["writer"] = f"{counter.RULES}+{writer.label()}"
             plan, _ = CounterPlan.objects.update_or_create(
                 team=team, opponent=rival, week_start=week, defaults=content
             )
