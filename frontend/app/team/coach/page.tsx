@@ -5,20 +5,22 @@ import { useEffect, useState } from "react";
 import CounterPlanView from "@/components/coach/CounterPlanView";
 import ReportView from "@/components/coach/ReportView";
 import RotateView from "@/components/coach/RotateView";
+import ScrimReview from "@/components/coach/ScrimReview";
 import { api, ApiError } from "@/lib/api";
 import { weekLabel, type CoachReport } from "@/lib/coach";
 
 import { useTeam } from "../TeamGate";
 
-type Tab = "report" | "counter" | "rotate";
+type Tab = "review" | "report" | "counter" | "rotate";
 const TABS: { key: Tab; label: string }[] = [
+  { key: "review", label: "After scrims" },
   { key: "report", label: "Weekly report" },
   { key: "counter", label: "Counter plan" },
   { key: "rotate", label: "When to rotate" },
 ];
 
 export default function TeamCoach() {
-  const [tab, setTab] = useState<Tab>("report");
+  const [tab, setTab] = useState<Tab>("review");
   const { me, membership } = useTeam();
   const [reports, setReports] = useState<CoachReport[] | null>(null);
   const [pick, setPick] = useState(0);
@@ -52,6 +54,11 @@ export default function TeamCoach() {
               {t.label}
             </button>
           ))}
+        </div>
+      )}
+      {slug && allowed && tab === "review" && (
+        <div className="mt-6">
+          <ScrimReview teamSlug={slug} replayBase={(id) => `/team/matches/${id}/replay`} />
         </div>
       )}
       {slug && allowed && tab === "counter" && (

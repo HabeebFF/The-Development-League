@@ -1,7 +1,19 @@
 import assert from "node:assert/strict";
 import { describe, it, test } from "node:test";
 
-import { aiWritten, dataText, headToHeadText, matchesReview, parseData, sourceLine } from "./coach.ts";
+import {
+  aiWritten,
+  dataText,
+  finishText,
+  headToHeadText,
+  matchesReview,
+  parseData,
+  repeatedMistakes,
+  sourceLine,
+  type MomentKind,
+  type ReviewMatch,
+  type ReviewMoment,
+} from "./coach.ts";
 
 describe("knowledge base data box", () => {
   it("round-trips named values", () => {
@@ -84,4 +96,32 @@ test("aiWritten spots reports and plans the AI writer touched", () => {
   assert.equal(aiWritten("template-1"), false);
   assert.equal(aiWritten("gemini:gemini-2.5-flash"), true);
   assert.equal(aiWritten("template-1+gemini:gemini-2.5-flash"), true);
+});
+
+describe("after-scrim review", () => {
+  const moment = (kind: MomentKind, good = false): ReviewMoment => ({
+    kind, good, t: 100, clock: "1:40", watch_s: 92, title: "", detail: "", players: [], opponent: null,
+  });
+  const match = (id: number, ...moments: ReviewMoment[]): ReviewMatch => ({
+    id, number: id, label: `M${id}`, map: "Bermuda", placement: 5, kills: 2, downs_taken: 4,
+    eliminated_s: 900, eliminated_clock: "15:00", wiped_by: "Bravo", has_tracks: true, moments,
+  });
+
+  it("lists only mistakes that came back in two or more matches", () => {
+    const day = [
+      match(1, moment("alone"), moment("alone"), moment("zone"), moment("trade", true)),
+      match(2, moment("alone"), moment("third_party")),
+      match(3, moment("third_party"), moment("trade", true)),
+    ];
+    assert.deepEqual(repeatedMistakes(day), [
+      { kind: "alone", label: "Alone", matches: 2 },
+      { kind: "third_party", label: "Third party", matches: 2 },
+    ]);
+  });
+
+  it("says how a match ended", () => {
+    assert.equal(finishText({ placement: 1, eliminated_clock: null, wiped_by: null }), "Booyah");
+    assert.equal(finishText({ placement: 4, eliminated_clock: "15:17", wiped_by: "NOOBZ" }), "#4 · out at 15:17 to NOOBZ");
+    assert.equal(finishText({ placement: 9, eliminated_clock: null, wiped_by: null }), "#9");
+  });
 });

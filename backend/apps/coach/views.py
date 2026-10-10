@@ -14,9 +14,16 @@ from apps.maps.models import Map
 from apps.results.models import MatchEvent
 from common.permissions import HasFeature, IsStaff, IsTeamMemberOrStaff
 
-from . import counter, writer
+from . import counter, moments, writer
 from .engine import load_games, team_profile
-from .models import AiUsage, CoachReport, CounterPlan, KnowledgeEntry, WeaponName
+from .models import (
+    AiUsage,
+    CoachReport,
+    CounterPlan,
+    KnowledgeEntry,
+    MatchReview,
+    WeaponName,
+)
 from .reports import week_of, write_reports
 from .rotate import map_advice
 from .serializers import (
@@ -277,3 +284,69 @@ class RotationAdviceView(APIView):
     def get(self, request, slug: str):
         game_map = get_object_or_404(Map, slug=slug)
         return Response({"name": game_map.name, **map_advice(game_map.slug)})
+
+
+class TeamReviewView(APIView):
+    """A team's after-scrim review (``/coach/teams/<slug>/review?day=<match day id>``): for
+    each match of a match day (the latest by default), the moments that cost the team the
+    most and its best one. Reviews missing or built with older rules are made here."""
+
+    permission_classes = [HasFeature(COACH), IsTeamMemberOrStaff]
+
+    def get_team(self) -> Team:
+        return get_object_or_404(Team, slug=self.kwargs["slug"])
+
+    def get(self, request, slug: str):
+        team = self.get_team()
+        played = (
+            Match.objects.filter(status=Match.Status.PUBLISHED, team_results__team=team)
+            .select_related("map", "match_day")
+            .order_by("-match_day__date", "-match_day__number", "number")
+        )
+        # Newest match day first; two sessions on one date (8pm, 10pm) by when they started.
+        days: dict[int, dict] = {}
+        for m in played:
+            day = m.match_day
+            d = days.setdefault(
+                day.pk, {"id": day.pk, "label": str(day), "date": day.date, "latest": 0.0}
+            )
+            if m.started_at:
+                d["latest"] = max(d["latest"], m.started_at.timestamp())
+        order = sorted(
+            days.values(), key=lambda d: (d["date"] or date.min, d["latest"], d["id"]), reverse=True
+        )
+        wanted = request.query_params.get("day")
+        pick = next((d for d in order if str(d["id"]) == wanted), order[0] if order else None)
+        out = []
+        if pick:
+            matches = sorted(
+                (m for m in played if m.match_day_id == pick["id"]), key=lambda m: m.number
+            )
+            stored = {
+                r.match_id: r for r in MatchReview.objects.filter(team=team, match__in=matches)
+            }
+            for m in matches:
+                review = stored.get(m.pk)
+                if review is None or review.rules != moments.RULES:
+                    moments.save_reviews(m.pk)
+                    review = MatchReview.objects.filter(team=team, match=m).first()
+                if review is None:
+                    continue
+                out.append(
+                    {
+                        "id": m.pk,
+                        "number": m.number,
+                        "label": f"M{m.number}",
+                        "map": m.map.name if m.map else None,
+                        **review.summary,
+                        "moments": review.moments,
+                    }
+                )
+        return Response(
+            {
+                "team": {"slug": team.slug, "name": team.name},
+                "days": [{k: d[k] for k in ("id", "label", "date")} for d in order[:30]],
+                "day": {k: pick[k] for k in ("id", "label", "date")} if pick else None,
+                "matches": out,
+            }
+        )

@@ -1,10 +1,12 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { describe, it, test } from "node:test";
 
 import {
   clock,
   enemiesInScan,
   positionAt,
+  replayHref,
+  replayStart,
   strikesAt,
   timeRange,
   trailAt,
@@ -80,4 +82,17 @@ test("enemiesInScan counts other teams inside the circle when it fires", () => {
   });
   const players = [at(1, "a", 0), at(2, "a", 10), at(3, "b", 49), at(4, "b", 51), at(5, "c", -20)];
   assert.equal(enemiesInScan(scan, players, 0.5), 2); // 3 and 5; not teammates, not 51 m away
+});
+
+describe("watch-this links", () => {
+  it("reads a start time and team, ignoring junk", () => {
+    assert.deepEqual(replayStart({ t: "142", team: "noobz-esports" }), { startAt: 142, team: "noobz-esports" });
+    assert.deepEqual(replayStart({ t: "-3", team: "<b>" }), { startAt: undefined, team: undefined });
+    assert.deepEqual(replayStart({}), { startAt: undefined, team: undefined });
+  });
+
+  it("builds the link", () => {
+    assert.equal(replayHref("/team/matches/7/replay", 141.6, "alpha"), "/team/matches/7/replay?t=142&team=alpha");
+    assert.equal(replayHref("/matches/7/replay", -5), "/matches/7/replay?t=0");
+  });
 });

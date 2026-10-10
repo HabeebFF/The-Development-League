@@ -46,12 +46,15 @@ export default function ReplayViewer({
   matchId,
   backHref = "/staff/matches",
   focusTeams = [],
+  startAt,
 }: {
   matchId: number;
   /** Where the "Matches" link goes (the staff list, or the team area). */
   backHref?: string;
   /** Teams to watch first, e.g. the signed-in player's own team. */
   focusTeams?: string[];
+  /** Open at this game second and play in real time (a coach "Watch this" link). */
+  startAt?: number;
 }) {
   const [data, setData] = useState<Loaded | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -74,12 +77,19 @@ export default function ReplayViewer({
           replay.teams.find((team) => team.has_tracks && focusTeams.includes(team.slug)) ??
           replay.teams.find((team) => team.has_tracks);
         if (first) setChosen(new Set([first.slug]));
-        if (replay.step_s) setT(timeRange(replay.players, replay.step_s)[0]);
+        if (replay.step_s) {
+          const [from, to] = timeRange(replay.players, replay.step_s);
+          if (startAt != null && to > from) {
+            setT(Math.min(to, Math.max(from, startAt)));
+            setSpeed(1);
+            setPlaying(true);
+          } else setT(from);
+        }
       } catch (e) {
         setError(e instanceof Error ? e.message : "Couldn't load this match.");
       }
     })();
-    // focusTeams only picks the first team shown; it shouldn't reload the replay.
+    // focusTeams and startAt only pick where it opens; they shouldn't reload the replay.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [matchId]);
 
