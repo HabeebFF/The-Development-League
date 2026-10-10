@@ -181,3 +181,23 @@ class AiUsage(models.Model):
 
     def __str__(self) -> str:
         return f"{self.created_at:%Y-%m-%d %H:%M} {self.feature} {self.model}"
+
+
+class MatchReview(models.Model):
+    """A team's after-match review: the moments that cost it the most, with game times so
+    the replay can open on them. Built after each upload (and again when ``rules`` is
+    older than the code's)."""
+
+    match = models.ForeignKey("league.Match", on_delete=models.CASCADE, related_name="reviews")
+    team = models.ForeignKey("league.Team", on_delete=models.CASCADE, related_name="reviews")
+    rules = models.CharField(max_length=20)
+    summary = models.JSONField(default=dict, help_text="placement, kills, eliminated, wiped by")
+    moments = models.JSONField(default=list, help_text="[{kind, good, t, title, detail, ...}]")
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["match", "team"]
+        unique_together = [("match", "team")]
+
+    def __str__(self) -> str:
+        return f"{self.team}: review of {self.match}"

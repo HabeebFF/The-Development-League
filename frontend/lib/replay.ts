@@ -188,3 +188,22 @@ export function strikesAt(o: ReplayObject, t: number, seconds = 1.2): { x: numbe
     .filter((p) => p[0] <= t && p[0] > t - seconds)
     .map((p) => ({ x: p[1] / 10, z: p[2] / 10, age: (t - p[0]) / seconds }));
 }
+
+/** Where a "Watch this" link opens the replay: `?t=<game second>&team=<slug>`. */
+export type ReplayStart = { startAt?: number; team?: string };
+
+export function replayStart(query: { t?: string | string[]; team?: string | string[] }): ReplayStart {
+  const one = (v?: string | string[]) => (Array.isArray(v) ? v[0] : v);
+  const t = Number(one(query.t));
+  const team = one(query.team);
+  return {
+    startAt: one(query.t) && Number.isFinite(t) && t >= 0 ? t : undefined,
+    team: team && /^[a-z0-9-]+$/.test(team) ? team : undefined,
+  };
+}
+
+export function replayHref(base: string, startAt: number, team?: string): string {
+  const q = new URLSearchParams({ t: String(Math.max(0, Math.round(startAt))) });
+  if (team) q.set("team", team);
+  return `${base}?${q}`;
+}

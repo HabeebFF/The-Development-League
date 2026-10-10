@@ -239,3 +239,77 @@ export type RotationAdvice = {
   zone_ends: { match: number; label: string; zone: number; x: number; z: number; r: number }[];
   drops: RotateDrop[];
 };
+
+// -- After-scrim review ---------------------------------------------------------------------
+
+export type MomentKind = "third_party" | "alone" | "rotating" | "untraded" | "zone" | "fight_won" | "trade";
+
+export type ReviewMoment = {
+  kind: MomentKind;
+  good: boolean;
+  t: number;
+  clock: string;
+  /** Where "Watch this" opens the replay: a few seconds before the moment. */
+  watch_s: number;
+  title: string;
+  detail: string;
+  players: string[];
+  opponent: number | null;
+};
+
+export type ReviewMatch = {
+  id: number;
+  number: number;
+  label: string;
+  map: string | null;
+  placement: number;
+  kills: number;
+  downs_taken: number;
+  eliminated_s: number | null;
+  eliminated_clock: string | null;
+  wiped_by: string | null;
+  has_tracks: boolean;
+  moments: ReviewMoment[];
+};
+
+export type ReviewDay = { id: number; label: string; date: string | null };
+
+export type TeamReview = {
+  team: { slug: string; name: string };
+  days: ReviewDay[];
+  day: ReviewDay | null;
+  matches: ReviewMatch[];
+};
+
+export const MOMENT_LABELS: Record<MomentKind, string> = {
+  third_party: "Third party",
+  alone: "Alone",
+  rotating: "Rotating",
+  untraded: "No trade",
+  zone: "Zone",
+  fight_won: "Fight won",
+  trade: "Trade",
+};
+
+/** The session's pattern: which mistakes came back in more than one match, most first. */
+export function repeatedMistakes(matches: ReviewMatch[]): { kind: MomentKind; label: string; matches: number }[] {
+  const seen = new Map<MomentKind, Set<number>>();
+  for (const m of matches) {
+    for (const x of m.moments) {
+      if (x.good) continue;
+      if (!seen.has(x.kind)) seen.set(x.kind, new Set());
+      seen.get(x.kind)!.add(m.id);
+    }
+  }
+  return [...seen.entries()]
+    .filter(([, ids]) => ids.size >= 2)
+    .map(([kind, ids]) => ({ kind, label: MOMENT_LABELS[kind], matches: ids.size }))
+    .sort((a, b) => b.matches - a.matches || a.label.localeCompare(b.label));
+}
+
+/** "Booyah", or "#4 · out at 15:17 to NOOBZ". */
+export function finishText(m: Pick<ReviewMatch, "placement" | "eliminated_clock" | "wiped_by">): string {
+  if (m.placement === 1) return "Booyah";
+  const out = m.eliminated_clock ? ` · out at ${m.eliminated_clock}${m.wiped_by ? ` to ${m.wiped_by}` : ""}` : "";
+  return `#${m.placement}${out}`;
+}

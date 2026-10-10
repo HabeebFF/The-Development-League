@@ -135,7 +135,15 @@ def assemble(assignment: Assignment, *, batch: UploadBatch | None = None, user=N
     run.save()
     # The match may have moved to another match day (and season): rebuild both tables.
     schedule_rebuild(old_season_id, match.match_day.stage.season_id)
+    _schedule_reviews(match.pk)
     return run
+
+
+def _schedule_reviews(match_id: int) -> None:
+    """Queue the coach's after-match reviews once the current transaction commits."""
+    from apps.coach.tasks import build_reviews_task
+
+    transaction.on_commit(lambda: build_reviews_task.delay(match_id))
 
 
 # Any fixed number, shared by every assembly; the value only has to be unique in this app.
