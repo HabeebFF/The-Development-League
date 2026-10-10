@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, timedelta
 
 from django.conf import settings
 from django.db.models import Count, Q
@@ -14,7 +14,7 @@ from apps.maps.models import Map
 from apps.results.models import MatchEvent
 from common.permissions import HasFeature, IsStaff, IsTeamMemberOrStaff
 
-from . import counter, moments, writer
+from . import counter, moments, players, writer
 from .engine import load_games, team_profile
 from .models import (
     AiUsage,
@@ -32,6 +32,7 @@ from .serializers import (
     KnowledgeEntrySerializer,
     WeaponNameSerializer,
 )
+from .tasks import build_reviews_task
 
 
 class KnowledgeEntryViewSet(viewsets.ModelViewSet):
@@ -348,5 +349,72 @@ class TeamReviewView(APIView):
                 "days": [{k: d[k] for k in ("id", "label", "date")} for d in order[:30]],
                 "day": {k: pick[k] for k in ("id", "label", "date")} if pick else None,
                 "matches": out,
+            }
+        )
+
+
+# Reviews built while a page waits; more than this are queued for the worker instead.
+BUILD_NOW = 6
+
+
+def _fresh_reviews(match_ids: list[int]) -> int:
+    """Make sure every match has reviews built with the current rules. Returns how many are
+    still being built in the background."""
+    fresh = set(
+        MatchReview.objects.filter(match__in=match_ids, rules=moments.RULES).values_list(
+            "match_id", flat=True
+        )
+    )
+    stale = [m for m in match_ids if m not in fresh]
+    if len(stale) <= BUILD_NOW:
+        for m in stale:
+            moments.save_reviews(m)
+        return 0
+    for m in stale:
+        build_reviews_task.delay(m)
+    return len(stale)
+
+
+class TeamPlayersView(APIView):
+    """Player cards for a team (``/coach/teams/<slug>/players?period=30|all``): each player's
+    numbers over the period against the league's, and one thing to work on."""
+
+    permission_classes = [HasFeature(COACH), IsTeamMemberOrStaff]
+
+    def get_team(self) -> Team:
+        return get_object_or_404(Team, slug=self.kwargs["slug"])
+
+    def get(self, request, slug: str):
+        team = self.get_team()
+        period = request.query_params.get("period", "30")
+        qs = Match.objects.filter(status=Match.Status.PUBLISHED).select_related("match_day")
+        if period != "all":
+            period = "30"
+            since = timezone.localdate() - timedelta(days=30)
+            qs = qs.filter(Q(match_day__date__gte=since) | Q(started_at__date__gte=since))
+        league = {m.pk: m for m in qs}
+        ours = sorted(
+            m
+            for m in Match.objects.filter(pk__in=list(league), team_results__team=team)
+            .values_list("pk", flat=True)
+            .distinct()
+        )
+        pending = _fresh_reviews(sorted(league))
+        rows = {"team": [], "league": []}
+        for r in MatchReview.objects.filter(match__in=list(league), rules=moments.RULES):
+            tagged = [{**row, "match": r.match_id} for row in r.players]
+            rows["league"] += tagged
+            if r.team_id == team.pk:
+                rows["team"] += tagged
+        labels = {pk: f"{league[pk].match_day} M{league[pk].number}" for pk in ours}
+        names = dict(WeaponName.objects.values_list("weapon_id", "name"))
+        out = players.cards(rows["team"], rows["league"], labels, names)
+        return Response(
+            {
+                "team": {"slug": team.slug, "name": team.name},
+                "period": period,
+                "matches": len(ours),
+                "pending": pending,
+                **out,
             }
         )

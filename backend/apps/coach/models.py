@@ -193,6 +193,7 @@ class MatchReview(models.Model):
     rules = models.CharField(max_length=20)
     summary = models.JSONField(default=dict, help_text="placement, kills, eliminated, wiped by")
     moments = models.JSONField(default=list, help_text="[{kind, good, t, title, detail, ...}]")
+    players = models.JSONField(default=list, help_text="Each player's counts for the match")
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:

@@ -313,3 +313,64 @@ export function finishText(m: Pick<ReviewMatch, "placement" | "eliminated_clock"
   const out = m.eliminated_clock ? ` · out at ${m.eliminated_clock}${m.wiped_by ? ` to ${m.wiped_by}` : ""}` : "";
   return `#${m.placement}${out}`;
 }
+
+// -- Player cards ---------------------------------------------------------------------------
+
+export type PlayerClip = { match: number; label: string; t: number; clock: string; watch_s: number };
+
+export type PlayerRates = { alone: number | null; trade: number | null; far: number | null; first: number | null };
+
+export type PlayerCard = {
+  player: number | null;
+  name: string;
+  matches: number;
+  kills: number;
+  knocks: number;
+  kills_per_match: number;
+  downs: number;
+  alone_downs: number;
+  known_downs: number;
+  trades: number;
+  trade_chances: number;
+  first_downs: number;
+  spacing_m: number | null;
+  alive_s: number | null;
+  alive_clock: string | null;
+  rates: PlayerRates;
+  weapons: { name: string; kills: number }[];
+  utility: { uav?: number; bolt?: number; scan?: number };
+  task: { title: string; why: string; clips: PlayerClip[] } | null;
+  strengths: string[];
+};
+
+export type TeamPlayers = {
+  team: { slug: string; name: string };
+  period: "30" | "all";
+  matches: number;
+  pending: number;
+  league: PlayerRates;
+  players: PlayerCard[];
+};
+
+/** "33%", or a dash when there isn't enough data for a rate. */
+export function pct(rate: number | null): string {
+  return rate == null ? "–" : `${Math.round(rate * 100)}%`;
+}
+
+/** How a player's rate compares with the league's, when lower is better (or higher). */
+export function versus(rate: number | null, league: number | null, lowerIsBetter: boolean): "better" | "worse" | "even" | null {
+  if (rate == null || league == null) return null;
+  const diff = lowerIsBetter ? league - rate : rate - league;
+  if (diff >= 0.1) return "better";
+  if (diff <= -0.1) return "worse";
+  return "even";
+}
+
+/** "2 UAV · 5 Dinoculars", or "" when none were used. */
+export function utilityText(u: PlayerCard["utility"]): string {
+  const parts: string[] = [];
+  if (u.uav) parts.push(`${u.uav} UAV`);
+  if (u.bolt) parts.push(`${u.bolt} Bolt Maker`);
+  if (u.scan) parts.push(`${u.scan} Dinoculars`);
+  return parts.join(" · ");
+}

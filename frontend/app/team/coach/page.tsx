@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 
 import CounterPlanView from "@/components/coach/CounterPlanView";
+import PlayerCards from "@/components/coach/PlayerCards";
 import ReportView from "@/components/coach/ReportView";
 import RotateView from "@/components/coach/RotateView";
 import ScrimReview from "@/components/coach/ScrimReview";
@@ -11,9 +12,10 @@ import { weekLabel, type CoachReport } from "@/lib/coach";
 
 import { useTeam } from "../TeamGate";
 
-type Tab = "review" | "report" | "counter" | "rotate";
+type Tab = "review" | "players" | "report" | "counter" | "rotate";
 const TABS: { key: Tab; label: string }[] = [
   { key: "review", label: "After scrims" },
+  { key: "players", label: "Players" },
   { key: "report", label: "Weekly report" },
   { key: "counter", label: "Counter plan" },
   { key: "rotate", label: "When to rotate" },
@@ -38,7 +40,7 @@ export default function TeamCoach() {
   const report = reports?.[pick];
   const matchHref = (id: number) => `/team/matches/${id}/rotations`;
   return (
-    <section className={`mx-auto px-4 py-10 ${tab === "rotate" ? "max-w-6xl" : "max-w-3xl"}`}>
+    <section className={`mx-auto px-4 py-10 ${tab === "rotate" ? "max-w-6xl" : tab === "players" ? "max-w-5xl" : "max-w-3xl"}`}>
       <p className="text-sm font-semibold tracking-[0.2em] text-accent uppercase">Coach</p>
       <h1 className="mt-1 font-display text-5xl leading-none font-extrabold uppercase">{membership?.team.name ?? "Coach"}</h1>
       {!membership && <p className="mt-4 text-muted">League staff see every team&apos;s reports under Staff, Coach knowledge.</p>}
@@ -59,6 +61,11 @@ export default function TeamCoach() {
       {slug && allowed && tab === "review" && (
         <div className="mt-6">
           <ScrimReview teamSlug={slug} replayBase={(id) => `/team/matches/${id}/replay`} />
+        </div>
+      )}
+      {slug && allowed && tab === "players" && (
+        <div className="mt-6">
+          <PlayerCards teamSlug={slug} replayBase={(id) => `/team/matches/${id}/replay`} />
         </div>
       )}
       {slug && allowed && tab === "counter" && (

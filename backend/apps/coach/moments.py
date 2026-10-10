@@ -27,7 +27,7 @@ from apps.rotations.paths import Track
 from .engine import FIGHT_GAP_S, Game, Hit, fights, zone_at, zone_entries
 
 # Bump when the rules change, so stored reviews are rebuilt.
-RULES = "moments-v1"
+RULES = "moments-v2"
 
 ALONE_M = 60.0  # no standing teammate this close: the player was alone
 TRADE_S = 10.0  # a knock back on the attackers this soon counts as a trade
@@ -48,6 +48,7 @@ class Player:
     team: int
     name: str
     track: Track | None = None
+    player_id: int | None = None
 
 
 @dataclass
@@ -119,6 +120,42 @@ def downs(hits: Sequence[Hit]) -> list[Down]:
     return out
 
 
+def standing(entity: int, t: float, players: dict[int, Player], team_downs: list[Down]) -> bool:
+    """On their feet at ``t``: in the feed, and not knocked in the last ``DOWNED_S``."""
+    if any(d.victim == entity and t - DOWNED_S <= d.t < t for d in team_downs):
+        return False
+    p = players.get(entity)
+    return p is not None and position(p.track, t, 1.0) is not None
+
+
+def where_down(d: Down, players: dict[int, Player]) -> tuple[float, float] | None:
+    if d.x is not None and d.z is not None:
+        return d.x, d.z
+    p = players.get(d.victim)
+    return position(p.track if p else None, d.t)
+
+
+def nearest_mate(
+    entity: int,
+    t: float,
+    here: tuple[float, float] | None,
+    mates: list[int],
+    players: dict[int, Player],
+    team_downs: list[Down],
+) -> float | None:
+    """Metres to the closest standing teammate (None: unknown, or nobody left standing)."""
+    if here is None:
+        return None
+    gaps = [
+        math.hypot(p[0] - here[0], p[1] - here[1])
+        for e in mates
+        if e != entity
+        and standing(e, t, players, team_downs)
+        and (p := position(players[e].track, t, 1.0))
+    ]
+    return min(gaps) if gaps else None
+
+
 def _names(players: list[str]) -> str:
     if len(players) <= 1:
         return players[0] if players else "A player"
@@ -148,24 +185,12 @@ def find(
     eliminated = team.eliminated_s
     first_zone = game.zones[0].announced_s if game.zones else None
 
-    def standing(entity: int, t: float) -> bool:
-        if any(d.victim == entity and t - DOWNED_S <= d.t < t for d in ours):
-            return False
-        return position(players[entity].track, t, 1.0) is not None
-
     bad: list[Moment] = []
     good: list[Moment] = []
     for d in ours:
         me = players.get(d.victim)
-        here = (d.x, d.z) if d.x is not None and d.z is not None else None
-        here = here or position(me.track if me else None, d.t)
-        others = [e for e in mates if e != d.victim and standing(e, d.t)]
-        gaps = [
-            math.hypot(p[0] - here[0], p[1] - here[1])
-            for e in others
-            if here and (p := position(players[e].track, d.t, 1.0))
-        ]
-        nearest = min(gaps) if gaps else None
+        here = where_down(d, players)
+        nearest = nearest_mate(d.victim, d.t, here, mates, players, ours)
         name = pname(d.victim)
 
         # Fighting another team in the 30 s before this?
@@ -356,12 +381,14 @@ def _merge(moments: list[Moment]) -> list[Moment]:
 
 
 def review_match(match_id: int) -> dict[int, dict]:
-    """Every team's review of one published match, keyed by team id."""
+    """Every team's review of one published match, keyed by team id, with each player's
+    counts for the match under ``players``."""
     from apps.league.models import Team
     from apps.results.models import MatchEvent
-    from apps.rotations.models import PlayerTrack
+    from apps.rotations.models import PlayerTrack, ReplayObject
 
     from .engine import load_games
+    from .players import match_rows
 
     games = load_games([match_id])
     if not games:
@@ -375,6 +402,7 @@ def review_match(match_id: int) -> dict[int, dict]:
             row.team_id,
             row.player.display_name if row.player else "",
             Track(row.start_s, row.step_s, row.points),
+            row.player_id,
         )
     # Players the replay feed missed still have a name and team on their knocks.
     for e in MatchEvent.objects.filter(
@@ -383,11 +411,17 @@ def review_match(match_id: int) -> dict[int, dict]:
         p = players.setdefault(e.target_entity, Player(e.target_team_id, ""))
         if not p.name and e.target_player:
             p.name = e.target_player.display_name
+        if p.player_id is None:
+            p.player_id = e.target_player_id
+    objects = list(
+        ReplayObject.objects.filter(match_id=match_id).values_list("owner_entity", "kind")
+    )
     names = dict(Team.objects.filter(pk__in=list(game.teams)).values_list("pk", "name"))
     out = {}
     for team_id in game.teams:
         review = find(game, team_id, players, names)
         review["has_tracks"] = any(p.track for p in players.values() if p.team == team_id)
+        review["players"] = match_rows(game, team_id, players, objects)
         out[team_id] = review
     return out
 
@@ -399,10 +433,10 @@ def save_reviews(match_id: int) -> int:
     reviews = review_match(match_id)
     MatchReview.objects.filter(match_id=match_id).exclude(team_id__in=list(reviews)).delete()
     for team_id, review in reviews.items():
-        moments = review.pop("moments")
+        moments, rows = review.pop("moments"), review.pop("players")
         MatchReview.objects.update_or_create(
             match_id=match_id,
             team_id=team_id,
-            defaults={"rules": RULES, "summary": review, "moments": moments},
+            defaults={"rules": RULES, "summary": review, "moments": moments, "players": rows},
         )
     return len(reviews)

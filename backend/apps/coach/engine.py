@@ -54,6 +54,8 @@ class Hit:
     target: int | None  # victim entity
     x: float | None = None  # victim position, when logged
     z: float | None = None
+    actor: int | None = None  # attacker entity
+    weapon: int | None = None
 
 
 @dataclass
@@ -662,6 +664,8 @@ def load_games(match_ids: Iterable[int] | None = None) -> list[Game]:
                 e.target_entity,
                 e.tx,
                 e.tz,
+                e.actor_entity,
+                e.weapon_id,
             )
             for e in events
             if e.kind in (K.KILL, K.KNOCK) and e.actor_team_id and e.target_team_id
