@@ -200,6 +200,13 @@ class PlayerAdminSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ["current_name_raw"]
 
+    def update(self, instance, validated_data):
+        # DRF skips an empty file field; an empty "photo" here means take the photo off.
+        if self.initial_data.get("photo") == "" and "photo" not in validated_data:
+            instance.photo.delete(save=False)
+            validated_data["photo"] = ""
+        return super().update(instance, validated_data)
+
     def validate_photo(self, value):
         """A JPEG, PNG or WebP picture of at most 5 MB (or empty, to remove it)."""
         if not value:

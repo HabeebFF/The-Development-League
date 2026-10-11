@@ -383,6 +383,8 @@ def _detail(key: str, w: Window) -> tuple[str, str]:
     if key == "AIM":
         return pct("headshots", "knocks"), f"{pct('headshots', 'knocks')} of knocks were headshots"
     if key == "TRD":
+        if not s["trade_chances"]:
+            return "n/a", "No teammate was knocked near them yet, so nothing to trade"
         return pct("trades", "trade_chances"), (
             f"Hit back within seconds after {pct('trades', 'trade_chances')} of nearby"
             " teammate knocks"
@@ -395,6 +397,11 @@ def _detail(key: str, w: Window) -> tuple[str, str]:
         clock = f"{int(alive // 60)}:{int(alive % 60):02d}"
         return clock, f"Alive {clock} on average" + (f", {deaths}" if deaths else "")
     if key == "AWR":
+        if not s["known_downs"]:
+            return "0%", (
+                f"Never knocked where we could tell, team's first down in"
+                f" {pct('first_downs', 'review_m')} of matches"
+            )
         return pct("alone_downs", "known_downs"), (
             f"Caught alone in {pct('alone_downs', 'known_downs')} of knocks, team's first down"
             f" in {pct('first_downs', 'review_m')} of matches"

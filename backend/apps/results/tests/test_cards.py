@@ -308,3 +308,7 @@ def test_staff_set_photo_and_role(league):
     assert resp.status_code == 400
     cards.build_week(WEEK_A)
     assert get(f"/cards/{pid}").json()["photo"].endswith(".png")
+    # An empty photo removes it: the card goes back to the blank picture.
+    resp = client.patch(f"/api/v1/admin/players/{pid}", {"photo": ""}, format="multipart")
+    assert resp.status_code == 200, resp.content
+    assert resp.json()["photo"] is None and get(f"/cards/{pid}").json()["photo"] is None

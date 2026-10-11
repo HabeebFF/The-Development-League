@@ -481,6 +481,7 @@ def _card(card, request) -> dict:
         "role": card.role,
         "role_label": ROLE_LABELS.get(card.role, card.role),
         "role_suggested": card.role_suggested,
+        "suggested_role": card.suggested_role,
         "overall": card.overall,
         "overall_change": card.overall_change,
         "tier": "totw" if card.totw else tier(card.overall),
