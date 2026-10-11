@@ -285,21 +285,38 @@ export default function ReplayViewer({
             {gadgets ? "Hide gadgets" : "Show gadgets"}
           </button>
         </div>
-        {replay.teams.map((team) => (
-          <button
-            key={team.slug}
-            onClick={(e) => toggleTeam(team.slug, !(e.shiftKey || e.metaKey || e.ctrlKey))}
-            disabled={!team.has_tracks}
-            className={`flex shrink-0 items-center gap-2 px-2 py-1.5 text-left text-sm disabled:opacity-40 ${
-              chosen.has(team.slug) ? "bg-panel-2 ring-1 ring-accent" : "hover:bg-panel"
-            }`}
-          >
-            <span className="h-3 w-3 rounded-full" style={{ background: colors[team.slug] }} />
-            <span className="flex-1 truncate">
-              #{team.placement} {team.name}
-            </span>
-          </button>
-        ))}
+        {replay.teams.map((team) => {
+          const members = players.filter((p) => p.team === team.slug);
+          const teamKills = members.reduce((n, p) => n + (kills[p.entity_id] ?? 0), 0);
+          return (
+            <div key={team.slug} className="shrink-0">
+              <button
+                onClick={(e) => toggleTeam(team.slug, !(e.shiftKey || e.metaKey || e.ctrlKey))}
+                disabled={!team.has_tracks}
+                className={`flex w-full items-center gap-2 px-2 py-1.5 text-left text-sm disabled:opacity-40 ${
+                  chosen.has(team.slug) ? "bg-panel-2 ring-1 ring-accent" : "hover:bg-panel"
+                }`}
+              >
+                <span className="h-3 w-3 rounded-full" style={{ background: colors[team.slug] }} />
+                <span className="flex-1 truncate">
+                  #{team.placement} {team.name}
+                </span>
+                <span className="text-xs text-muted tabular-nums" title="Kills so far">
+                  {teamKills} kills
+                </span>
+              </button>
+              {chosen.has(team.slug) &&
+                members.map((p) => (
+                  <div key={p.entity_id} className="flex items-center gap-2 py-0.5 pl-7 pr-2 text-xs">
+                    <span className="flex-1 truncate">{p.name}</span>
+                    <span className={`tabular-nums ${kills[p.entity_id] ? "text-accent" : "text-muted"}`}>
+                      {kills[p.entity_id] ?? 0}
+                    </span>
+                  </div>
+                ))}
+            </div>
+          );
+        })}
       </aside>
 
       <div className="flex min-h-[60dvh] flex-1 flex-col">
