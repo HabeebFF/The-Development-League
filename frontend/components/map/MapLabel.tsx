@@ -38,6 +38,8 @@ export type LabelSpec = {
   status?: LabelStatus;
   /** The highlighted or followed team: drawn on top and brighter. */
   focus?: boolean;
+  /** Kills so far (live replay): shown as a badge on the pill's corner. */
+  kills?: number;
 };
 
 function sizes(kind: LabelSpec["kind"], compact: boolean): Sizes {
@@ -54,9 +56,11 @@ function measure(spec: LabelSpec, compact: boolean) {
   return { s, text, w: Math.max(s.logo, tw) + s.pad * 2, h: s.logo + 1 + s.font + s.pad * 2 };
 }
 
-/** Every label, nudged apart where they would overlap. Focused labels drawn last (on top).
- * Each label remembers its last spot (in screen pixels, so zooming doesn't move it) and
- * keeps it while it's clear; when it must move, it glides there instead of jumping. */
+/** Every label. Player labels always sit straight above their player and may overlap
+ * each other (a label that moves around its player is hard to follow); the lower player's
+ * label is drawn on top, and the followed team's above all. Team labels are nudged apart
+ * where they would overlap: each remembers its last spot (in screen pixels, so zooming
+ * doesn't move it) and keeps it while it's clear; when it must move, it glides there. */
 export function MapLabels({ labels, px }: { labels: LabelSpec[]; px: (n: number) => number }) {
   // Last placements, kept across renders. A Map held in state is never replaced, only
   // updated, so it acts as memory without causing renders.
@@ -65,21 +69,26 @@ export function MapLabels({ labels, px }: { labels: LabelSpec[]; px: (n: number)
   const font = useDisplayFont();
   const logos = useImages(labels.map((l) => l.logo));
   const measured = labels.map((l) => ({ spec: l, ...measure(l, compact) }));
-  const items: LabelItem[] = measured.map((m) => ({
-    id: m.spec.id,
-    x: m.spec.x,
-    y: m.spec.y,
-    w: px(m.w),
-    h: px(m.h),
-    rank: (m.spec.focus ? 10 : 0) + (m.spec.kind === "team" ? 5 : 0) + (m.spec.status === "out" ? -3 : 0),
-  }));
+  const items: LabelItem[] = measured
+    .filter((m) => m.spec.kind !== "player")
+    .map((m) => ({
+      id: m.spec.id,
+      x: m.spec.x,
+      y: m.spec.y,
+      w: px(m.w),
+      h: px(m.h),
+      rank: (m.spec.focus ? 10 : 0) + (m.spec.kind === "team" ? 5 : 0) + (m.spec.status === "out" ? -3 : 0),
+    }));
   const unit = px(1);
   const prev: Record<string, Placed> = {};
   for (const [id, p] of memory) prev[id] = { ...p, dx: p.dx * unit, dy: p.dy * unit };
   const placed = layout(items, px(GAP), px(5), 10, prev);
+  for (const m of measured) {
+    if (m.spec.kind === "player") placed[m.spec.id] = { dx: 0, dy: -(px(m.h) / 2 + px(GAP) + px(5)), scale: 1, crowded: false, hidden: false };
+  }
   memory.clear();
   for (const [id, p] of Object.entries(placed)) memory.set(id, { ...p, dx: p.dx / unit, dy: p.dy / unit });
-  const order = [...measured].sort((a, b) => Number(!!a.spec.focus) - Number(!!b.spec.focus));
+  const order = [...measured].sort((a, b) => Number(!!a.spec.focus) - Number(!!b.spec.focus) || a.spec.y - b.spec.y);
   return (
     <Group listening={false}>
       {order
@@ -174,7 +183,38 @@ function Pill({
           fontStyle="bold"
           fill={out ? "#9ca3af" : spec.focus ? "#ffffff" : "#e5e7eb"}
         />
+        {spec.kills != null && <KillBadge kills={spec.kills} x={w / 2} y={-h / 2} size={fontSize} font={font} dim={out} />}
       </Group>
+    </Group>
+  );
+}
+
+/** A player's kills so far, on the pill's top-right corner: bright once they have one. */
+function KillBadge({ kills, x, y, size, font, dim }: { kills: number; x: number; y: number; size: number; font: string; dim: boolean }) {
+  const h = size + 3;
+  const w = Math.max(h, textWidth(String(kills), size) + 6);
+  const hot = kills > 0 && !dim;
+  return (
+    <Group x={x - w / 2 + 2} y={y - h / 2 + 2}>
+      <Rect
+        width={w}
+        height={h}
+        cornerRadius={h / 2}
+        fill={hot ? "#ff5a1f" : "rgba(8, 8, 12, 0.85)"}
+        stroke={hot ? "#000" : GREY}
+        strokeWidth={0.8}
+      />
+      <Text
+        text={String(kills)}
+        width={w}
+        height={h}
+        align="center"
+        verticalAlign="middle"
+        fontSize={size}
+        fontFamily={font}
+        fontStyle="bold"
+        fill={hot ? "#fff" : "#9ca3af"}
+      />
     </Group>
   );
 }
