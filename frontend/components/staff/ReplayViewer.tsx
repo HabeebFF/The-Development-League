@@ -230,7 +230,10 @@ export default function ReplayViewer({
   const teamOf = Object.fromEntries(replay.teams.map((x) => [x.slug, x]));
   const single = chosen.size === 1 ? [...chosen][0] : null;
 
-  const kills = killsAt(replay.events, t);
+  const kills = killsAt(replay.events, t, Object.fromEntries(replay.players.map((p) => [p.entity_id, p.team])));
+  // Each player's fixed place within their team, so their labels fan out instead of stacking.
+  const slotOf: Record<number, number> = {};
+  for (const team of replay.teams) replay.players.filter((p) => p.team === team.slug).forEach((p, i) => (slotOf[p.entity_id] = i));
 
   // Knocks and deaths per player, for the labels.
   const knocksOf: Record<number, number[]> = {};
@@ -472,6 +475,7 @@ export default function ReplayViewer({
                         color: colors[p.team],
                         status,
                         kills: kills[p.entity_id] ?? 0,
+                        slot: slotOf[p.entity_id] ?? 0,
                         focus: p.team === single,
                       },
                     ];

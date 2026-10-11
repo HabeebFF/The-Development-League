@@ -15,6 +15,9 @@ export type LabelStatus = "ok" | "knocked" | "out";
 const GREY = "#6b7280";
 const PILL = "rgba(8, 8, 12, 0.72)";
 const GAP = 4;
+/** How far each team-mate's label steps up and right from the first one's, in screen pixels. */
+const FAN_X = 10;
+const FAN_Y = 12;
 /** How long a label takes to glide to a new spot, in seconds. */
 const GLIDE = 0.3;
 
@@ -40,6 +43,9 @@ export type LabelSpec = {
   focus?: boolean;
   /** Kills so far (live replay): shown as a badge on the pill's corner. */
   kills?: number;
+  /** A player's fixed place in their team: labels of players standing together fan out
+   * by this many steps, so each name peeks out instead of hiding under another. */
+  slot?: number;
 };
 
 function sizes(kind: LabelSpec["kind"], compact: boolean): Sizes {
@@ -84,7 +90,10 @@ export function MapLabels({ labels, px }: { labels: LabelSpec[]; px: (n: number)
   for (const [id, p] of memory) prev[id] = { ...p, dx: p.dx * unit, dy: p.dy * unit };
   const placed = layout(items, px(GAP), px(5), 10, prev);
   for (const m of measured) {
-    if (m.spec.kind === "player") placed[m.spec.id] = { dx: 0, dy: -(px(m.h) / 2 + px(GAP) + px(5)), scale: 1, crowded: false, hidden: false };
+    if (m.spec.kind === "player") {
+      const slot = m.spec.slot ?? 0;
+      placed[m.spec.id] = { dx: px(FAN_X * slot), dy: -(px(m.h) / 2 + px(GAP) + px(5) + px(FAN_Y * slot)), scale: 1, crowded: false, hidden: false };
+    }
   }
   memory.clear();
   for (const [id, p] of Object.entries(placed)) memory.set(id, { ...p, dx: p.dx / unit, dy: p.dy / unit });
