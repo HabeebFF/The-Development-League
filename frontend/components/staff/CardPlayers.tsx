@@ -12,6 +12,7 @@ type AdminPlayer = {
   current_team: string | null;
   photo: string | null;
   card_role: Role | "";
+  hide_card: boolean;
 };
 
 /** Find a player, then set their photo and card role. */
@@ -62,7 +63,7 @@ function PlayerRow({ player, suggested }: { player: AdminPlayer; suggested?: str
     setNote(null);
     try {
       setP(await api<AdminPlayer>(`/admin/players/${p.id}`, { method: "PATCH", body }));
-      setNote("Saved. Shows on the card at the next rebuild.");
+      setNote("Saved. Photos and hiding show straight away; a new role shows at the next rebuild.");
     } catch (e) {
       setNote(e instanceof ApiError ? e.message : "Couldn't save. Try again.");
     } finally {
@@ -75,7 +76,10 @@ function PlayerRow({ player, suggested }: { player: AdminPlayer; suggested?: str
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img src={p.photo || BLANK_PHOTO} alt="" className="h-12 w-12 shrink-0 bg-panel-2 object-cover object-top" />
       <span className="min-w-0 flex-1">
-        <span className="block truncate font-medium">{p.display_name}</span>
+        <span className="block truncate font-medium">
+          {p.display_name}
+          {p.hide_card && <span className="ml-2 text-xs text-muted">(card hidden)</span>}
+        </span>
         <span className="text-xs text-muted">
           UID {p.game_uid}
           {p.current_team ? ` · ${p.current_team}` : ""}
@@ -130,6 +134,19 @@ function PlayerRow({ player, suggested }: { player: AdminPlayer; suggested?: str
           Remove photo
         </button>
       )}
+      <label className="flex items-center gap-1.5 text-xs text-muted">
+        <input
+          type="checkbox"
+          checked={p.hide_card}
+          disabled={busy}
+          onChange={(e) => {
+            const body = new FormData();
+            body.set("hide_card", e.target.checked ? "true" : "false");
+            patch(body);
+          }}
+        />
+        Hide card
+      </label>
       {note && <p className="w-full text-xs text-muted">{note}</p>}
     </li>
   );

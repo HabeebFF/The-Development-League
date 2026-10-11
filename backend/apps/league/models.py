@@ -254,6 +254,10 @@ class Player(TimeStampedModel):
         help_text="Role on the player card; blank means the site suggests one each week",
     )
 
+    hide_card = models.BooleanField(
+        default=False, help_text="Staff took this player off the player cards pages"
+    )
+
     class Meta:
         ordering = ["display_name"]
 

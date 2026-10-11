@@ -197,6 +197,7 @@ class PlayerAdminSerializer(serializers.ModelSerializer):
             "user",
             "photo",
             "card_role",
+            "hide_card",
         ]
         read_only_fields = ["current_name_raw"]
 
