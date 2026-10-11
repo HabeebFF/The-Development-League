@@ -5,6 +5,7 @@ from datetime import timedelta
 from pathlib import Path
 
 import dj_database_url
+from celery.schedules import crontab
 
 BASE_DIR = Path(__file__).resolve().parents[2]
 
@@ -192,6 +193,17 @@ CELERY_TASK_ALWAYS_EAGER = env_bool("CELERY_TASK_ALWAYS_EAGER", False)
 CELERY_TASK_ACKS_LATE = True
 CELERY_WORKER_PREFETCH_MULTIPLIER = 1
 CELERY_TASK_TIME_LIMIT = 30 * 60
+# Run inside the worker (started with -B). Hours are UTC: 5 is 6 am in Lagos.
+CELERY_BEAT_SCHEDULE = {
+    "coach-weekly-reports": {
+        "task": "apps.coach.tasks.weekly_reports_task",
+        "schedule": crontab(minute=0, hour=int(env("COACH_REPORT_HOUR", "5")), day_of_week="mon"),
+    },
+    "coach-catch-up-reviews": {
+        "task": "apps.coach.tasks.catch_up_reviews_task",
+        "schedule": crontab(minute=30, hour=4),
+    },
+}
 
 LOGGING = {
     "version": 1,

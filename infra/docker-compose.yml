@@ -32,7 +32,7 @@ services:
 
   worker:
     build: ../backend
-    command: celery -A config worker -l info
+    command: celery -A config worker -B -s /tmp/celerybeat-schedule -l info
     env_file: ../.env
     environment:
       DJANGO_SETTINGS_MODULE: config.settings.dev

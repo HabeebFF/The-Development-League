@@ -42,7 +42,7 @@ services:
   worker:
     build: ../backend
     restart: unless-stopped
-    command: celery -A config worker -l info --concurrency 2
+    command: celery -A config worker -B -s /tmp/celerybeat-schedule -l info --concurrency 2
     env_file: ../.env
     environment: *django
     volumes: [media:/data/media]
