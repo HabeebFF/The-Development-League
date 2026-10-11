@@ -8,7 +8,7 @@ export default function StaffCards() {
     <section className="mx-auto max-w-4xl px-4 py-10">
       <h1 className="font-display text-5xl leading-none font-extrabold uppercase">Player cards</h1>
       <p className="mt-2 text-sm text-muted">
-        Cards rebuild every Monday morning from the week before. Add player photos, pick each player&apos;s role (or leave the site&apos;s
+        Cards come out every Saturday at 11am (Lagos) for the week that ended Friday. Add player photos, pick each player&apos;s role (or leave the site&apos;s
         suggestion), and set how much each stat counts towards the overall rating.
       </p>
       <CardPlayers />

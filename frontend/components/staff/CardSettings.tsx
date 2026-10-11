@@ -37,7 +37,7 @@ export default function CardSettings() {
       const d = await api<Settings>("/admin/cards", { method: "PUT", body: { weights } });
       setS(d);
       setDraft(d.weights);
-      setNote("Saved. Rebuild a week to see the new ratings now, or wait for Monday.");
+      setNote("Saved. Rebuild a week to see the new ratings now, or wait for Saturday.");
     } catch (e) {
       setNote(message(e));
     }

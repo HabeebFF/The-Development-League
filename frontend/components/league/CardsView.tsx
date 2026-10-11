@@ -8,6 +8,7 @@ import { useApi } from "@/lib/useApi";
 
 import Loading from "./Loading";
 import PlayerCard from "./PlayerCard";
+import CardCountdown from "./CardCountdown";
 import TeamOfMonth from "./TeamOfMonth";
 
 /** The weekly cards gallery, and a Team of the Month tab (not on a team page). */
@@ -16,6 +17,7 @@ export default function CardsView({ team }: { team?: string }) {
   if (team) return <WeekCards team={team} />;
   return (
     <>
+      <CardCountdown />
       <div className="mb-5 flex gap-1 border-b border-line">
         {(
           [
@@ -111,7 +113,8 @@ function WeekCards({ team }: { team?: string }) {
         </div>
       ) : !data.data.week ? (
         <p className="mt-6 text-muted">
-          No cards yet. They are built every Monday from the week before.
+          No cards yet. They come out every Saturday at 11am for the week
+          before.
         </p>
       ) : (
         <>

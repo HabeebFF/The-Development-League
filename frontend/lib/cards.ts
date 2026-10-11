@@ -1,4 +1,4 @@
-// FUT style player cards (``/cards``), rebuilt every Monday from the weeks before.
+// FUT style player cards (``/cards``), out every Saturday at 11am (Lagos) for the Saturday to Friday week before.
 
 import type { TeamRef } from "./api";
 
@@ -111,7 +111,7 @@ export function monthLabel(start: string): string {
   });
 }
 
-/** "5 – 11 Oct" for a week starting on Monday ``start``. */
+/** "5 – 11 Oct" for a card week starting on Saturday ``start``. */
 export function weekLabel(start: string): string {
   const from = new Date(`${start}T00:00:00`);
   const to = new Date(from);
@@ -154,3 +154,37 @@ export const TIER_LABELS: Record<PlayerCard["tier"], string> = {
   totw: "Team of the Week",
   totm: "Team of the Month",
 };
+
+/** Cards come out every Saturday at 11:00 in Lagos, which is 10:00 UTC. */
+export const RELEASE_UTC = { weekday: 6, hour: 10 };
+
+/** When the next cards come out, after ``now``. */
+export function nextRelease(now: Date): Date {
+  const out = new Date(
+    Date.UTC(
+      now.getUTCFullYear(),
+      now.getUTCMonth(),
+      now.getUTCDate(),
+      RELEASE_UTC.hour,
+    ),
+  );
+  out.setUTCDate(
+    out.getUTCDate() + ((RELEASE_UTC.weekday - out.getUTCDay() + 7) % 7),
+  );
+  if (out <= now) out.setUTCDate(out.getUTCDate() + 7);
+  return out;
+}
+
+/** Days, hours, minutes and seconds left until ``to``. */
+export function countdown(
+  now: Date,
+  to: Date,
+): { d: number; h: number; m: number; s: number } {
+  const left = Math.max(0, Math.floor((to.getTime() - now.getTime()) / 1000));
+  return {
+    d: Math.floor(left / 86400),
+    h: Math.floor(left / 3600) % 24,
+    m: Math.floor(left / 60) % 60,
+    s: left % 60,
+  };
+}

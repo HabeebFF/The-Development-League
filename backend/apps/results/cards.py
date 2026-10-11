@@ -25,10 +25,11 @@ import json
 import math
 from collections import defaultdict
 from dataclasses import dataclass, field
-from datetime import date, timedelta
+from datetime import UTC, date, datetime, time, timedelta
 
 from django.core.cache import cache
 from django.db import transaction
+from django.utils import timezone
 
 from apps.league.models import Match, Player
 
@@ -92,6 +93,22 @@ DEFAULT_WEIGHTS = {
     SNIPER: {"SNP": 25, "RNG": 20, "AIM": 15, "FIN": 15, "AWR": 15, "SUR": 10},
     ALL_ROUNDER: {k: 1 for k in ROLE_STATS[ALL_ROUNDER]},
 }
+
+
+# Cards come out every Saturday at 11:00 in Lagos (10:00 UTC), for the week that ended the
+# day before: a card week runs Saturday to Friday, so it takes in Friday night's scrims.
+RELEASE_WEEKDAY = 5  # Saturday
+RELEASE_UTC = time(10, 0)
+
+
+def card_week(day: date) -> date:
+    """The Saturday that starts the card week ``day`` is in."""
+    return day - timedelta(days=(day.weekday() - RELEASE_WEEKDAY) % 7)
+
+
+def release_of(week: date) -> datetime:
+    """When the cards of the week starting ``week`` come out: the Saturday after it."""
+    return datetime.combine(week + timedelta(days=7), RELEASE_UTC, tzinfo=UTC)
 
 
 def tier(overall: int) -> str:
@@ -475,10 +492,11 @@ def _fresh_reviews(match_ids: list[int]) -> None:
 
 
 def _week_winners(week: date) -> dict[int, list[str]]:
+    """The award winners over the card's own week (Saturday to Friday)."""
     from .awards import awards
 
     won: dict[int, list[str]] = defaultdict(list)
-    for a in awards("week", week)["awards"]:
+    for a in awards("week", week, between=(week, week + timedelta(days=6)))["awards"]:
         if a["top"] and a["top"][0].get("player_id"):
             won[a["top"][0]["player_id"]].append(a["key"])
     return won
@@ -486,7 +504,7 @@ def _week_winners(week: date) -> dict[int, list[str]]:
 
 def build_week(week: date) -> int:
     """Every player's card for the week starting ``week`` (any day in it is fine)."""
-    week = period_of("week", week)[0]
+    week = card_week(week)
     windows = windows_for(week)
     places = rate_windows({pid: w for pid, w in windows.items() if w.n >= MIN_MATCHES})
     ws = weights()
@@ -567,15 +585,17 @@ def build_week(week: date) -> int:
     return built
 
 
-def weeks_with_matches() -> list[date]:
-    """Every Monday that starts a week with a published match, oldest first."""
+def weeks_with_matches(now: datetime | None = None) -> list[date]:
+    """Every card week with a published match that is already out (its Saturday release has
+    passed), oldest first."""
     from .awards import match_date
 
     days = {
         match_date(m)
         for m in Match.objects.filter(status=Match.Status.PUBLISHED).select_related("match_day")
     }
-    return sorted({period_of("week", d)[0] for d in days if d})
+    now = now or timezone.now()
+    return sorted({w for w in (card_week(d) for d in days if d) if release_of(w) <= now})
 
 
 # -- Team of the Month ----------------------------------------------------------------------
@@ -626,10 +646,12 @@ def team_of_month(day: date) -> list[dict]:
 
 
 def months_with_cards() -> list[date]:
-    """The first day of every month that has a card in it, newest first."""
-    weeks = PlayerCard.objects.values_list("week", flat=True).distinct()
-    months = set()
-    for w in weeks:
-        months.add(w.replace(day=1))
-        months.add((w + timedelta(days=6)).replace(day=1))  # a week running into the next month
-    return sorted(months, reverse=True)
+    """The first day of every month with a match on a built card week, newest first."""
+    from .awards import match_date
+
+    weeks = set(PlayerCard.objects.values_list("week", flat=True).distinct())
+    days = {
+        match_date(m)
+        for m in Match.objects.filter(status=Match.Status.PUBLISHED).select_related("match_day")
+    }
+    return sorted({d.replace(day=1) for d in days if d and card_week(d) in weeks}, reverse=True)

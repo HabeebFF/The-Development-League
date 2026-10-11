@@ -26,7 +26,8 @@ from apps.rotations.models import PlayerTrack
 pytestmark = pytest.mark.django_db
 K = MatchEvent.Kind
 SNIPER_GUN, GRENADE, RIFLE = 21, 50, 635
-WEEK_A, WEEK_B = dt.date(2026, 10, 5), dt.date(2026, 10, 12)
+# Card weeks start on Saturday.
+WEEK_A, WEEK_B = dt.date(2026, 9, 26), dt.date(2026, 10, 3)
 
 
 @pytest.fixture(autouse=True)
@@ -224,7 +225,7 @@ def test_rebuild_task_rebuilds_later_weeks(league):
     from apps.results.tasks import rebuild_cards_task
 
     league.match(WEEK_B)
-    assert rebuild_cards_task("2026-10-07") == 16
+    assert rebuild_cards_task("2026-09-29") == 16
     assert PlayerCard.objects.filter(week=WEEK_B).count() == 8
 
 
@@ -249,24 +250,24 @@ def test_cards_api(league):
     cards.build_week(WEEK_A)
     cards.build_week(WEEK_B)
     data = get("/cards").json()
-    assert data["week"] == "2026-10-12" and data["previous"] == "2026-10-05"
+    assert data["week"] == "2026-10-03" and data["previous"] == "2026-09-26"
     assert data["next"] is None
     top = data["cards"][0]
     assert top["overall"] >= data["cards"][-1]["overall"]
     assert {"name", "photo", "team", "role_label", "tier", "stats"} <= set(top)
     assert top["photo"] is None  # the site shows the blank picture
 
-    snipers = get("/cards?role=sniper&week=2026-10-08").json()
-    assert snipers["week"] == "2026-10-05" and [c["name"] for c in snipers["cards"]] == ["SNIPE"]
-    assert snipers["cards"][0]["tier"] == "totw" and snipers["next"] == "2026-10-12"
+    snipers = get("/cards?role=sniper&week=2026-09-30").json()
+    assert snipers["week"] == "2026-09-26" and [c["name"] for c in snipers["cards"]] == ["SNIPE"]
+    assert snipers["cards"][0]["tier"] == "totw" and snipers["next"] == "2026-10-03"
     assert get("/cards?team=bravo").json()["cards"][0]["team"]["slug"] == "bravo"
 
     one = get(f"/cards/{league.p['RUSH'].pk}").json()
-    assert one["week"] == "2026-10-12" and [h["week"] for h in one["history"]] == [
-        "2026-10-05",
-        "2026-10-12",
+    assert one["week"] == "2026-10-03" and [h["week"] for h in one["history"]] == [
+        "2026-09-26",
+        "2026-10-03",
     ]
-    assert get(f"/cards/{league.p['RUSH'].pk}?week=2026-10-05").json()["week"] == "2026-10-05"
+    assert get(f"/cards/{league.p['RUSH'].pk}?week=2026-09-26").json()["week"] == "2026-09-26"
     assert get("/cards/123456").status_code == 404
 
 
@@ -280,7 +281,7 @@ def test_staff_weights_and_rebuild(league):
     )
     assert ok.json()["weights"]["RUSHER"]["ENT"] == 100
     assert CardWeights.objects.get().weights == {"RUSHER": {"CQC": 0, "ENT": 100}}
-    resp = client.post("/api/v1/admin/cards", {"week": "2026-10-06"}, format="json")
+    resp = client.post("/api/v1/admin/cards", {"week": "2026-09-28"}, format="json")
     assert resp.status_code == 202
     # Rusher overall is now the entry rating alone.
     rush = card(league, "RUSH")
@@ -331,7 +332,7 @@ def test_hidden_players_leave_the_cards_pages(league):
 def test_team_of_the_month(league):
     cards.build_week(WEEK_A)
     data = get("/cards/month").json()
-    assert data["month"] == "2026-10-01" and data["end"] == "2026-10-31"
+    assert data["month"] == "2026-09-01" and data["end"] == "2026-09-30"
     slots = {s["award"]: s for s in data["slots"]}
     assert list(slots) == ["player", "rusher", "sniper", "grenader"]
     assert slots["sniper"]["card"]["name"] == "SNIPE"
@@ -339,11 +340,26 @@ def test_team_of_the_month(league):
     assert slots["rusher"]["card"]["name"] == "RUSH"
     sniper = slots["sniper"]["card"]
     assert (
-        sniper["tier"] == "totm" and sniper["totm"] == "sniper" and sniper["week"] == "2026-10-05"
+        sniper["tier"] == "totm" and sniper["totm"] == "sniper" and sniper["week"] == "2026-09-26"
     )
     # A hidden winner hands the slot to the next player in that award.
     league.p["SNIPE"].hide_card = True
     league.p["SNIPE"].save()
-    top = get("/cards/month?month=2026-10-20").json()["slots"][0]["card"]["name"]
+    top = get("/cards/month?month=2026-09-20").json()["slots"][0]["card"]["name"]
     assert top != "SNIPE"
-    assert get("/cards/month?month=2026-09-01").json()["slots"][0]["card"] is None
+    assert get("/cards/month?month=2026-08-01").json()["slots"][0]["card"] is None
+
+
+def test_card_weeks_run_saturday_to_friday_and_come_out_saturday_morning():
+    assert cards.card_week(dt.date(2026, 10, 9)) == dt.date(2026, 10, 3)  # Friday
+    assert cards.card_week(dt.date(2026, 10, 10)) == dt.date(2026, 10, 10)  # Saturday
+    out = cards.release_of(dt.date(2026, 10, 3))
+    assert out == dt.datetime(2026, 10, 10, 10, tzinfo=dt.UTC)  # 11:00 in Lagos
+
+
+def test_unreleased_weeks_wait_for_saturday(league):
+    league.match(WEEK_B)
+    friday = dt.datetime(2026, 10, 9, 12, tzinfo=dt.UTC)
+    assert cards.weeks_with_matches(friday) == [WEEK_A]
+    later = cards.release_of(WEEK_B)
+    assert cards.weeks_with_matches(later) == [WEEK_A, WEEK_B]
