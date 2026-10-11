@@ -207,3 +207,13 @@ export function replayHref(base: string, startAt: number, team?: string): string
   if (team) q.set("team", team);
   return `${base}?${q}`;
 }
+
+/** Kills each player (by entity id) has made by time ``t``. Self-kills don't count. */
+export function killsAt(events: ReplayEvent[], t: number): Record<number, number> {
+  const out: Record<number, number> = {};
+  for (const e of events) {
+    if (e.kind !== "KILL" || e.t > t || e.actor == null || e.actor === e.target) continue;
+    out[e.actor] = (out[e.actor] ?? 0) + 1;
+  }
+  return out;
+}

@@ -4,6 +4,7 @@ import { describe, it, test } from "node:test";
 import {
   clock,
   enemiesInScan,
+  killsAt,
   positionAt,
   replayHref,
   replayStart,
@@ -95,4 +96,13 @@ describe("watch-this links", () => {
     assert.equal(replayHref("/team/matches/7/replay", 141.6, "alpha"), "/team/matches/7/replay?t=142&team=alpha");
     assert.equal(replayHref("/matches/7/replay", -5), "/matches/7/replay?t=0");
   });
+});
+
+test("kills count up as the replay plays, without knocks or self-kills", () => {
+  const e = (kind: "KILL" | "KNOCK", t: number, actor: number, target: number) =>
+    ({ kind, t, actor, target, headshot: null, x: null, z: null, tx: null, tz: null }) as const;
+  const events = [e("KNOCK", 10, 1, 2), e("KILL", 12, 1, 2), e("KILL", 30, 1, 3), e("KILL", 40, 4, 4)];
+  assert.deepEqual(killsAt(events, 5), {});
+  assert.deepEqual(killsAt(events, 12), { 1: 1 });
+  assert.deepEqual(killsAt(events, 60), { 1: 2 });
 });

@@ -13,6 +13,7 @@ import { boxOf, statusAt } from "@/lib/livepath";
 import {
   clock,
   enemiesInScan,
+  killsAt,
   positionAt,
   strikesAt,
   timeRange,
@@ -228,6 +229,8 @@ export default function ReplayViewer({
   const alive = players.filter((p) => positionAt(p, step, t)).length;
   const teamOf = Object.fromEntries(replay.teams.map((x) => [x.slug, x]));
   const single = chosen.size === 1 ? [...chosen][0] : null;
+
+  const kills = killsAt(replay.events, t);
 
   // Knocks and deaths per player, for the labels.
   const knocksOf: Record<number, number[]> = {};
@@ -451,6 +454,7 @@ export default function ReplayViewer({
                         logo: team?.logo ?? null,
                         color: colors[p.team],
                         status,
+                        kills: kills[p.entity_id] ?? 0,
                         focus: p.team === single,
                       },
                     ];
