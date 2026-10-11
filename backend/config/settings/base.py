@@ -199,6 +199,11 @@ CELERY_BEAT_SCHEDULE = {
         "task": "apps.coach.tasks.weekly_reports_task",
         "schedule": crontab(minute=0, hour=int(env("COACH_REPORT_HOUR", "5")), day_of_week="mon"),
     },
+    # Monday 04:45, after the nightly reviews, so trades and time alive are in.
+    "player-cards-weekly": {
+        "task": "apps.results.tasks.weekly_cards_task",
+        "schedule": crontab(minute=45, hour=4, day_of_week="mon"),
+    },
     "coach-catch-up-reviews": {
         "task": "apps.coach.tasks.catch_up_reviews_task",
         "schedule": crontab(minute=30, hour=4),

@@ -189,3 +189,55 @@ class StandingRow(TimeStampedModel):
 
     def __str__(self) -> str:
         return f"{self.season} [{self.scope}] #{self.rank} {self.team}"
+
+
+class PlayerCard(models.Model):
+    """A player's card for one week (Monday to Sunday): rebuilt from the four weeks up to
+    and including it (see ``apps.results.cards``)."""
+
+    player = models.ForeignKey("league.Player", on_delete=models.CASCADE, related_name="cards")
+    week = models.DateField(help_text="The Monday the week starts")
+    team = models.ForeignKey(
+        "league.Team", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+    role = models.CharField(max_length=12)
+    role_suggested = models.BooleanField(
+        default=False, help_text="Staff haven't set a role: this is the site's suggestion"
+    )
+    suggested_role = models.CharField(max_length=12, blank=True)
+    overall = models.PositiveSmallIntegerField()
+    overall_change = models.SmallIntegerField(null=True, blank=True)
+    stats = models.JSONField(
+        default=list, help_text="[{key, rating, change, stale, value, detail}] in card order"
+    )
+    matches = models.PositiveSmallIntegerField(help_text="Matches in the 4-week window")
+    week_matches = models.PositiveSmallIntegerField(default=0)
+    stale = models.BooleanField(
+        default=False, help_text="Too few matches: last week's numbers carried over"
+    )
+    totw = models.JSONField(default=list, blank=True, help_text="Awards won this week")
+    rules = models.CharField(max_length=20)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-week", "-overall"]
+        constraints = [
+            models.UniqueConstraint(fields=["player", "week"], name="one_card_per_player_week")
+        ]
+        indexes = [models.Index(fields=["week", "overall"])]
+
+    def __str__(self) -> str:
+        return f"{self.player} {self.week}: {self.overall} {self.role}"
+
+
+class CardWeights(models.Model):
+    """Staff's weights for each role's overall rating (one row; empty uses the defaults)."""
+
+    weights = models.JSONField(default=dict, blank=True, help_text="{role: {stat: weight}}")
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name_plural = "card weights"
+
+    def __str__(self) -> str:
+        return "Card weights"

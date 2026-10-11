@@ -22,4 +22,7 @@ router.register("admin/matches", views.MatchAdminViewSet, basename="admin-match"
 urlpatterns = [
     *router.urls,
     path("awards", views.AwardsView.as_view(), name="awards"),
+    path("cards", views.CardsView.as_view(), name="cards"),
+    path("cards/<int:player_id>", views.PlayerCardView.as_view(), name="player-card"),
+    path("admin/cards", views.CardAdminView.as_view(), name="admin-cards"),
 ]
