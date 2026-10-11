@@ -21,6 +21,7 @@ from .models import (
 )
 
 _HEX = re.compile(r"^#[0-9A-Fa-f]{6}$")
+PHOTO_MAX_BYTES = 5 * 1024 * 1024
 SOCIAL_KEYS = {"instagram", "x", "tiktok", "youtube", "discord", "facebook", "website"}
 
 
@@ -194,8 +195,36 @@ class PlayerAdminSerializer(serializers.ModelSerializer):
             "current_team",
             "country",
             "user",
+            "photo",
+            "card_role",
         ]
         read_only_fields = ["current_name_raw"]
+
+    def update(self, instance, validated_data):
+        # DRF skips an empty file field; an empty "photo" here means take the photo off.
+        if self.initial_data.get("photo") == "" and "photo" not in validated_data:
+            instance.photo.delete(save=False)
+            validated_data["photo"] = ""
+        return super().update(instance, validated_data)
+
+    def validate_photo(self, value):
+        """A JPEG, PNG or WebP picture of at most 5 MB (or empty, to remove it)."""
+        if not value:
+            return value
+        if value.size > PHOTO_MAX_BYTES:
+            raise serializers.ValidationError("Photos can be at most 5 MB.")
+        from PIL import Image, UnidentifiedImageError
+
+        try:
+            with Image.open(value) as img:
+                kind = img.format
+                img.verify()
+        except (UnidentifiedImageError, OSError, SyntaxError) as exc:
+            raise serializers.ValidationError("This isn't a picture we can read.") from exc
+        if kind not in {"JPEG", "PNG", "WEBP"}:
+            raise serializers.ValidationError("Use a JPEG, PNG or WebP picture.")
+        value.seek(0)
+        return value
 
 
 # -- seasons, stages, groups, match days, matches ---------------------------------------------

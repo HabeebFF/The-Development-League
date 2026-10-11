@@ -1,6 +1,6 @@
 """League API. Public reads (seasons, standings, fixtures, results, teams); staff manage."""
 
-from datetime import date
+from datetime import date, timedelta
 
 from django.db.models import Count, F, Prefetch, ProtectedError, Q
 from django.shortcuts import get_object_or_404
@@ -448,3 +448,171 @@ class AwardsView(APIView):
         except ValueError:
             day = latest_day() or timezone.localdate()
         return Response(awards(kind, day))
+
+
+# -- player cards (FUT style; see apps.results.cards) ----------------------------------------
+
+
+def _media(f) -> str | None:
+    return f.url if f else None
+
+
+def _card(card, request) -> dict:
+    from apps.results.cards import ROLE_LABELS, STATS, tier
+
+    team, player = card.team, card.player
+    return {
+        "player_id": player.pk,
+        "name": player.display_name,
+        "photo": _media(player.photo),
+        "team": (
+            {
+                "id": team.pk,
+                "name": team.name,
+                "tag": team.tag,
+                "slug": team.slug,
+                "logo": _media(team.logo),
+                "primary_color": team.primary_color,
+            }
+            if team
+            else None
+        ),
+        "week": card.week,
+        "role": card.role,
+        "role_label": ROLE_LABELS.get(card.role, card.role),
+        "role_suggested": card.role_suggested,
+        "suggested_role": card.suggested_role,
+        "overall": card.overall,
+        "overall_change": card.overall_change,
+        "tier": "totw" if card.totw else tier(card.overall),
+        "totw": card.totw,
+        "stats": [{**s, "label": STATS.get(s["key"], s["key"])} for s in card.stats],
+        "matches": card.matches,
+        "week_matches": card.week_matches,
+        "stale": card.stale,
+    }
+
+
+class CardsView(APIView):
+    """Every player's card for a week (``?week=`` any day of it; default the latest week with
+    cards), best first. ``?role=`` and ``?team=<slug>`` narrow it down."""
+
+    permission_classes = [PublicRead]
+
+    def get(self, request):
+        from apps.results.awards import period_of
+        from apps.results.models import PlayerCard
+
+        weeks = list(PlayerCard.objects.order_by("-week").values_list("week", flat=True).distinct())
+        try:
+            week = period_of("week", date.fromisoformat(request.query_params.get("week", "")))[0]
+        except ValueError:
+            week = weeks[0] if weeks else None
+        qs = PlayerCard.objects.filter(week=week).select_related("player", "team")
+        role = request.query_params.get("role", "").upper()
+        if role:
+            qs = qs.filter(role=role)
+        team = request.query_params.get("team", "").strip()
+        if team:
+            qs = qs.filter(team__slug=team)
+        cards = sorted(qs, key=lambda c: (-c.overall, c.player.display_name.casefold()))
+        older = [w for w in weeks if week and w < week]
+        newer = [w for w in weeks if week and w > week]
+        return Response(
+            {
+                "week": week,
+                "end": week + timedelta(days=6) if week else None,
+                "previous": older[0] if older else None,
+                "next": newer[-1] if newer else None,
+                "cards": [_card(c, request) for c in cards],
+            }
+        )
+
+
+class PlayerCardView(APIView):
+    """One player's latest card (or ``?week=``'s), and their overall week by week."""
+
+    permission_classes = [PublicRead]
+
+    def get(self, request, player_id: int):
+        from apps.results.models import PlayerCard
+
+        player = get_object_or_404(Player, pk=player_id)
+        cards = list(
+            PlayerCard.objects.filter(player=player)
+            .select_related("player", "team")
+            .order_by("week")
+        )
+        if not cards:
+            return Response({"detail": "This player has no card yet."}, status=404)
+        pick = cards[-1]
+        week = request.query_params.get("week")
+        if week:
+            pick = next((c for c in cards if str(c.week) == week), pick)
+        return Response(
+            {
+                **_card(pick, request),
+                "history": [{"week": c.week, "overall": c.overall, "role": c.role} for c in cards],
+            }
+        )
+
+
+class CardAdminView(APIView):
+    """Staff: card weights per role (GET, PUT ``{"weights": {role: {stat: n}}}``) and
+    rebuilding a week's cards (POST ``{"week": "YYYY-MM-DD"}``, later weeks follow)."""
+
+    permission_classes = [IsStaff]
+
+    def get(self, request):
+        from apps.results.cards import DEFAULT_WEIGHTS, ROLE_LABELS, ROLE_STATS, STATS, weights
+
+        return Response(
+            {
+                "weights": weights(),
+                "defaults": DEFAULT_WEIGHTS,
+                "roles": [
+                    {"key": r, "label": ROLE_LABELS[r], "stats": ROLE_STATS[r]} for r in ROLE_STATS
+                ],
+                "stats": STATS,
+            }
+        )
+
+    def put(self, request):
+        from apps.results.cards import ROLE_STATS
+        from apps.results.models import CardWeights
+
+        given = request.data.get("weights")
+        if not isinstance(given, dict):
+            raise ValidationError({"weights": "Send {role: {stat: weight}}."})
+        clean = {}
+        for role, ws in given.items():
+            if role not in ROLE_STATS or not isinstance(ws, dict):
+                raise ValidationError({"weights": f"Unknown role {role}."})
+            row = {}
+            for key, value in ws.items():
+                if key not in ROLE_STATS[role]:
+                    raise ValidationError({"weights": f"{key} isn't on a {role.lower()} card."})
+                try:
+                    number = float(value)
+                except (TypeError, ValueError) as exc:
+                    raise ValidationError({"weights": f"{key} must be a number."}) from exc
+                if not 0 <= number <= 100:
+                    raise ValidationError({"weights": f"{key} must be between 0 and 100."})
+                row[key] = number
+            if not any(row.values()):
+                raise ValidationError({"weights": f"Give a {role.lower()} stat some weight."})
+            clean[role] = row
+        saved = CardWeights.objects.first() or CardWeights()
+        saved.weights = clean
+        saved.save()
+        return self.get(request)
+
+    def post(self, request):
+        from apps.results.tasks import rebuild_cards_task
+
+        try:
+            week = date.fromisoformat(str(request.data.get("week", "")))
+        except ValueError as exc:
+            raise ValidationError({"week": "Give a date: YYYY-MM-DD."}) from exc
+        rebuild_cards_task.delay(week.isoformat())
+        return Response({"queued": True, "week": week}, status=status.HTTP_202_ACCEPTED)

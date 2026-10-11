@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">
+  <!-- The picture every player without a photo gets: a plain head-and-shoulders silhouette. -->
+  <circle cx="100" cy="74" r="38" fill="#3a3f52"/>
+  <path d="M30 200c0-46 31-74 70-74s70 28 70 74z" fill="#3a3f52"/>
+</svg>

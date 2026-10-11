@@ -282,6 +282,7 @@ def awards(kind: str, day: date) -> dict:
         value, detail = _numbers(key, t.line)
         return {
             "player": players[pid].display_name if pid in players else "Unknown player",
+            "player_id": pid,
             "team": team.name if team else None,
             "team_slug": team.slug if team else None,
             "team_tag": team.tag if team else "",

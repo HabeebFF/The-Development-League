@@ -239,6 +239,20 @@ class Player(TimeStampedModel):
         help_text="The site account linked to this game UID",
     )
     country = models.CharField(max_length=2, blank=True)
+    photo = models.FileField(upload_to="players/photos/", blank=True)
+
+    class CardRole(models.TextChoices):
+        RUSHER = "RUSHER", "Rusher"
+        GRENADER = "GRENADER", "Grenader"
+        SNIPER = "SNIPER", "Sniper"
+        ALL_ROUNDER = "ALL_ROUNDER", "All-rounder"
+
+    card_role = models.CharField(
+        max_length=12,
+        choices=CardRole.choices,
+        blank=True,
+        help_text="Role on the player card; blank means the site suggests one each week",
+    )
 
     class Meta:
         ordering = ["display_name"]
