@@ -9,6 +9,7 @@ import {
   matchesReview,
   parseData,
   pct,
+  progressText,
   repeatedMistakes,
   sourceLine,
   utilityText,
@@ -68,16 +69,29 @@ describe("report facts", () => {
 
 test("head-to-head line covers never met, met without fighting, and a record", () => {
   const none = { met: [], fights: 0, won: 0, lost: 0, matches: [] };
-  assert.equal(headToHeadText(none, "Cliq"), "You haven't played in the same match as Cliq yet.");
-  assert.equal(headToHeadText({ ...none, met: [3] }, "Cliq"), "You've been in 1 match with Cliq but haven't fought them.");
   assert.equal(
-    headToHeadText({ met: [1, 2], fights: 3, won: 1, lost: 2, matches: [1, 2] }, "Cliq"),
+    headToHeadText(none, "Cliq"),
+    "You haven't played in the same match as Cliq yet.",
+  );
+  assert.equal(
+    headToHeadText({ ...none, met: [3] }, "Cliq"),
+    "You've been in 1 match with Cliq but haven't fought them.",
+  );
+  assert.equal(
+    headToHeadText(
+      { met: [1, 2], fights: 3, won: 1, lost: 2, matches: [1, 2] },
+      "Cliq",
+    ),
     "Against Cliq: won 1, lost 2 of 3 fights over 2 matches.",
   );
 });
 
 describe("knowledge review", () => {
-  const e = (status: "DRAFT" | "APPROVED" | "REJECTED", body = "x", weak_sources = false) => ({ status, body, weak_sources });
+  const e = (
+    status: "DRAFT" | "APPROVED" | "REJECTED",
+    body = "x",
+    weak_sources = false,
+  ) => ({ status, body, weak_sources });
 
   it("filters by review state", () => {
     assert.equal(matchesReview(e("DRAFT"), "DRAFT"), true);
@@ -89,8 +103,18 @@ describe("knowledge review", () => {
   });
 
   it("describes a source by publisher and date", () => {
-    assert.equal(sourceLine({ url: "https://ff.garena.com/en/article/1712/", publisher: "Garena", published: "2026-09-10" }), "Garena, 2026-09-10");
-    assert.equal(sourceLine({ url: "https://www.vandal.net/x", accessed: "2026-10-03" }), "vandal.net, no date, read 2026-10-03");
+    assert.equal(
+      sourceLine({
+        url: "https://ff.garena.com/en/article/1712/",
+        publisher: "Garena",
+        published: "2026-09-10",
+      }),
+      "Garena, 2026-09-10",
+    );
+    assert.equal(
+      sourceLine({ url: "https://www.vandal.net/x", accessed: "2026-10-03" }),
+      "vandal.net, no date, read 2026-10-03",
+    );
   });
 });
 
@@ -103,16 +127,40 @@ test("aiWritten spots reports and plans the AI writer touched", () => {
 
 describe("after-scrim review", () => {
   const moment = (kind: MomentKind, good = false): ReviewMoment => ({
-    kind, good, t: 100, clock: "1:40", watch_s: 92, title: "", detail: "", players: [], opponent: null,
+    kind,
+    good,
+    t: 100,
+    clock: "1:40",
+    watch_s: 92,
+    title: "",
+    detail: "",
+    players: [],
+    opponent: null,
   });
   const match = (id: number, ...moments: ReviewMoment[]): ReviewMatch => ({
-    id, number: id, label: `M${id}`, map: "Bermuda", placement: 5, kills: 2, downs_taken: 4,
-    eliminated_s: 900, eliminated_clock: "15:00", wiped_by: "Bravo", has_tracks: true, moments,
+    id,
+    number: id,
+    label: `M${id}`,
+    map: "Bermuda",
+    placement: 5,
+    kills: 2,
+    downs_taken: 4,
+    eliminated_s: 900,
+    eliminated_clock: "15:00",
+    wiped_by: "Bravo",
+    has_tracks: true,
+    moments,
   });
 
   it("lists only mistakes that came back in two or more matches", () => {
     const day = [
-      match(1, moment("alone"), moment("alone"), moment("zone"), moment("trade", true)),
+      match(
+        1,
+        moment("alone"),
+        moment("alone"),
+        moment("zone"),
+        moment("trade", true),
+      ),
       match(2, moment("alone"), moment("third_party")),
       match(3, moment("third_party"), moment("trade", true)),
     ];
@@ -123,9 +171,22 @@ describe("after-scrim review", () => {
   });
 
   it("says how a match ended", () => {
-    assert.equal(finishText({ placement: 1, eliminated_clock: null, wiped_by: null }), "Booyah");
-    assert.equal(finishText({ placement: 4, eliminated_clock: "15:17", wiped_by: "NOOBZ" }), "#4 · out at 15:17 to NOOBZ");
-    assert.equal(finishText({ placement: 9, eliminated_clock: null, wiped_by: null }), "#9");
+    assert.equal(
+      finishText({ placement: 1, eliminated_clock: null, wiped_by: null }),
+      "Booyah",
+    );
+    assert.equal(
+      finishText({
+        placement: 4,
+        eliminated_clock: "15:17",
+        wiped_by: "NOOBZ",
+      }),
+      "#4 · out at 15:17 to NOOBZ",
+    );
+    assert.equal(
+      finishText({ placement: 9, eliminated_clock: null, wiped_by: null }),
+      "#9",
+    );
   });
 });
 
@@ -143,4 +204,25 @@ describe("player cards", () => {
     assert.equal(utilityText({ uav: 2, scan: 5 }), "2 UAV · 5 Dinoculars");
     assert.equal(utilityText({}), "");
   });
+});
+
+test("progressText says how many matches hit the target and the score before", () => {
+  const p = {
+    target: "x",
+    unit: "matches" as const,
+    good: 3,
+    of: 4,
+    before: { good: 1, of: 4 },
+    status: "done" as const,
+    matches: [],
+  };
+  assert.equal(progressText(p), "3 of 4 matches on target · before: 1 of 4");
+  assert.equal(
+    progressText({ ...p, unit: "fights", good: 1, of: 1, before: null }),
+    "1 of 1 fight on target",
+  );
+  assert.equal(
+    progressText({ ...p, good: 0, of: 0 }),
+    "No matches this week where this applies yet",
+  );
 });

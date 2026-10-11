@@ -14,8 +14,8 @@ from apps.maps.models import Map
 from apps.results.models import MatchEvent
 from common.permissions import HasFeature, IsStaff, IsTeamMemberOrStaff
 
-from . import counter, moments, players, writer
-from .engine import load_games, team_profile
+from . import counter, moments, players, progress, writer
+from .engine import load_games, measure, team_profile
 from .models import (
     AiUsage,
     CoachReport,
@@ -135,7 +135,30 @@ class TeamReportsView(APIView):
         )
         if not request.user.is_league_staff:
             reports = reports.filter(is_published=True)
-        return Response(CoachReportSerializer(reports, many=True).data)
+        reports = list(reports)
+        data = CoachReportSerializer(reports, many=True).data
+        for row, report in zip(data, reports, strict=True):
+            row["progress"] = _week_progress(report)
+        return Response(data)
+
+
+def _week_progress(report: CoachReport) -> list[dict | None]:
+    """How the team did on each task in the matches of the report's week."""
+    end = report.week_start + timedelta(days=7)
+    ids = list(
+        Match.objects.filter(status=Match.Status.PUBLISHED, team_results__team=report.team)
+        .filter(
+            Q(started_at__date__gte=report.week_start, started_at__date__lt=end)
+            | Q(
+                started_at__isnull=True,
+                match_day__date__gte=report.week_start,
+                match_day__date__lt=end,
+            )
+        )
+        .values_list("pk", flat=True)
+    )
+    week = [measure(g, report.team_id) for g in load_games(ids)] if ids else []
+    return progress.report_progress(report.tasks, report.facts, week)
 
 
 class ReportView(generics.RetrieveUpdateAPIView):

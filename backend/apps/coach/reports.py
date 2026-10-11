@@ -149,12 +149,14 @@ def _metrics(ms: Sequence[TeamMatch]) -> dict[str, float | None]:
     }
 
 
-def changes(recent: Sequence[TeamMatch], earlier: Sequence[TeamMatch]) -> list[dict]:
-    """What changed this week against the weeks before (needs 2+ matches on each side)."""
+def changes(
+    recent: Sequence[TeamMatch], earlier: Sequence[TeamMatch], label: str = "this week"
+) -> list[dict]:
+    """What changed in ``recent`` against the weeks before (needs 2+ matches on each side)."""
     if len(recent) < 2 or len(earlier) < 2:
         return []
     now, before = _metrics(recent), _metrics(earlier)
-    side = f"this week ({len(recent)} matches) against before ({len(earlier)} matches)"
+    side = f"{label} ({len(recent)} matches) against before ({len(earlier)} matches)"
     out = []
     if now["placement"] is not None and before["placement"] is not None:
         diff = before["placement"] - now["placement"]
@@ -204,6 +206,13 @@ def build(team_id: int, week_start: date, games: Sequence[Game], names: dict[int
     result = profile(ms, names)
     recent = [m for m in ms if m.played_on and m.played_on >= week_start]
     earlier = [m for m in ms if m.played_on and m.played_on < week_start]
+    label = "this week"
+    if len(recent) < 2:
+        # Written on Monday morning, before this week's matches: compare last week instead.
+        last = week_start - timedelta(days=7)
+        recent = [m for m in earlier if m.played_on >= last]
+        earlier = [m for m in earlier if m.played_on < last]
+        label = "last week"
     return {
         "matches": [
             {"id": g.match, "label": g.label, "map": g.map, "played_on": g.played_on}
@@ -211,7 +220,7 @@ def build(team_id: int, week_start: date, games: Sequence[Game], names: dict[int
         ],
         "facts": result["facts"],
         "tasks": tasks_from(result["facts"]),
-        "changes": changes(recent, earlier),
+        "changes": changes(recent, earlier, label),
     }
 
 

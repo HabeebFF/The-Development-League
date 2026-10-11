@@ -1,6 +1,14 @@
 // The AI Coach's knowledge base (staff-edited general Free Fire knowledge).
 
-export type KnowledgeKind = "WEAPON" | "ATTACHMENT" | "CHARACTER" | "PET" | "UTILITY" | "MAP" | "ZONE" | "GENERAL";
+export type KnowledgeKind =
+  | "WEAPON"
+  | "ATTACHMENT"
+  | "CHARACTER"
+  | "PET"
+  | "UTILITY"
+  | "MAP"
+  | "ZONE"
+  | "GENERAL";
 
 export const KINDS: { key: KnowledgeKind; label: string }[] = [
   { key: "UTILITY", label: "Utility" },
@@ -38,12 +46,27 @@ export type KnowledgeEntry = {
 
 export type KnowledgeStatus = "DRAFT" | "APPROVED" | "REJECTED";
 
-export type KnowledgeSource = { title?: string; url: string; publisher?: string; published?: string | null; accessed?: string };
+export type KnowledgeSource = {
+  title?: string;
+  url: string;
+  publisher?: string;
+  published?: string | null;
+  accessed?: string;
+};
 
 /** Which entries a staff filter shows. "WRITE" = no text yet. */
-export type ReviewFilter = "ALL" | "DRAFT" | "APPROVED" | "REJECTED" | "WRITE" | "WEAK";
+export type ReviewFilter =
+  | "ALL"
+  | "DRAFT"
+  | "APPROVED"
+  | "REJECTED"
+  | "WRITE"
+  | "WEAK";
 
-export function matchesReview(e: Pick<KnowledgeEntry, "status" | "body" | "weak_sources">, f: ReviewFilter): boolean {
+export function matchesReview(
+  e: Pick<KnowledgeEntry, "status" | "body" | "weak_sources">,
+  f: ReviewFilter,
+): boolean {
   if (f === "ALL") return true;
   if (f === "WRITE") return !e.body.trim();
   if (f === "WEAK") return e.weak_sources && e.status !== "REJECTED";
@@ -53,7 +76,11 @@ export function matchesReview(e: Pick<KnowledgeEntry, "status" | "body" | "weak_
 /** "Fandom wiki, 2026-09-10" for a source line. */
 export function sourceLine(s: KnowledgeSource): string {
   const who = s.publisher || hostOf(s.url);
-  const when = s.published ? s.published : s.accessed ? `no date, read ${s.accessed}` : "no date";
+  const when = s.published
+    ? s.published
+    : s.accessed
+      ? `no date, read ${s.accessed}`
+      : "no date";
   return `${who}, ${when}`;
 }
 
@@ -65,7 +92,19 @@ function hostOf(url: string): string {
   }
 }
 
-export type WeaponClass = "" | "AR" | "SMG" | "SHOTGUN" | "SNIPER" | "MARKSMAN" | "LMG" | "PISTOL" | "MELEE" | "THROWABLE" | "EXPLOSIVE" | "OTHER";
+export type WeaponClass =
+  | ""
+  | "AR"
+  | "SMG"
+  | "SHOTGUN"
+  | "SNIPER"
+  | "MARKSMAN"
+  | "LMG"
+  | "PISTOL"
+  | "MELEE"
+  | "THROWABLE"
+  | "EXPLOSIVE"
+  | "OTHER";
 
 export const WEAPON_CLASSES: { key: WeaponClass; label: string }[] = [
   { key: "", label: "Class..." },
@@ -100,7 +139,9 @@ export function parseData(text: string): Record<string, unknown> | null {
   if (!text.trim()) return {};
   try {
     const value: unknown = JSON.parse(text);
-    return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
+    return value && typeof value === "object" && !Array.isArray(value)
+      ? (value as Record<string, unknown>)
+      : null;
   } catch {
     return null;
   }
@@ -153,7 +194,12 @@ export type AiUsage = {
   }[];
 };
 export type CoachChange = { text: string; better: boolean; matches: number[] };
-export type ReportMatch = { id: number; label: string; map: string; played_on: string | null };
+export type ReportMatch = {
+  id: number;
+  label: string;
+  map: string;
+  played_on: string | null;
+};
 
 export type CoachReport = {
   id: number;
@@ -164,11 +210,50 @@ export type CoachReport = {
   facts: Fact[];
   tasks: CoachTask[];
   changes: CoachChange[];
+  /** One entry per task: how the team did on it in that week's matches (team pages only). */
+  progress?: (TaskProgress | null)[];
   writer: string;
   is_published: boolean;
   edited_by: string | null;
   updated_at: string;
 };
+
+export type ProgressStatus =
+  | "untested"
+  | "early"
+  | "improving"
+  | "done"
+  | "problem";
+
+export type TaskProgress = {
+  target: string;
+  unit: "matches" | "fights";
+  good: number;
+  of: number;
+  before: { good: number; of: number } | null;
+  status: ProgressStatus;
+  matches: number[];
+};
+
+export const STATUS: Record<
+  ProgressStatus,
+  { label: string; tone: "ok" | "bad" | "muted" }
+> = {
+  done: { label: "Done", tone: "ok" },
+  improving: { label: "Improving", tone: "ok" },
+  problem: { label: "Still a problem", tone: "bad" },
+  early: { label: "Too early to say", tone: "muted" },
+  untested: { label: "Not played yet", tone: "muted" },
+};
+
+/** "3 of 4 matches on target · before: 1 of 4" */
+export function progressText(p: TaskProgress): string {
+  if (p.of === 0) return `No ${p.unit} this week where this applies yet`;
+  const now = `${p.good} of ${p.of} ${p.of === 1 ? p.unit.replace(/e?s$/, "") : p.unit} on target`;
+  return p.before && p.before.of > 0
+    ? `${now} · before: ${p.before.good} of ${p.before.of}`
+    : now;
+}
 
 export const TOPICS: { key: string; label: string }[] = [
   { key: "results", label: "Results" },
@@ -181,10 +266,18 @@ export const TOPICS: { key: string; label: string }[] = [
 ];
 
 /** Facts grouped by topic in reading order; overall facts before per-map ones. */
-export function factsByTopic(facts: Fact[]): { key: string; label: string; facts: Fact[] }[] {
+export function factsByTopic(
+  facts: Fact[],
+): { key: string; label: string; facts: Fact[] }[] {
   return TOPICS.map((t) => ({
     ...t,
-    facts: facts.filter((f) => f.topic === t.key).sort((a, b) => Number(!!a.map) - Number(!!b.map) || (a.map ?? "").localeCompare(b.map ?? "")),
+    facts: facts
+      .filter((f) => f.topic === t.key)
+      .sort(
+        (a, b) =>
+          Number(!!a.map) - Number(!!b.map) ||
+          (a.map ?? "").localeCompare(b.map ?? ""),
+      ),
   })).filter((g) => g.facts.length > 0);
 }
 
@@ -194,7 +287,13 @@ export function weekLabel(weekStart: string): string {
 }
 
 export type CoachPlay = CoachTask;
-export type HeadToHead = { met: number[]; fights: number; won: number; lost: number; matches: number[] };
+export type HeadToHead = {
+  met: number[];
+  fights: number;
+  won: number;
+  lost: number;
+  matches: number[];
+};
 
 export type CounterPlan = {
   team: string;
@@ -211,13 +310,21 @@ export type CounterPlan = {
 
 /** One line on how two teams have done against each other, from the asking team's side. */
 export function headToHeadText(h: HeadToHead, opponent: string): string {
-  if (h.met.length === 0) return `You haven't played in the same match as ${opponent} yet.`;
+  if (h.met.length === 0)
+    return `You haven't played in the same match as ${opponent} yet.`;
   const games = `${h.met.length} match${h.met.length === 1 ? "" : "es"}`;
-  if (h.fights === 0) return `You've been in ${games} with ${opponent} but haven't fought them.`;
+  if (h.fights === 0)
+    return `You've been in ${games} with ${opponent} but haven't fought them.`;
   return `Against ${opponent}: won ${h.won}, lost ${h.lost} of ${h.fights} fight${h.fights === 1 ? "" : "s"} over ${games}.`;
 }
 
-export type RotateRoute = { team: string; match: number; label: string; placement: number; path: number[][][] };
+export type RotateRoute = {
+  team: string;
+  match: number;
+  label: string;
+  placement: number;
+  path: number[][][];
+};
 export type RotateDrop = {
   place: string;
   x: number;
@@ -236,13 +343,27 @@ export type RotationAdvice = {
   map: string;
   name: string;
   matches: { id: number; label: string }[];
-  zone_ends: { match: number; label: string; zone: number; x: number; z: number; r: number }[];
+  zone_ends: {
+    match: number;
+    label: string;
+    zone: number;
+    x: number;
+    z: number;
+    r: number;
+  }[];
   drops: RotateDrop[];
 };
 
 // -- After-scrim review ---------------------------------------------------------------------
 
-export type MomentKind = "third_party" | "alone" | "rotating" | "untraded" | "zone" | "fight_won" | "trade";
+export type MomentKind =
+  | "third_party"
+  | "alone"
+  | "rotating"
+  | "untraded"
+  | "zone"
+  | "fight_won"
+  | "trade";
 
 export type ReviewMoment = {
   kind: MomentKind;
@@ -292,7 +413,9 @@ export const MOMENT_LABELS: Record<MomentKind, string> = {
 };
 
 /** The session's pattern: which mistakes came back in more than one match, most first. */
-export function repeatedMistakes(matches: ReviewMatch[]): { kind: MomentKind; label: string; matches: number }[] {
+export function repeatedMistakes(
+  matches: ReviewMatch[],
+): { kind: MomentKind; label: string; matches: number }[] {
   const seen = new Map<MomentKind, Set<number>>();
   for (const m of matches) {
     for (const x of m.moments) {
@@ -303,22 +426,41 @@ export function repeatedMistakes(matches: ReviewMatch[]): { kind: MomentKind; la
   }
   return [...seen.entries()]
     .filter(([, ids]) => ids.size >= 2)
-    .map(([kind, ids]) => ({ kind, label: MOMENT_LABELS[kind], matches: ids.size }))
+    .map(([kind, ids]) => ({
+      kind,
+      label: MOMENT_LABELS[kind],
+      matches: ids.size,
+    }))
     .sort((a, b) => b.matches - a.matches || a.label.localeCompare(b.label));
 }
 
 /** "Booyah", or "#4 · out at 15:17 to NOOBZ". */
-export function finishText(m: Pick<ReviewMatch, "placement" | "eliminated_clock" | "wiped_by">): string {
+export function finishText(
+  m: Pick<ReviewMatch, "placement" | "eliminated_clock" | "wiped_by">,
+): string {
   if (m.placement === 1) return "Booyah";
-  const out = m.eliminated_clock ? ` · out at ${m.eliminated_clock}${m.wiped_by ? ` to ${m.wiped_by}` : ""}` : "";
+  const out = m.eliminated_clock
+    ? ` · out at ${m.eliminated_clock}${m.wiped_by ? ` to ${m.wiped_by}` : ""}`
+    : "";
   return `#${m.placement}${out}`;
 }
 
 // -- Player cards ---------------------------------------------------------------------------
 
-export type PlayerClip = { match: number; label: string; t: number; clock: string; watch_s: number };
+export type PlayerClip = {
+  match: number;
+  label: string;
+  t: number;
+  clock: string;
+  watch_s: number;
+};
 
-export type PlayerRates = { alone: number | null; trade: number | null; far: number | null; first: number | null };
+export type PlayerRates = {
+  alone: number | null;
+  trade: number | null;
+  far: number | null;
+  first: number | null;
+};
 
 export type PlayerCard = {
   player: number | null;
@@ -358,7 +500,11 @@ export function pct(rate: number | null): string {
 }
 
 /** How a player's rate compares with the league's, when lower is better (or higher). */
-export function versus(rate: number | null, league: number | null, lowerIsBetter: boolean): "better" | "worse" | "even" | null {
+export function versus(
+  rate: number | null,
+  league: number | null,
+  lowerIsBetter: boolean,
+): "better" | "worse" | "even" | null {
   if (rate == null || league == null) return null;
   const diff = lowerIsBetter ? league - rate : rate - league;
   if (diff >= 0.1) return "better";
