@@ -1,7 +1,14 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { cardFileName, changeText, roleShort, totwText, weekLabel } from "./cards.ts";
+import {
+  cardFileName,
+  changeText,
+  monthLabel,
+  roleShort,
+  totwText,
+  weekLabel,
+} from "./cards.ts";
 
 test("changes read as arrows, nothing when flat", () => {
   assert.equal(changeText(3), "▲ 3");
@@ -14,11 +21,24 @@ test("weeks, roles and awards read plainly", () => {
   assert.equal(weekLabel("2026-10-05"), "5 – 11 Oct");
   assert.equal(weekLabel("2026-09-28"), "28 Sept – 4 Oct");
   assert.equal(roleShort("GRENADER"), "NDR");
-  assert.equal(totwText(["player", "sniper"]), "Team of the Week: Top player, Top sniper");
+  assert.equal(
+    totwText(["player", "sniper"]),
+    "Team of the Week: Top player, Top sniper",
+  );
   assert.equal(totwText([]), "");
 });
 
 test("saved cards get a tidy file name", () => {
-  assert.equal(cardFileName({ name: "ÁCE • Killer!", week: "2026-10-05" }), "tdl-card-ace-killer-2026-10-05.png");
-  assert.equal(cardFileName({ name: "★★", week: "2026-10-05" }), "tdl-card-player-2026-10-05.png");
+  assert.equal(
+    cardFileName({ name: "ÁCE • Killer!", week: "2026-10-05" }),
+    "tdl-card-ace-killer-2026-10-05.png",
+  );
+  assert.equal(
+    cardFileName({ name: "★★", week: "2026-10-05" }),
+    "tdl-card-player-2026-10-05.png",
+  );
+});
+
+test("months read in full", () => {
+  assert.equal(monthLabel("2026-10-01"), "October 2026");
 });

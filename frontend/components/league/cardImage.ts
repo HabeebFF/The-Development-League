@@ -1,7 +1,14 @@
 // Draws a player card onto a canvas, for "Save as image". The on-page card is HTML and CSS,
 // which a browser can't save as a picture by itself, so this redraws the same layout.
 
-import { BLANK_PHOTO, changeText, roleShort, TIER_COLORS, type PlayerCard } from "@/lib/cards";
+import {
+  AWARD_NAMES,
+  BLANK_PHOTO,
+  changeText,
+  roleShort,
+  TIER_COLORS,
+  type PlayerCard,
+} from "@/lib/cards";
 
 const W = 750;
 const H = 1050;
@@ -36,10 +43,17 @@ export async function cardImage(card: PlayerCard): Promise<Blob | null> {
   canvas.height = H;
   const ctx = canvas.getContext("2d");
   if (!ctx) return null;
-  const font = getComputedStyle(document.body).getPropertyValue("--font-display").trim() || "sans-serif";
-  const body = getComputedStyle(document.body).getPropertyValue("--font-body").trim() || "sans-serif";
+  const font =
+    getComputedStyle(document.body).getPropertyValue("--font-display").trim() ||
+    "sans-serif";
+  const body =
+    getComputedStyle(document.body).getPropertyValue("--font-body").trim() ||
+    "sans-serif";
   const [top, bottom, ink, line] = TIER_COLORS[card.tier];
-  const [photo, logo] = await Promise.all([load(card.photo || BLANK_PHOTO), card.team?.logo ? load(card.team.logo) : null]);
+  const [photo, logo] = await Promise.all([
+    load(card.photo || BLANK_PHOTO),
+    card.team?.logo ? load(card.team.logo) : null,
+  ]);
 
   shape(ctx);
   ctx.save();
@@ -50,9 +64,30 @@ export async function cardImage(card: PlayerCard): Promise<Blob | null> {
   ctx.fillStyle = g;
   ctx.fillRect(0, 0, W, H);
   if (card.tier === "totw") {
-    const r = ctx.createRadialGradient(W * 0.7, H * 0.25, 0, W * 0.7, H * 0.25, W * 0.7);
+    const r = ctx.createRadialGradient(
+      W * 0.7,
+      H * 0.25,
+      0,
+      W * 0.7,
+      H * 0.25,
+      W * 0.7,
+    );
     r.addColorStop(0, "rgba(255,90,31,0.45)");
     r.addColorStop(1, "rgba(255,90,31,0)");
+    ctx.fillStyle = r;
+    ctx.fillRect(0, 0, W, H);
+  }
+  if (card.tier === "totm") {
+    const r = ctx.createRadialGradient(
+      W * 0.7,
+      H * 0.25,
+      0,
+      W * 0.7,
+      H * 0.25,
+      W * 0.6,
+    );
+    r.addColorStop(0, "rgba(242,193,78,0.35)");
+    r.addColorStop(1, "rgba(242,193,78,0)");
     ctx.fillStyle = r;
     ctx.fillRect(0, 0, W, H);
   }
@@ -65,9 +100,13 @@ export async function cardImage(card: PlayerCard): Promise<Blob | null> {
 
   // Photo, fading out at the bottom.
   if (photo) {
-    const px = W * 0.42, py = 55, pw = W * 0.5, ph = 370;
+    const px = W * 0.42,
+      py = 55,
+      pw = W * 0.5,
+      ph = 370;
     const scale = Math.max(pw / photo.width, ph / photo.height);
-    const sw = pw / scale, sh = ph / scale;
+    const sw = pw / scale,
+      sh = ph / scale;
     const off = document.createElement("canvas");
     off.width = pw;
     off.height = ph;
@@ -106,7 +145,11 @@ export async function cardImage(card: PlayerCard): Promise<Blob | null> {
     ctx.fillRect(cx - 50, 305, 100, 100);
     ctx.fillStyle = "#fff";
     ctx.font = `700 40px ${font}`;
-    ctx.fillText((card.team.tag || card.team.name).slice(0, 4).toUpperCase(), cx, 370);
+    ctx.fillText(
+      (card.team.tag || card.team.name).slice(0, 4).toUpperCase(),
+      cx,
+      370,
+    );
   }
   if (card.overall_change) {
     ctx.fillStyle = card.overall_change > 0 ? "#22c55e" : "#f04444";
@@ -117,8 +160,13 @@ export async function cardImage(card: PlayerCard): Promise<Blob | null> {
   ctx.fillStyle = ink;
   ctx.font = `700 72px ${font}`;
   let name = card.name.toUpperCase();
-  while (ctx.measureText(name).width > W - 120 && name.length > 3) name = name.slice(0, -1);
-  ctx.fillText(name === card.name.toUpperCase() ? name : `${name.slice(0, -1)}…`, W / 2, 500);
+  while (ctx.measureText(name).width > W - 120 && name.length > 3)
+    name = name.slice(0, -1);
+  ctx.fillText(
+    name === card.name.toUpperCase() ? name : `${name.slice(0, -1)}…`,
+    W / 2,
+    500,
+  );
   ctx.globalAlpha = 0.35;
   ctx.fillRect(100, 525, W - 200, 3);
   ctx.globalAlpha = 1;
@@ -136,7 +184,9 @@ export async function cardImage(card: PlayerCard): Promise<Blob | null> {
     ctx.fillText(s.key, x + 105, y);
     ctx.globalAlpha = 1;
   };
-  main.forEach((s, i) => drawStat(s, i % 2 === 0 ? 105 : 395, 600 + Math.floor(i / 2) * rowH));
+  main.forEach((s, i) =>
+    drawStat(s, i % 2 === 0 ? 105 : 395, 600 + Math.floor(i / 2) * rowH),
+  );
   if (extras.length) {
     const y = 600 + Math.ceil(main.length / 2) * rowH;
     ctx.globalAlpha = 0.35;
@@ -147,7 +197,13 @@ export async function cardImage(card: PlayerCard): Promise<Blob | null> {
   ctx.textAlign = "center";
   ctx.font = `700 22px ${body}`;
   ctx.globalAlpha = 0.7;
-  ctx.fillText(card.tier === "totw" ? "TEAM OF THE WEEK" : "THE DEVELOPMENT LEAGUE", W / 2, H - 120);
+  const foot =
+    card.tier === "totm"
+      ? `TEAM OF THE MONTH · ${(AWARD_NAMES[card.totm ?? ""] ?? "").toUpperCase()}`
+      : card.tier === "totw"
+        ? "TEAM OF THE WEEK"
+        : "THE DEVELOPMENT LEAGUE";
+  ctx.fillText(foot, W / 2, H - 120);
   ctx.globalAlpha = 1;
 
   return new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
