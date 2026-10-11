@@ -8,8 +8,11 @@ import {
   headToHeadText,
   matchesReview,
   parseData,
+  pct,
   repeatedMistakes,
   sourceLine,
+  utilityText,
+  versus,
   type MomentKind,
   type ReviewMatch,
   type ReviewMoment,
@@ -123,5 +126,21 @@ describe("after-scrim review", () => {
     assert.equal(finishText({ placement: 1, eliminated_clock: null, wiped_by: null }), "Booyah");
     assert.equal(finishText({ placement: 4, eliminated_clock: "15:17", wiped_by: "NOOBZ" }), "#4 · out at 15:17 to NOOBZ");
     assert.equal(finishText({ placement: 9, eliminated_clock: null, wiped_by: null }), "#9");
+  });
+});
+
+describe("player cards", () => {
+  it("formats rates and compares them with the league", () => {
+    assert.equal(pct(0.333), "33%");
+    assert.equal(pct(null), "–");
+    assert.equal(versus(0.6, 0.2, true), "worse");
+    assert.equal(versus(0.1, 0.25, true), "better");
+    assert.equal(versus(0.3, 0.25, false), "even");
+    assert.equal(versus(null, 0.25, false), null);
+  });
+
+  it("lists the utility a player used", () => {
+    assert.equal(utilityText({ uav: 2, scan: 5 }), "2 UAV · 5 Dinoculars");
+    assert.equal(utilityText({}), "");
   });
 });
