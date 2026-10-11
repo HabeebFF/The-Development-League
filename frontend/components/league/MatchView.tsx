@@ -3,10 +3,12 @@
 import Link from "next/link";
 import { Fragment, useState } from "react";
 
+import type { KillList } from "@/lib/kills";
 import { mapName, ordinal, plural, shortDate, type MatchDetail } from "@/lib/league";
 import { clock } from "@/lib/replay";
 import { useApi } from "@/lib/useApi";
 
+import KillTable from "./KillTable";
 import Loading from "./Loading";
 import PageHeader from "./PageHeader";
 import TeamBadge from "./TeamBadge";
@@ -14,6 +16,7 @@ import TeamBadge from "./TeamBadge";
 /** One match: every team's placement, kills and points; tap a team for its players. */
 export default function MatchView({ id }: { id: number }) {
   const match = useApi<MatchDetail>(`/matches/${id}`);
+  const kills = useApi<KillList>(`/kills?match=${id}`);
   const [open, setOpen] = useState<Set<number>>(new Set());
   if (!match.data)
     return (
@@ -115,6 +118,10 @@ export default function MatchView({ id }: { id: number }) {
           </table>
         </div>
         <p className="mt-2 text-xs text-muted">Tap a team to see its players.</p>
+        <section className="mt-10">
+          <h2 className="section-title">Kill list</h2>
+          <div className="mt-4">{kills.data ? <KillTable list={kills.data} showMatches={false} /> : <Loading error={kills.error} count={6} />}</div>
+        </section>
       </div>
     </>
   );

@@ -450,6 +450,40 @@ class AwardsView(APIView):
         return Response(awards(kind, day))
 
 
+class KillsView(APIView):
+    """Kill list: every player's kills, knocks and headshot knocks, best first.
+
+    ``?match=<id>`` one match, ``?session=<match day id>`` one session (``?session=latest``
+    the newest), or ``?period=week|month&date=`` any day in it (default: the latest period).
+    """
+
+    permission_classes = [PublicRead]
+
+    def get(self, request):
+        from apps.results import killboard
+        from apps.results.awards import latest_day
+
+        params = request.query_params
+        match = _int_param(request, "match")
+        if match:
+            return Response(
+                killboard.for_match(
+                    get_object_or_404(Match, pk=match, status=Match.Status.PUBLISHED)
+                )
+            )
+        if "session" in params:
+            day = None if params["session"] == "latest" else _int_param(request, "session")
+            return Response(
+                killboard.for_session(get_object_or_404(MatchDay, pk=day) if day else None)
+            )
+        kind = "month" if params.get("period") == "month" else "week"
+        try:
+            day = date.fromisoformat(params.get("date", ""))
+        except ValueError:
+            day = latest_day() or timezone.localdate()
+        return Response(killboard.for_period(kind, day))
+
+
 # -- player cards (FUT style; see apps.results.cards) ----------------------------------------
 
 
