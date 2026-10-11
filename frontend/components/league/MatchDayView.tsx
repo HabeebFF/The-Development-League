@@ -2,17 +2,20 @@
 
 import Link from "next/link";
 
+import type { KillList } from "@/lib/kills";
 import { dayName, shortDate, type MatchDayDetail } from "@/lib/league";
 import { useApi } from "@/lib/useApi";
 
+import KillTable from "./KillTable";
 import Loading, { Skeleton } from "./Loading";
 import MatchDayCard from "./MatchDayCard";
 import PageHeader from "./PageHeader";
 import StandingsTable from "./StandingsTable";
 
-/** One match day: its table and its matches. */
+/** One match day (a session): its table, its matches and its kill list. */
 export default function MatchDayView({ id }: { id: number }) {
   const day = useApi<MatchDayDetail>(`/match-days/${id}`);
+  const kills = useApi<KillList>(`/kills?session=${id}`);
   if (!day.data)
     return (
       <div className="mx-auto max-w-6xl px-4 py-8">
@@ -44,6 +47,10 @@ export default function MatchDayView({ id }: { id: number }) {
             </div>
           </section>
         </div>
+        <section className="mt-10">
+          <h2 className="section-title">Kill list</h2>
+          <div className="mt-4">{kills.data ? <KillTable list={kills.data} /> : <Loading error={kills.error} count={6} />}</div>
+        </section>
       </div>
     </>
   );
