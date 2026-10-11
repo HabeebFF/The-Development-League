@@ -105,4 +105,6 @@ test("kills count up as the replay plays, without knocks or self-kills", () => {
   assert.deepEqual(killsAt(events, 5), {});
   assert.deepEqual(killsAt(events, 12), { 1: 1 });
   assert.deepEqual(killsAt(events, 60), { 1: 2 });
+  // A teammate's death isn't a kill.
+  assert.deepEqual(killsAt(events, 60, { 1: "a", 2: "b", 3: "a" }), { 1: 1 });
 });

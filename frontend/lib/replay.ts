@@ -209,10 +209,12 @@ export function replayHref(base: string, startAt: number, team?: string): string
 }
 
 /** Kills each player (by entity id) has made by time ``t``. Self-kills don't count. */
-export function killsAt(events: ReplayEvent[], t: number): Record<number, number> {
+export function killsAt(events: ReplayEvent[], t: number, teamOf: Record<number, string> = {}): Record<number, number> {
   const out: Record<number, number> = {};
   for (const e of events) {
     if (e.kind !== "KILL" || e.t > t || e.actor == null || e.actor === e.target) continue;
+    // Zone, fall and own-explosive deaths can be logged against a teammate: not a kill.
+    if (e.target != null && teamOf[e.actor] != null && teamOf[e.actor] === teamOf[e.target]) continue;
     out[e.actor] = (out[e.actor] ?? 0) + 1;
   }
   return out;
