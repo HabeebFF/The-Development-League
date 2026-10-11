@@ -29,9 +29,11 @@ export type PlayerCard = {
   suggested_role: Role;
   overall: number;
   overall_change: number | null;
-  tier: "gold" | "silver" | "bronze" | "totw";
+  tier: "gold" | "silver" | "bronze" | "totw" | "totm";
   /** Awards won that week: player, rusher, sniper, grenader. */
   totw: string[];
+  /** On a Team of the Month card: the award it stands for. */
+  totm?: string;
   stats: CardStat[];
   matches: number;
   week_matches: number;
@@ -46,7 +48,24 @@ export type CardWeek = {
   cards: PlayerCard[];
 };
 
-export type CardDetail = PlayerCard & { history: { week: string; overall: number; role: Role }[] };
+export type TeamOfMonth = {
+  month: string | null;
+  end: string | null;
+  /** False while the month is still being played: the winners can change. */
+  finished?: boolean;
+  previous: string | null;
+  next: string | null;
+  slots: {
+    award: string;
+    title: string;
+    detail: string;
+    card: PlayerCard | null;
+  }[];
+};
+
+export type CardDetail = PlayerCard & {
+  history: { week: string; overall: number; role: Role }[];
+};
 
 export type Role = "RUSHER" | "GRENADER" | "SNIPER" | "ALL_ROUNDER";
 
@@ -70,7 +89,7 @@ export function changeText(change: number | null | undefined): string {
   return change > 0 ? `▲ ${change}` : `▼ ${-change}`;
 }
 
-const AWARD_NAMES: Record<string, string> = {
+export const AWARD_NAMES: Record<string, string> = {
   player: "Top player",
   rusher: "Top rusher",
   sniper: "Top sniper",
@@ -79,7 +98,17 @@ const AWARD_NAMES: Record<string, string> = {
 
 /** "Team of the Week: Top player, Top sniper". */
 export function totwText(totw: string[]): string {
-  return totw.length ? `Team of the Week: ${totw.map((k) => AWARD_NAMES[k] ?? k).join(", ")}` : "";
+  return totw.length
+    ? `Team of the Week: ${totw.map((k) => AWARD_NAMES[k] ?? k).join(", ")}`
+    : "";
+}
+
+/** "October 2026" for a month starting on ``start``. */
+export function monthLabel(start: string): string {
+  return new Date(`${start}T00:00:00`).toLocaleDateString("en-GB", {
+    month: "long",
+    year: "numeric",
+  });
 }
 
 /** "5 – 11 Oct" for a week starting on Monday ``start``. */
@@ -88,7 +117,10 @@ export function weekLabel(start: string): string {
   const to = new Date(from);
   to.setDate(from.getDate() + 6);
   const sameMonth = from.getMonth() === to.getMonth();
-  const a = from.toLocaleDateString("en-GB", sameMonth ? { day: "numeric" } : { day: "numeric", month: "short" });
+  const a = from.toLocaleDateString(
+    "en-GB",
+    sameMonth ? { day: "numeric" } : { day: "numeric", month: "short" },
+  );
   return `${a} – ${to.toLocaleDateString("en-GB", { day: "numeric", month: "short" })}`;
 }
 
@@ -104,11 +136,15 @@ export function cardFileName(card: Pick<PlayerCard, "name" | "week">): string {
 }
 
 /** Colours for each tier: [top of the card, bottom, text, accent line]. */
-export const TIER_COLORS: Record<PlayerCard["tier"], [string, string, string, string]> = {
+export const TIER_COLORS: Record<
+  PlayerCard["tier"],
+  [string, string, string, string]
+> = {
   gold: ["#f6d36b", "#a8781c", "#1d1405", "#fff3c4"],
   silver: ["#e3e8ef", "#7d8796", "#11151c", "#ffffff"],
   bronze: ["#e0a46d", "#7b4520", "#1e0f05", "#ffd9b5"],
   totw: ["#1a1d29", "#07080c", "#f2f3f7", "#ff5a1f"],
+  totm: ["#24124a", "#090414", "#f7e6b4", "#f2c14e"],
 };
 
 export const TIER_LABELS: Record<PlayerCard["tier"], string> = {
@@ -116,4 +152,5 @@ export const TIER_LABELS: Record<PlayerCard["tier"], string> = {
   silver: "Silver",
   bronze: "Bronze",
   totw: "Team of the Week",
+  totm: "Team of the Month",
 };

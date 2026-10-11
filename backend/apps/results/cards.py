@@ -576,3 +576,60 @@ def weeks_with_matches() -> list[date]:
         for m in Match.objects.filter(status=Match.Status.PUBLISHED).select_related("match_day")
     }
     return sorted({period_of("week", d)[0] for d in days if d})
+
+
+# -- Team of the Month ----------------------------------------------------------------------
+
+
+def team_of_month(day: date) -> list[dict]:
+    """The month's award winners (top player, rusher, sniper, grenader), each with the card
+    they ended the month on: their latest card from a week that touches the month. A winner
+    with no card, or a hidden one, gives the slot to the next player in that award."""
+    from .awards import awards
+
+    start, end = period_of("month", day)
+    slots = []
+    for a in awards("month", start)["awards"]:
+        pick = None
+        for person in a["top"]:
+            pick = (
+                PlayerCard.objects.filter(
+                    player_id=person.get("player_id"),
+                    player__hide_card=False,
+                    week__gte=start - timedelta(days=6),
+                    week__lte=end,
+                )
+                .select_related("player", "team")
+                .order_by("-week")
+                .first()
+            )
+            if pick:
+                slots.append(
+                    {
+                        "award": a["key"],
+                        "title": a["title"],
+                        "detail": person["detail"],
+                        "card": pick,
+                    }
+                )
+                break
+        if pick is None:
+            slots.append(
+                {
+                    "award": a["key"],
+                    "title": a["title"],
+                    "detail": a.get("blocked", ""),
+                    "card": None,
+                }
+            )
+    return slots
+
+
+def months_with_cards() -> list[date]:
+    """The first day of every month that has a card in it, newest first."""
+    weeks = PlayerCard.objects.values_list("week", flat=True).distinct()
+    months = set()
+    for w in weeks:
+        months.add(w.replace(day=1))
+        months.add((w + timedelta(days=6)).replace(day=1))  # a week running into the next month
+    return sorted(months, reverse=True)

@@ -326,3 +326,24 @@ def test_hidden_players_leave_the_cards_pages(league):
     # Still counted in everyone else's comparison, and back as soon as staff undo it.
     client.patch(f"/api/v1/admin/players/{ace.pk}", {"hide_card": False}, format="json")
     assert get(f"/cards/{ace.pk}").status_code == 200
+
+
+def test_team_of_the_month(league):
+    cards.build_week(WEEK_A)
+    data = get("/cards/month").json()
+    assert data["month"] == "2026-10-01" and data["end"] == "2026-10-31"
+    slots = {s["award"]: s for s in data["slots"]}
+    assert list(slots) == ["player", "rusher", "sniper", "grenader"]
+    assert slots["sniper"]["card"]["name"] == "SNIPE"
+    assert slots["grenader"]["card"]["name"] == "NADE"
+    assert slots["rusher"]["card"]["name"] == "RUSH"
+    sniper = slots["sniper"]["card"]
+    assert (
+        sniper["tier"] == "totm" and sniper["totm"] == "sniper" and sniper["week"] == "2026-10-05"
+    )
+    # A hidden winner hands the slot to the next player in that award.
+    league.p["SNIPE"].hide_card = True
+    league.p["SNIPE"].save()
+    top = get("/cards/month?month=2026-10-20").json()["slots"][0]["card"]["name"]
+    assert top != "SNIPE"
+    assert get("/cards/month?month=2026-09-01").json()["slots"][0]["card"] is None

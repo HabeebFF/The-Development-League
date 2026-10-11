@@ -570,6 +570,50 @@ class CardsView(APIView):
         )
 
 
+class TeamOfMonthView(APIView):
+    """Team of the Month: the month's top player, rusher, sniper and grenader on their latest
+    card (``?month=`` any day of it; default the newest month with cards)."""
+
+    permission_classes = [PublicRead]
+
+    def get(self, request):
+        from apps.results.awards import period_of
+        from apps.results.cards import months_with_cards, team_of_month
+
+        months = months_with_cards()
+        try:
+            month = date.fromisoformat(request.query_params.get("month", "")).replace(day=1)
+        except ValueError:
+            month = months[0] if months else None
+        if month is None:
+            return Response({"month": None, "previous": None, "next": None, "slots": []})
+        end = period_of("month", month)[1]
+        slots = []
+        for s in team_of_month(month):
+            card = s.pop("card")
+            slots.append(
+                {
+                    **s,
+                    "card": {**_card(card, request), "tier": "totm", "totm": s["award"]}
+                    if card
+                    else None,
+                }
+            )
+        older = [m for m in months if m < month]
+        newer = [m for m in months if m > month]
+        return Response(
+            {
+                "month": month,
+                "end": end,
+                # Still being played: the winners can change until the month is over.
+                "finished": date.today() > end,
+                "previous": older[0] if older else None,
+                "next": newer[-1] if newer else None,
+                "slots": slots,
+            }
+        )
+
+
 class PlayerCardView(APIView):
     """One player's latest card (or ``?week=``'s), and their overall week by week."""
 
