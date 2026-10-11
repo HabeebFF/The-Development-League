@@ -286,7 +286,7 @@ export default function ReplayViewer({
           </button>
         </div>
         {replay.teams.map((team) => {
-          const members = players.filter((p) => p.team === team.slug);
+          const members = replay.players.filter((p) => p.team === team.slug);
           const teamKills = members.reduce((n, p) => n + (kills[p.entity_id] ?? 0), 0);
           return (
             <div key={team.slug} className="shrink-0">
