@@ -312,3 +312,17 @@ def test_staff_set_photo_and_role(league):
     resp = client.patch(f"/api/v1/admin/players/{pid}", {"photo": ""}, format="multipart")
     assert resp.status_code == 200, resp.content
     assert resp.json()["photo"] is None and get(f"/cards/{pid}").json()["photo"] is None
+
+
+def test_hidden_players_leave_the_cards_pages(league):
+    cards.build_week(WEEK_A)
+    ace = league.p["ACE"]
+    client = staff()
+    resp = client.patch(f"/api/v1/admin/players/{ace.pk}", {"hide_card": True}, format="json")
+    assert resp.status_code == 200 and resp.json()["hide_card"] is True
+    names = [c["name"] for c in get("/cards").json()["cards"]]
+    assert "ACE" not in names and "RUSH" in names
+    assert get(f"/cards/{ace.pk}").status_code == 404
+    # Still counted in everyone else's comparison, and back as soon as staff undo it.
+    client.patch(f"/api/v1/admin/players/{ace.pk}", {"hide_card": False}, format="json")
+    assert get(f"/cards/{ace.pk}").status_code == 200

@@ -503,12 +503,19 @@ class CardsView(APIView):
         from apps.results.awards import period_of
         from apps.results.models import PlayerCard
 
-        weeks = list(PlayerCard.objects.order_by("-week").values_list("week", flat=True).distinct())
+        weeks = list(
+            PlayerCard.objects.filter(player__hide_card=False)
+            .order_by("-week")
+            .values_list("week", flat=True)
+            .distinct()
+        )
         try:
             week = period_of("week", date.fromisoformat(request.query_params.get("week", "")))[0]
         except ValueError:
             week = weeks[0] if weeks else None
-        qs = PlayerCard.objects.filter(week=week).select_related("player", "team")
+        qs = PlayerCard.objects.filter(week=week, player__hide_card=False).select_related(
+            "player", "team"
+        )
         role = request.query_params.get("role", "").upper()
         if role:
             qs = qs.filter(role=role)
@@ -537,7 +544,7 @@ class PlayerCardView(APIView):
     def get(self, request, player_id: int):
         from apps.results.models import PlayerCard
 
-        player = get_object_or_404(Player, pk=player_id)
+        player = get_object_or_404(Player, pk=player_id, hide_card=False)
         cards = list(
             PlayerCard.objects.filter(player=player)
             .select_related("player", "team")
