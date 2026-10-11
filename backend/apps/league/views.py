@@ -534,7 +534,7 @@ class CardsView(APIView):
     permission_classes = [PublicRead]
 
     def get(self, request):
-        from apps.results.awards import period_of
+        from apps.results.cards import card_week
         from apps.results.models import PlayerCard
 
         weeks = list(
@@ -544,7 +544,7 @@ class CardsView(APIView):
             .distinct()
         )
         try:
-            week = period_of("week", date.fromisoformat(request.query_params.get("week", "")))[0]
+            week = card_week(date.fromisoformat(request.query_params.get("week", "")))
         except ValueError:
             week = weeks[0] if weeks else None
         qs = PlayerCard.objects.filter(week=week, player__hide_card=False).select_related(

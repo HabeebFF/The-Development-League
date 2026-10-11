@@ -257,8 +257,9 @@ def _numbers(key: str, ln: Line) -> tuple[int, str]:
     return ln.throwable_kills, f"{ln.throwable_kills} explosive kills"
 
 
-def awards(kind: str, day: date) -> dict:
-    start, end = period_of(kind, day)
+def awards(kind: str, day: date, between: tuple[date, date] | None = None) -> dict:
+    """``between`` overrides the period (the player cards' Saturday to Friday week)."""
+    start, end = between or period_of(kind, day)
     matches = matches_between(start, end)
     classes = _weapon_classes()
     version = hashlib.md5(json.dumps(sorted(classes.items())).encode()).hexdigest()[:10]
