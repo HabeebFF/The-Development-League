@@ -435,3 +435,117 @@ def test_cutout_failure_keeps_the_uploaded_photo(
     assert ace.photo and not ace.photo_cutout
     cards.build_week(WEEK_A)
     assert get(f"/cards/{pid}").json()["photo"].endswith("a.png")
+
+
+# -- Rising Stars and Icons -----------------------------------------------------------------
+
+
+def make_card(p: Player, week: dt.date, overall: int, stale=False, week_matches=6) -> PlayerCard:
+    return PlayerCard.objects.create(
+        player=p, week=week, role="RUSHER", overall=overall, stats=[], matches=12,
+        week_matches=week_matches, stale=stale, rules=cards.RULES,
+    )  # fmt: skip
+
+
+def weeks(n: int) -> list[dt.date]:
+    return [WEEK_A + dt.timedelta(weeks=i) for i in range(n)]
+
+
+def test_rising_stars_are_the_three_biggest_jumps_over_the_bar():
+    w0, w1 = weeks(2)
+    jumps = {"A": 12, "B": 10, "C": 15, "D": 11, "E": 9}
+    for i, (name, jump) in enumerate(jumps.items()):
+        p = player(100 + i, name)
+        make_card(p, w0, 60)
+        make_card(p, w1, 60 + jump)
+    cards.mark_specials(w1)
+    stars = PlayerCard.objects.filter(week=w1, special=cards.RISING_STAR).order_by("-rise")
+    assert [(c.player.display_name, c.rise) for c in stars] == [("C", 15), ("A", 12), ("D", 11)]
+    assert PlayerCard.objects.get(player__display_name="B", week=w1).rise is None
+
+
+def test_only_real_cards_rise():
+    w0, w1 = weeks(2)
+    cases = {
+        "STALEBEFORE": dict(before_stale=True),
+        "STALENOW": dict(now_stale=True),
+        "FEWMATCHES": dict(week_matches=3),
+        "HIDDEN": dict(hidden=True),
+        "FIRSTCARD": dict(first=True),
+    }
+    for i, (name, c) in enumerate(cases.items()):
+        p = player(200 + i, name)
+        p.hide_card = c.get("hidden", False)
+        p.save()
+        if not c.get("first"):
+            make_card(p, w0, 60, stale=c.get("before_stale", False))
+        make_card(p, w1, 80, stale=c.get("now_stale", False), week_matches=c.get("week_matches", 6))
+    cards.mark_specials(w1)
+    assert not PlayerCard.objects.filter(special=cards.RISING_STAR).exists()
+
+
+def test_icons_need_four_back_to_back_weeks_at_95():
+    ws = weeks(6)
+    keep, gap, dip = player(301, "KEEP"), player(302, "GAP"), player(303, "DIP")
+    for w in ws[:5]:
+        make_card(keep, w, 96)
+    for w in ws[:2] + ws[3:6]:  # missed the third week
+        make_card(gap, w, 97)
+    for w, ovr in zip(ws[:5], [96, 96, 96, 94, 96], strict=True):
+        make_card(dip, w, ovr)
+    for w in ws:
+        cards.mark_specials(w)
+    keep_cards = PlayerCard.objects.filter(player=keep).order_by("week")
+    assert [c.streak for c in keep_cards] == [1, 2, 3, 4, 5]
+    assert [c.special for c in keep_cards] == ["", "", "", "icon", "icon"]
+    assert not PlayerCard.objects.filter(player__in=[gap, dip], special=cards.ICON).exists()
+    hall = cards.icon_hall()
+    assert [(r["player"], r["weeks"], r["from"], r["current"]) for r in hall] == [
+        (keep, 2, ws[3], False)  # the newest week (ws[5]) has GAP's card, not KEEP's
+    ]
+
+
+def test_staff_change_the_bars_and_every_week_is_marked_again():
+    w0, w1 = weeks(2)
+    p = player(400, "UP")
+    make_card(p, w0, 60)
+    make_card(p, w1, 68)
+    cards.mark_specials(w1)
+    assert PlayerCard.objects.get(week=w1).special == ""
+    client = staff()
+    bad = client.put("/api/v1/admin/cards", {"specials": {"rising_min": 0}}, format="json")
+    assert bad.status_code == 400
+    resp = client.put(
+        "/api/v1/admin/cards", {"specials": {"rising_min": 8, "icon_min": 90}}, format="json"
+    )
+    assert resp.status_code == 200, resp.content
+    assert resp.json()["specials"] == {"rising_min": 8, "icon_min": 90, "icon_weeks": 4}
+    up = PlayerCard.objects.get(week=w1)
+    assert (up.special, up.rise) == ("rising_star", 8)
+
+
+def test_specials_api(league):
+    league.match(WEEK_B)
+    cards.build_week(WEEK_A)
+    cards.build_week(WEEK_B)
+    data = get("/cards/specials?week=2026-09-27").json()
+    assert data["week"] == "2026-09-26" and data["next"] == "2026-10-03"
+    assert data["newest"] is False
+    slots = {s["award"]: s for s in data["team_of_week"]}
+    assert list(slots) == ["player", "rusher", "sniper", "grenader"]
+    assert slots["sniper"]["card"]["name"] == "SNIPE" and slots["sniper"]["card"]["tier"] == "totw"
+    assert "sniper kills" in slots["sniper"]["detail"]
+
+    rush = card(league, "RUSH", WEEK_B)
+    rush.special, rush.rise = cards.RISING_STAR, 11
+    rush.save()
+    latest = get("/cards/specials").json()
+    assert latest["newest"] is True
+    assert [(c["name"], c["rise"], c["tier"]) for c in latest["rising"]] == [("RUSH", 11, "totw")]
+    ace = card(league, "ACE", WEEK_B)
+    ace.special, ace.streak = cards.ICON, 4
+    ace.save()
+    latest = get("/cards/specials").json()
+    assert latest["icons"][0]["tier"] == "icon" and latest["hall"][0]["current"] is True
+    assert latest["bars"] == {"rising_min": 10, "icon_min": 95, "icon_weeks": 4}
+    assert get("/cards/month").json()["newest"] is True

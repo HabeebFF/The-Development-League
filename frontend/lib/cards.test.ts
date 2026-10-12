@@ -3,13 +3,16 @@ import { test } from "node:test";
 
 import {
   cardFileName,
+  cardFooter,
   changeText,
   countdown,
   nextRelease,
   monthLabel,
   roleShort,
+  runLabel,
   totwText,
   weekLabel,
+  type PlayerCard,
 } from "./cards.ts";
 
 test("changes read as arrows, nothing when flat", () => {
@@ -62,4 +65,22 @@ test("next cards come out Saturday 10:00 UTC", () => {
     m: 0,
     s: 0,
   });
+});
+
+test("an Icon run reads from its first Saturday to its last Friday", () => {
+  assert.equal(runLabel("2026-10-03", "2026-10-31"), "3 Oct to 6 Nov");
+});
+
+test("card footers name the special cards", () => {
+  const base = {
+    tier: "gold",
+    stale: false,
+    totw: [],
+  } as unknown as PlayerCard;
+  assert.equal(
+    cardFooter({ ...base, tier: "rising", rise: 12 }),
+    "Rising star · +12",
+  );
+  assert.equal(cardFooter({ ...base, tier: "icon" }), "Icon");
+  assert.equal(cardFooter(base), "TDL");
 });

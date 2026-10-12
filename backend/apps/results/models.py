@@ -216,6 +216,15 @@ class PlayerCard(models.Model):
         default=False, help_text="Too few matches: last week's numbers carried over"
     )
     totw = models.JSONField(default=list, blank=True, help_text="Awards won this week")
+    special = models.CharField(
+        max_length=12, blank=True, help_text="rising_star or icon (see cards.mark_specials)"
+    )
+    rise = models.SmallIntegerField(
+        null=True, blank=True, help_text="A Rising Star's jump in overall since their last card"
+    )
+    streak = models.PositiveSmallIntegerField(
+        default=0, help_text="Back-to-back weeks at the Icon rating, this one included"
+    )
     rules = models.CharField(max_length=20)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -234,6 +243,13 @@ class CardWeights(models.Model):
     """Staff's weights for each role's overall rating (one row; empty uses the defaults)."""
 
     weights = models.JSONField(default=dict, blank=True, help_text="{role: {stat: weight}}")
+    rising_min = models.PositiveSmallIntegerField(
+        default=10, help_text="Rise in overall since the last card that makes a Rising Star"
+    )
+    icon_min = models.PositiveSmallIntegerField(default=95, help_text="Overall an Icon keeps")
+    icon_weeks = models.PositiveSmallIntegerField(
+        default=4, help_text="Back-to-back weeks at icon_min that make an Icon"
+    )
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:

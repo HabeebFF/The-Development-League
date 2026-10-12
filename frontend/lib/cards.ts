@@ -29,9 +29,15 @@ export type PlayerCard = {
   suggested_role: Role;
   overall: number;
   overall_change: number | null;
-  tier: "gold" | "silver" | "bronze" | "totw" | "totm";
+  tier: "gold" | "silver" | "bronze" | "totw" | "totm" | "rising" | "icon";
   /** Awards won that week: player, rusher, sniper, grenader. */
   totw: string[];
+  /** A Rising Star (a big jump in overall) or an Icon (95+ weeks in a row). */
+  special?: "" | "rising_star" | "icon";
+  /** A Rising Star's jump since their last card. */
+  rise?: number | null;
+  /** Back-to-back weeks at the Icon rating, this one included. */
+  streak?: number;
   /** On a Team of the Month card: the award it stands for. */
   totm?: string;
   stats: CardStat[];
@@ -53,14 +59,46 @@ export type TeamOfMonth = {
   end: string | null;
   /** False while the month is still being played: the winners can change. */
   finished?: boolean;
+  /** The newest month: its cards start face down. */
+  newest?: boolean;
   previous: string | null;
   next: string | null;
-  slots: {
-    award: string;
-    title: string;
-    detail: string;
-    card: PlayerCard | null;
-  }[];
+  slots: AwardSlot[];
+};
+
+export type AwardSlot = {
+  award: string;
+  title: string;
+  detail: string;
+  card: PlayerCard | null;
+};
+
+export type IconRun = {
+  player_id: number;
+  name: string;
+  photo: string | null;
+  from: string;
+  to: string;
+  weeks: number;
+  best: number;
+  /** Still an Icon on the newest cards. */
+  current: boolean;
+};
+
+/** A week's special cards: Team of the Week, Rising Stars and Icons. */
+export type CardSpecials = {
+  week: string | null;
+  end: string | null;
+  previous: string | null;
+  next: string | null;
+  /** The newest week: its Team of the Week starts face down. */
+  newest: boolean;
+  team_of_week: AwardSlot[];
+  rising: PlayerCard[];
+  icons: PlayerCard[];
+  hall: IconRun[];
+  /** What it takes (staff can change these). */
+  bars: { rising_min: number; icon_min: number; icon_weeks: number };
 };
 
 export type CardDetail = PlayerCard & {
@@ -124,6 +162,15 @@ export function weekLabel(start: string): string {
   return `${a} – ${to.toLocaleDateString("en-GB", { day: "numeric", month: "short" })}`;
 }
 
+/** "26 Sep to 9 Oct" for card weeks ``from`` to ``to`` (both Saturdays), Friday included. */
+export function runLabel(from: string, to: string): string {
+  const end = new Date(`${to}T00:00:00`);
+  end.setDate(end.getDate() + 6);
+  const short = (d: Date) =>
+    d.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+  return `${short(new Date(`${from}T00:00:00`))} to ${short(end)}`;
+}
+
 /** A file name for a saved card: "tdl-card-ace-2026-10-05.png". */
 export function cardFileName(card: Pick<PlayerCard, "name" | "week">): string {
   const slug = card.name
@@ -145,6 +192,8 @@ export const TIER_COLORS: Record<
   bronze: ["#e0a46d", "#7b4520", "#1e0f05", "#ffd9b5"],
   totw: ["#1a1d29", "#07080c", "#f2f3f7", "#ff5a1f"],
   totm: ["#24124a", "#090414", "#f7e6b4", "#f2c14e"],
+  rising: ["#0f6b5f", "#04201f", "#e9fff8", "#3ee6b0"],
+  icon: ["#fbf8ee", "#cdb67a", "#241a04", "#a8811f"],
 };
 
 export const TIER_LABELS: Record<PlayerCard["tier"], string> = {
@@ -153,7 +202,57 @@ export const TIER_LABELS: Record<PlayerCard["tier"], string> = {
   bronze: "Bronze",
   totw: "Team of the Week",
   totm: "Team of the Month",
+  rising: "Rising Star",
+  icon: "Icon",
 };
+
+/** The small line at the foot of a card. */
+export function cardFooter(card: PlayerCard): string {
+  if (card.tier === "totm")
+    return `TOTM · ${AWARD_NAMES[card.totm ?? ""] ?? "Team of the month"}`;
+  if (card.tier === "totw") return "Team of the week";
+  if (card.tier === "icon") return "Icon";
+  if (card.tier === "rising")
+    return card.rise ? `Rising star · +${card.rise}` : "Rising star";
+  return card.stale ? "Not enough matches" : "TDL";
+}
+
+// Face-down cards: which ones this browser has already turned over.
+const FLIPPED_KEY = "tdl-flipped-cards";
+
+/** The id a face-down card is remembered by: a new winner starts face down again. */
+export function flipId(
+  kind: "totw" | "totm",
+  period: string,
+  award: string,
+  playerId: number,
+): string {
+  return `${kind}:${period}:${award}:${playerId}`;
+}
+
+export function readFlipped(): Set<string> {
+  try {
+    const raw = window.localStorage.getItem(FLIPPED_KEY);
+    const ids = raw ? JSON.parse(raw) : [];
+    return new Set(
+      Array.isArray(ids) ? ids.filter((x) => typeof x === "string") : [],
+    );
+  } catch {
+    return new Set();
+  }
+}
+
+export function saveFlipped(ids: Set<string>): void {
+  try {
+    // Only the newest few hundred: old weeks show face up anyway.
+    window.localStorage.setItem(
+      FLIPPED_KEY,
+      JSON.stringify([...ids].slice(-300)),
+    );
+  } catch {
+    // Private windows and blocked storage: the cards just start face down next time.
+  }
+}
 
 /** Cards come out every Saturday at 11:00 in Lagos, which is 10:00 UTC. */
 export const RELEASE_UTC = { weekday: 6, hour: 10 };

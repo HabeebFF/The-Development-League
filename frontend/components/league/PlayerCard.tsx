@@ -1,6 +1,6 @@
 import {
-  AWARD_NAMES,
   BLANK_PHOTO,
+  cardFooter,
   changeText,
   roleShort,
   TIER_COLORS,
@@ -25,6 +25,8 @@ export default function PlayerCard({
   const extras = card.stats.filter((s) => s.extra);
   const totw = card.tier === "totw";
   const totm = card.tier === "totm";
+  const rising = card.tier === "rising";
+  const icon = card.tier === "icon";
   return (
     <div
       className="relative aspect-[5/7] w-[15em] select-none"
@@ -35,7 +37,11 @@ export default function PlayerCard({
           ? "drop-shadow(0 0 0.9em rgb(255 90 31 / 0.55))"
           : totm
             ? "drop-shadow(0 0 0.9em rgb(242 193 78 / 0.5))"
-            : undefined,
+            : rising
+              ? "drop-shadow(0 0 0.9em rgb(62 230 176 / 0.5))"
+              : icon
+                ? "drop-shadow(0 0 1em rgb(255 244 205 / 0.6))"
+                : undefined,
       }}
     >
       <div
@@ -54,6 +60,12 @@ export default function PlayerCard({
         )}
         {totw && (
           <span className="absolute inset-0 bg-[radial-gradient(circle_at_70%_25%,rgb(255_90_31/0.45),transparent_60%)]" />
+        )}
+        {rising && (
+          <span className="absolute inset-0 bg-[radial-gradient(circle_at_70%_25%,rgb(62_230_176/0.4),transparent_60%),linear-gradient(0deg,rgb(62_230_176/0.18),transparent_40%)]" />
+        )}
+        {icon && (
+          <span className="absolute inset-0 bg-[radial-gradient(circle_at_70%_25%,rgb(255_255_255/0.8),transparent_55%),radial-gradient(circle_at_20%_90%,rgb(168_129_31/0.35),transparent_60%)]" />
         )}
         <span
           className="absolute inset-[0.35em]"
@@ -99,7 +111,7 @@ export default function PlayerCard({
             <span
               className={`mt-[0.4em] text-[0.7em] font-bold ${card.overall_change > 0 ? "text-ok" : "text-bad"}`}
               style={
-                totw || totm
+                totw || totm || rising
                   ? undefined
                   : { textShadow: "0 0 2px rgb(0 0 0 / 0.35)" }
               }
@@ -155,13 +167,7 @@ export default function PlayerCard({
         )}
         <div className="absolute inset-x-0 bottom-[1.3em]">
           <p className="text-center text-[0.5em] font-bold tracking-[0.25em] uppercase opacity-70">
-            {totm
-              ? `TOTM · ${AWARD_NAMES[card.totm ?? ""] ?? "Team of the month"}`
-              : totw
-                ? "Team of the week"
-                : card.stale
-                  ? "Not enough matches"
-                  : "TDL"}
+            {cardFooter(card)}
           </p>
         </div>
       </div>
