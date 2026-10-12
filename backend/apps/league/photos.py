@@ -36,36 +36,70 @@ def remove_background(img: Image.Image) -> Image.Image:
     return remove(img, session=_session)
 
 
+def _runs(px, y: int, left: int, right: int) -> list[tuple[int, int]]:
+    """The solid stretches of one row of the mask, as (first x, last x)."""
+    runs, start = [], None
+    for x in range(left, right + 1):
+        on = x < right and px[x, y]
+        if on and start is None:
+            start = x
+        elif not on and start is not None:
+            runs.append((start, x - 1))
+            start = None
+    return runs
+
+
+def _head(alpha: Image.Image, box: tuple[int, int, int, int]) -> tuple[int, float]:
+    """Where the head is: (its height from the top of the hair to the neck, its centre x).
+
+    Walks down from the top of the hair following the head's own stretch of each row, so an
+    arm beside the head (a salute, pointing at the temple) is left out; a hand touching the
+    head only widens a few rows, which a running median smooths away. The head widens, then
+    narrows to the neck, then the shoulders spread out: the neck is the narrowest row between.
+    """
+    left, top, right, bottom = box
+    px = alpha.load()
+    rows, mids = [], []
+    for y in range(top, top + int((bottom - top) * 0.6), 4):
+        runs = _runs(px, y, left, right)
+        if not runs:
+            continue
+        if not mids:
+            run = max(runs, key=lambda r: r[1] - r[0])
+        else:
+            cx = sorted(mids)[len(mids) // 2]
+            run = min(runs, key=lambda r: max(r[0] - cx, cx - r[1], 0))
+        rows.append((y, run[1] - run[0]))
+        mids.append((run[0] + run[1]) / 2)
+    widths = [w for _, w in rows]
+    smooth = [sorted(widths[max(0, i - 2) : i + 3])[len(widths[max(0, i - 2) : i + 3]) // 2]
+              for i in range(len(widths))]  # fmt: skip
+
+    peak, neck = 0, None
+    for i, w in enumerate(smooth):
+        if neck is None:
+            peak = max(peak, w)
+            if w < 0.85 * peak:
+                neck = i
+        elif w > 1.5 * smooth[neck]:
+            break  # the shoulders
+        elif w < smooth[neck]:
+            neck = i
+    head = mids[: neck or len(mids)]
+    cx = sorted(head)[len(head) // 2] if head else (left + right) / 2
+    # No neck found (a close-up): a head is about 1.3 times as tall as it is wide.
+    head_h = rows[neck][0] - top if neck else int(1.3 * peak)
+    return max(head_h, int((bottom - top) * 0.1)), cx
+
+
 def frame(cut: Image.Image) -> Image.Image:
     """Crop a cut-out (RGBA, transparent background) to head and shoulders."""
     alpha = cut.getchannel("A").point(lambda a: 255 if a > 128 else 0)
     box = alpha.getbbox()
     if not box:
         return cut.resize((OUT_W, OUT_H))
-    left, top, right, bottom = box
-    # Walk down from the top of the hair: the head gets wider, then narrows to the neck, then
-    # the shoulders spread out. The neck is the narrowest row before the shoulders.
-    px = alpha.load()
-    widths, centres = [], []
-    for y in range(top, top + int((bottom - top) * 0.6), 4):
-        xs = [x for x in range(left, right, 2) if px[x, y]]
-        widths.append(xs[-1] - xs[0] if xs else 0)
-        centres.append((xs[0] + xs[-1]) / 2 if xs else (left + right) / 2)
-    head_w, neck = 0, None
-    for i, w in enumerate(widths):
-        if neck is None or w > 1.1 * head_w:
-            if neck is not None:
-                break
-            head_w = max(head_w, w)
-            if head_w and w < 0.85 * head_w:
-                neck = i
-        elif w < widths[neck]:
-            neck = i
-    # No neck found (a close-up): a head is about 1.3 times as tall as it is wide.
-    head_h = neck * 4 if neck else int(1.3 * head_w)
-    head_h = max(head_h, int((bottom - top) * 0.1))
-    top_rows = centres[: max(1, head_h // 4)]
-    cx = sum(top_rows) / len(top_rows)
+    top = box[1]
+    head_h, cx = _head(alpha, box)
 
     h = head_h / HEAD_SHARE
     w = h * OUT_W / OUT_H
