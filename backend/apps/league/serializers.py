@@ -196,17 +196,31 @@ class PlayerAdminSerializer(serializers.ModelSerializer):
             "country",
             "user",
             "photo",
+            "photo_cutout",
             "card_role",
             "hide_card",
         ]
-        read_only_fields = ["current_name_raw"]
+        read_only_fields = ["current_name_raw", "photo_cutout"]
 
     def update(self, instance, validated_data):
         # DRF skips an empty file field; an empty "photo" here means take the photo off.
-        if self.initial_data.get("photo") == "" and "photo" not in validated_data:
+        removed = self.initial_data.get("photo") == "" and "photo" not in validated_data
+        if removed:
             instance.photo.delete(save=False)
             validated_data["photo"] = ""
-        return super().update(instance, validated_data)
+        new_photo = removed or bool(validated_data.get("photo"))
+        if new_photo:
+            # The old cut-out goes; a new photo gets its own, made in the background.
+            instance.photo_cutout.delete(save=False)
+            validated_data["photo_cutout"] = ""
+        player = super().update(instance, validated_data)
+        if new_photo and player.photo:
+            from django.db import transaction
+
+            from .tasks import photo_cutout_task
+
+            transaction.on_commit(lambda: photo_cutout_task.delay(player.pk))
+        return player
 
     def validate_photo(self, value):
         """A JPEG, PNG or WebP picture of at most 5 MB (or empty, to remove it)."""

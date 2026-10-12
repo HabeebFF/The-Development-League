@@ -240,6 +240,8 @@ class Player(TimeStampedModel):
     )
     country = models.CharField(max_length=2, blank=True)
     photo = models.FileField(upload_to="players/photos/", blank=True)
+    # The photo with its background removed and framed for the card (built by a task).
+    photo_cutout = models.FileField(upload_to="players/photos/cutouts/", blank=True)
 
     class CardRole(models.TextChoices):
         RUSHER = "RUSHER", "Rusher"

@@ -18,6 +18,8 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=8", "pytest-django>=4.9", "ruff>=0.6"]
+# Cutting the background out of player photos (big: onnxruntime, scipy, scikit-image).
+photos = ["rembg[cpu]==2.0.85"]
 
 [build-system]
 requires = ["setuptools>=68"]
