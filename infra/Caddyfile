@@ -12,8 +12,8 @@
 		file_server
 	}
 
-	# Only map images and team logos are public; uploaded match logs stay private.
-	@public_media path /media/maps/* /media/teams/*
+	# Only map images, team logos and player photos are public; match logs stay private.
+	@public_media path /media/maps/* /media/teams/* /media/players/photos/*
 	handle @public_media {
 		root * /srv
 		file_server
