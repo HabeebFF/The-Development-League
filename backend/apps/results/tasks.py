@@ -8,7 +8,14 @@ from .standings import rebuild_season
 @shared_task
 def rebuild_standings_task(season_id: int) -> int:
     season = Season.objects.filter(pk=season_id).first()
-    return rebuild_season(season) if season else 0
+    if not season:
+        return 0
+    rows = rebuild_season(season)
+    # Protection Points tasks on those days are checked against the new results too.
+    from apps.protection.rules import refresh_season
+
+    refresh_season(season)
+    return rows
 
 
 @shared_task

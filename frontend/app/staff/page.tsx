@@ -11,6 +11,7 @@ export default function StaffHome() {
     { href: "/staff/matches", title: "Plot rotations", text: "Check each team's auto route, fix it and confirm." },
     { href: "/staff/teams", title: "Teams", text: "Name teams, add logos, merge spellings of the same team and invite managers." },
     { href: "/staff/seasons", title: "Seasons", text: "Set up the season and its stages, and move match days into it." },
+    { href: "/staff/pp", title: "Protection Points", text: "Each day's tasks, starting PP and adjustments. Teams' PP is worked out from the logs." },
     { href: "/staff/cards", title: "Player cards", text: "Player photos, card roles and how the weekly ratings are weighted." },
     { href: "/staff/analytics", title: "Analytics", text: "Who is visiting the website: visitors, top pages, where they came from and their devices." },
     { href: "/staff/coach", title: "Coach", text: "Weekly team reports, and what the coach knows: utility, weapons, the zone and named drop spots." },
