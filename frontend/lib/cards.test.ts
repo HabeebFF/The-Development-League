@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import {
+  asSpecial,
   cardFileName,
   cardFooter,
   changeText,
@@ -83,4 +84,21 @@ test("card footers name the special cards", () => {
   );
   assert.equal(cardFooter({ ...base, tier: "icon" }), "Icon");
   assert.equal(cardFooter(base), "TDL");
+});
+
+test("special versions show only when opened from their own tab", () => {
+  const plain = {
+    tier: "gold",
+    totw: ["rusher"],
+    special: "rising_star",
+    rise: 12,
+  } as unknown as PlayerCard;
+  assert.equal(asSpecial(plain).tier, "gold");
+  assert.equal(asSpecial(plain, "totw").tier, "totw");
+  assert.equal(asSpecial(plain, "rising").tier, "rising");
+  assert.equal(asSpecial(plain, "icon").tier, "gold"); // not an Icon
+  const month = asSpecial(plain, "totm", "sniper");
+  assert.equal(month.tier, "totm");
+  assert.equal(month.totm, "sniper");
+  assert.equal(asSpecial(plain, "totm", "nonsense").tier, "gold");
 });

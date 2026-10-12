@@ -491,18 +491,10 @@ def _media(f) -> str | None:
     return f.url if f else None
 
 
-def _card_tier(card) -> str:
-    from apps.results.cards import ICON, RISING_STAR, tier
-
-    if card.special == ICON:
-        return "icon"
-    if card.totw:
-        return "totw"
-    return "rising" if card.special == RISING_STAR else tier(card.overall)
-
-
 def _card(card, request) -> dict:
-    from apps.results.cards import ROLE_LABELS, STATS
+    """A card in its plain gold, silver or bronze. The special versions (Team of the Week and
+    Month, Rising Star, Icon) only show on their own tabs, which set ``tier`` themselves."""
+    from apps.results.cards import ROLE_LABELS, STATS, tier
 
     team, player = card.team, card.player
     return {
@@ -530,7 +522,7 @@ def _card(card, request) -> dict:
         "suggested_role": card.suggested_role,
         "overall": card.overall,
         "overall_change": card.overall_change,
-        "tier": _card_tier(card),
+        "tier": tier(card.overall),
         "totw": card.totw,
         "special": card.special,
         "rise": card.rise,
@@ -650,8 +642,8 @@ class CardSpecialsView(APIView):
                 # The newest cards start face down on the site.
                 "newest": not newer,
                 "team_of_week": team,
-                "rising": [_card(c, request) for c in rising],
-                "icons": [_card(c, request) for c in icons],
+                "rising": [{**_card(c, request), "tier": "rising"} for c in rising],
+                "icons": [{**_card(c, request), "tier": "icon"} for c in icons],
                 "hall": hall,
                 # What it takes: staff can change these.
                 "bars": thresholds(),

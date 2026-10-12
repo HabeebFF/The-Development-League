@@ -206,6 +206,23 @@ export const TIER_LABELS: Record<PlayerCard["tier"], string> = {
   icon: "Icon",
 };
 
+/** The special version a card was opened from (``?as=`` on its page), if it really is one:
+ * cards show plain everywhere else, so the specials stay a surprise on their own tabs. */
+export function asSpecial<T extends PlayerCard>(
+  card: T,
+  as?: string,
+  award?: string,
+): T {
+  if (as === "totw" && card.totw.length) return { ...card, tier: "totw" };
+  if (as === "totm" && award && award in AWARD_NAMES)
+    return { ...card, tier: "totm", totm: award };
+  if (as === "rising" && card.special === "rising_star")
+    return { ...card, tier: "rising" };
+  if (as === "icon" && card.special === "icon")
+    return { ...card, tier: "icon" };
+  return card;
+}
+
 /** The small line at the foot of a card. */
 export function cardFooter(card: PlayerCard): string {
   if (card.tier === "totm")

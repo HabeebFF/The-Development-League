@@ -84,7 +84,7 @@ export default function AwardSlots({
           const id = ids[i];
           const face = s.card && (
             <Link
-              href={`/cards/${s.card.player_id}?week=${s.card.week}`}
+              href={`/cards/${s.card.player_id}?week=${s.card.week}&as=${kind}&award=${s.award}`}
               className="block transition duration-200 hover:-translate-y-1"
               aria-label={`${s.title}: ${s.card.name}, ${s.card.overall}`}
             >

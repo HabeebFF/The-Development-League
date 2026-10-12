@@ -127,7 +127,7 @@ function CardRow({
       {cards.map((c) => (
         <div key={c.player_id} className="flex flex-col items-center gap-2">
           <Link
-            href={`/cards/${c.player_id}?week=${c.week}`}
+            href={`/cards/${c.player_id}?week=${c.week}&as=${c.tier}`}
             className="transition duration-200 hover:-translate-y-1"
             aria-label={`${c.name}, ${c.overall}`}
           >
