@@ -3,6 +3,7 @@ import { Barlow_Condensed, Inter } from "next/font/google";
 import Link from "next/link";
 
 import { AuthGate, AuthProvider } from "@/components/Auth";
+import PageTracker from "@/components/PageTracker";
 import SiteNav from "@/components/SiteNav";
 
 import "./globals.css";
@@ -22,6 +23,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     <html lang="en" className={`${body.variable} ${display.variable} h-full antialiased`}>
       <body className="flex min-h-full flex-col pb-[var(--bottom-nav-h)] font-sans">
         <AuthProvider>
+          <PageTracker />
           <SiteNav />
           <main className="flex-1">
             <AuthGate>{children}</AuthGate>

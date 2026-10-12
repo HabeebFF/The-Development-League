@@ -20,7 +20,12 @@ PASSWORD = "a-Long-password-42"
 def _no_throttle(settings):
     settings.REST_FRAMEWORK = {
         **settings.REST_FRAMEWORK,
-        "DEFAULT_THROTTLE_RATES": {"login": None, "password_reset": None, "invite_accept": None},
+        "DEFAULT_THROTTLE_RATES": {
+            **settings.REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"],
+            "login": None,
+            "password_reset": None,
+            "invite_accept": None,
+        },
     }
 
 
