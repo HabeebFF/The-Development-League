@@ -554,3 +554,24 @@ def test_specials_api(league):
     assert weekly["ACE"] in ("gold", "silver", "bronze") and weekly["RUSH"] != "rising"
     assert latest["bars"] == {"rising_min": 10, "icon_min": 95, "icon_weeks": 4}
     assert get("/cards/month").json()["newest"] is True
+
+
+def test_a_hand_up_by_the_head_doesnt_change_the_framing():
+    """A salute or a finger on the temple: the arm beside the head is left out, so the player
+    is framed head and shoulders like everyone else."""
+    from PIL import ImageDraw
+
+    from apps.league import photos
+
+    plain = fake_cutout(Image.new("RGB", (400, 600)))
+    saluting = plain.copy()
+    d = ImageDraw.Draw(saluting)
+    skin = (200, 120, 80, 255)
+    d.polygon([(40, 240), (70, 260), (150, 130), (130, 115)], fill=skin)  # the raised arm
+    d.rectangle((130, 112, 175, 128), fill=skin)  # fingers on the forehead
+    alpha = lambda img: img.getchannel("A").point(lambda a: 255 if a > 128 else 0)  # noqa: E731
+    for img in (plain, saluting):
+        a = alpha(img)
+        head_h, cx = photos._head(a, a.getbbox())
+        assert 140 <= head_h <= 175  # the top of the head (60) to the neck (210-240)
+        assert 190 <= cx <= 210
