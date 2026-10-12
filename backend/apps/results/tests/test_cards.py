@@ -363,3 +363,75 @@ def test_unreleased_weeks_wait_for_saturday(league):
     assert cards.weeks_with_matches(friday) == [WEEK_A]
     later = cards.release_of(WEEK_B)
     assert cards.weeks_with_matches(later) == [WEEK_A, WEEK_B]
+
+
+def fake_cutout(img):
+    """A stand-in for the background remover: a head on shoulders, on transparent."""
+    from PIL import ImageDraw
+
+    out = Image.new("RGBA", img.size, (0, 0, 0, 0))
+    d = ImageDraw.Draw(out)
+    w, h = img.size
+    d.ellipse((w * 0.4, h * 0.1, w * 0.6, h * 0.35), fill=(200, 120, 80, 255))  # head
+    d.rectangle((w * 0.47, h * 0.35, w * 0.53, h * 0.4), fill=(200, 120, 80, 255))  # neck
+    d.rectangle((w * 0.2, h * 0.4, w * 0.8, h), fill=(255, 90, 31, 255))  # shoulders
+    return out
+
+
+def test_new_photo_gets_a_cutout_framed_for_the_card(
+    league, monkeypatch, django_capture_on_commit_callbacks
+):
+    from apps.league import photos
+
+    monkeypatch.setattr(photos, "remove_background", fake_cutout)
+    client = staff()
+    buf = io.BytesIO()
+    Image.new("RGB", (400, 600), "grey").save(buf, "JPEG")
+    pid = league.p["ACE"].pk
+    with django_capture_on_commit_callbacks(execute=True):
+        resp = client.patch(
+            f"/api/v1/admin/players/{pid}",
+            {"photo": SimpleUploadedFile("ace.jpg", buf.getvalue(), "image/jpeg")},
+            format="multipart",
+        )
+    assert resp.status_code == 200, resp.content
+    ace = Player.objects.get(pk=pid)
+    assert ace.photo_cutout.name.endswith(".png")
+    with ace.photo_cutout.open("rb") as f:
+        cut = Image.open(f)
+        cut.load()
+    assert cut.size == (photos.OUT_W, photos.OUT_H) and cut.mode == "RGBA"
+    assert cut.getpixel((5, 5))[3] == 0  # the background is see-through
+    # The head sits near the top, in the middle; the shoulders reach the bottom.
+    assert cut.getpixel((photos.OUT_W // 2, int(photos.OUT_H * 0.2)))[3] == 255
+    assert cut.getpixel((photos.OUT_W // 2, photos.OUT_H - 3))[3] == 255
+    cards.build_week(WEEK_A)
+    assert get(f"/cards/{pid}").json()["photo"].endswith(".png")
+    # Taking the photo off takes the cut-out with it.
+    client.patch(f"/api/v1/admin/players/{pid}", {"photo": ""}, format="multipart")
+    ace.refresh_from_db()
+    assert not ace.photo and not ace.photo_cutout
+
+
+def test_cutout_failure_keeps_the_uploaded_photo(
+    league, monkeypatch, django_capture_on_commit_callbacks
+):
+    from apps.league import photos
+
+    def broken(img):
+        raise RuntimeError("no model")
+
+    monkeypatch.setattr(photos, "remove_background", broken)
+    buf = io.BytesIO()
+    Image.new("RGB", (40, 60), "grey").save(buf, "PNG")
+    pid = league.p["ACE"].pk
+    with django_capture_on_commit_callbacks(execute=True):
+        staff().patch(
+            f"/api/v1/admin/players/{pid}",
+            {"photo": SimpleUploadedFile("a.png", buf.getvalue(), "image/png")},
+            format="multipart",
+        )
+    ace = Player.objects.get(pk=pid)
+    assert ace.photo and not ace.photo_cutout
+    cards.build_week(WEEK_A)
+    assert get(f"/cards/{pid}").json()["photo"].endswith("a.png")

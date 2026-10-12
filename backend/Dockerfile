@@ -8,7 +8,7 @@ COPY apps ./apps
 COPY config ./config
 COPY common ./common
 COPY manage.py ./
-RUN pip install --no-cache-dir .
+RUN pip install --no-cache-dir ".[photos]"
 
 # /data/media and /app/staticfiles are where compose mounts volumes; a new named volume copies
 # the folder's owner, so the app user can save uploads, map images and static files.

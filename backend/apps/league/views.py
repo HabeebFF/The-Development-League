@@ -498,7 +498,9 @@ def _card(card, request) -> dict:
     return {
         "player_id": player.pk,
         "name": player.display_name,
-        "photo": _media(player.photo),
+        # The cut-out (background removed, framed head and shoulders) once it is made.
+        "photo": _media(player.photo_cutout) or _media(player.photo),
+        "cutout": bool(player.photo_cutout),
         "team": (
             {
                 "id": team.pk,
