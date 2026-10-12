@@ -45,6 +45,7 @@ INSTALLED_APPS = [
     "apps.rotations",
     "apps.coach",
     "apps.analytics",
+    "apps.protection",
 ]
 
 MIDDLEWARE = [

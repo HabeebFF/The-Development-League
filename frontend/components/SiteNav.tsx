@@ -12,6 +12,7 @@ const MAIN = [
   { href: "/results", label: "Results", icon: "M7 4h10v3a5 5 0 0 1-10 0zM5 5H3v2a4 4 0 0 0 4 4M19 5h2v2a4 4 0 0 1-4 4M10 14h4v3h3v3H7v-3h3z" },
   { href: "/kills", label: "Kills", icon: "M12 2a1 1 0 0 1 1 1v1.06A8 8 0 0 1 19.94 11H21a1 1 0 1 1 0 2h-1.06A8 8 0 0 1 13 19.94V21a1 1 0 1 1-2 0v-1.06A8 8 0 0 1 4.06 13H3a1 1 0 1 1 0-2h1.06A8 8 0 0 1 11 4.06V3a1 1 0 0 1 1-1m0 4a6 6 0 1 0 0 12 6 6 0 0 0 0-12m0 3a3 3 0 1 1 0 6 3 3 0 0 1 0-6", bar: false },
   { href: "/awards", label: "Awards", icon: "M12 2l2.9 6.3 6.9.8-5.1 4.7 1.4 6.8L12 17.3 5.9 20.6l1.4-6.8L2.2 9.1l6.9-.8z" },
+  { href: "/protection-points", label: "PP", icon: "M12 2 4 5v6c0 5 3.4 9.4 8 11 4.6-1.6 8-6 8-11V5zm-1 6h2v3h3v2h-3v3h-2v-3H8v-2h3z", bar: false },
   { href: "/cards", label: "Cards", icon: "M7 2h10l3 3v12l-8 5-8-5V5zm5 5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5m-4 9h8c0-2-1.8-3-4-3s-4 1-4 3" },
   { href: "/teams", label: "Teams", icon: "M12 3 4 6v6c0 4.5 3.4 8.3 8 9 4.6-.7 8-4.5 8-9V6z" },
 ];
