@@ -61,6 +61,12 @@ export default function CardDetail({ id, week }: { id: string; week?: string }) 
           {` · ${card.matches} matches in the last four weeks, ${card.week_matches} this week`}
         </p>
         {card.totw.length > 0 && <p className="mt-2 text-sm font-semibold text-accent">{totwText(card.totw)}</p>}
+        {card.special === "rising_star" && card.rise ? (
+          <p className="mt-2 text-sm font-semibold text-ok">Rising Star: up {card.rise} since their last card</p>
+        ) : null}
+        {card.special === "icon" && (
+          <p className="mt-2 text-sm font-semibold text-accent-2">Icon: {card.streak} weeks in a row at the top</p>
+        )}
         {card.stale && (
           <p className="mt-2 text-sm text-muted">Not enough matches this week, so these are the numbers from their last card.</p>
         )}

@@ -1,13 +1,12 @@
 "use client";
 
-import Link from "next/link";
 import { useState } from "react";
 
 import { monthLabel, type TeamOfMonth as Month } from "@/lib/cards";
 import { useApi } from "@/lib/useApi";
 
+import AwardSlots from "./AwardSlots";
 import Loading from "./Loading";
-import PlayerCard from "./PlayerCard";
 
 /** Team of the Month: the month's top player, rusher, sniper and grenader on special cards. */
 export default function TeamOfMonth() {
@@ -52,38 +51,13 @@ export default function TeamOfMonth() {
         {m.finished === false &&
           " The month isn't over yet, so this can still change."}
       </p>
-      <div className="mt-6 grid grid-cols-2 justify-items-center gap-x-3 gap-y-6 lg:grid-cols-4">
-        {m.slots.map((s) => (
-          <div key={s.award} className="flex flex-col items-center gap-2">
-            <p className="font-display text-lg text-accent uppercase">
-              {s.title}
-            </p>
-            {s.card ? (
-              <Link
-                href={`/cards/${s.card.player_id}?week=${s.card.week}`}
-                className="transition duration-200 hover:-translate-y-1"
-                aria-label={`${s.title}: ${s.card.name}, ${s.card.overall}`}
-              >
-                <span className="sm:hidden">
-                  <PlayerCard card={s.card} size={0.64} />
-                </span>
-                <span className="hidden sm:block">
-                  <PlayerCard card={s.card} size={0.85} />
-                </span>
-              </Link>
-            ) : (
-              <p className="flex aspect-[5/7] w-[9.6em] items-center justify-center border border-dashed border-line p-3 text-center text-xs text-muted sm:w-[12.75em]">
-                {s.detail || "No winner yet"}
-              </p>
-            )}
-            {s.card && (
-              <p className="max-w-[12em] text-center text-xs text-muted">
-                {s.detail}
-              </p>
-            )}
-          </div>
-        ))}
-      </div>
+      <AwardSlots
+        kind="totm"
+        period={m.month}
+        periodLabel={monthLabel(m.month)}
+        slots={m.slots}
+        faceDown={!!m.newest}
+      />
     </>
   );
 }

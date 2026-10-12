@@ -77,6 +77,21 @@ export async function cardImage(card: PlayerCard): Promise<Blob | null> {
     ctx.fillStyle = r;
     ctx.fillRect(0, 0, W, H);
   }
+  if (card.tier === "rising" || card.tier === "icon") {
+    const r = ctx.createRadialGradient(
+      W * 0.7,
+      H * 0.25,
+      0,
+      W * 0.7,
+      H * 0.25,
+      W * 0.65,
+    );
+    const glow = card.tier === "rising" ? "62,230,176" : "255,255,255";
+    r.addColorStop(0, `rgba(${glow},0.4)`);
+    r.addColorStop(1, `rgba(${glow},0)`);
+    ctx.fillStyle = r;
+    ctx.fillRect(0, 0, W, H);
+  }
   if (card.tier === "totm") {
     const r = ctx.createRadialGradient(
       W * 0.7,
@@ -202,7 +217,11 @@ export async function cardImage(card: PlayerCard): Promise<Blob | null> {
       ? `TEAM OF THE MONTH · ${(AWARD_NAMES[card.totm ?? ""] ?? "").toUpperCase()}`
       : card.tier === "totw"
         ? "TEAM OF THE WEEK"
-        : "THE DEVELOPMENT LEAGUE";
+        : card.tier === "icon"
+          ? "ICON · THE DEVELOPMENT LEAGUE"
+          : card.tier === "rising"
+            ? `RISING STAR${card.rise ? ` · +${card.rise}` : ""}`
+            : "THE DEVELOPMENT LEAGUE";
   ctx.fillText(foot, W / 2, H - 120);
   ctx.globalAlpha = 1;
 

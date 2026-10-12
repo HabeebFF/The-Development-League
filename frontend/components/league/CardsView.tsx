@@ -9,32 +9,47 @@ import { useApi } from "@/lib/useApi";
 import Loading from "./Loading";
 import PlayerCard from "./PlayerCard";
 import CardCountdown from "./CardCountdown";
+import SpecialCards from "./SpecialCards";
 import TeamOfMonth from "./TeamOfMonth";
 
-/** The weekly cards gallery, and a Team of the Month tab (not on a team page). */
+const TABS = [
+  ["week", "Weekly cards"],
+  ["totw", "Team of the Week"],
+  ["month", "Team of the Month"],
+  ["rising", "Rising Stars"],
+  ["icons", "Icons"],
+] as const;
+
+/** The weekly cards gallery, and tabs for the special cards (not on a team page). */
 export default function CardsView({ team }: { team?: string }) {
-  const [view, setView] = useState<"week" | "month">("week");
+  const [view, setView] = useState<(typeof TABS)[number][0]>("week");
   if (team) return <WeekCards team={team} />;
   return (
     <>
       <CardCountdown />
-      <div className="mb-5 flex gap-1 border-b border-line">
-        {(
-          [
-            ["week", "Weekly cards"],
-            ["month", "Team of the Month"],
-          ] as const
-        ).map(([key, label]) => (
+      <div
+        className="mb-5 -mx-4 flex gap-1 overflow-x-auto border-b border-line px-4 sm:mx-0 sm:px-0"
+        role="tablist"
+      >
+        {TABS.map(([key, label]) => (
           <button
             key={key}
+            role="tab"
+            aria-selected={view === key}
             onClick={() => setView(key)}
-            className={`-mb-px border-b-2 px-3 py-2 font-display text-lg uppercase ${view === key ? "border-accent text-text" : "border-transparent text-muted hover:text-text"}`}
+            className={`-mb-px shrink-0 border-b-2 px-3 py-2 font-display text-lg whitespace-nowrap uppercase ${view === key ? "border-accent text-text" : "border-transparent text-muted hover:text-text"}`}
           >
             {label}
           </button>
         ))}
       </div>
-      {view === "week" ? <WeekCards /> : <TeamOfMonth />}
+      {view === "week" ? (
+        <WeekCards />
+      ) : view === "month" ? (
+        <TeamOfMonth />
+      ) : (
+        <SpecialCards key={view} view={view} />
+      )}
     </>
   );
 }

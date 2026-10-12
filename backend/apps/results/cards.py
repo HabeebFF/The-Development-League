@@ -582,7 +582,78 @@ def build_week(week: date) -> int:
                 ),
             )  # fmt: skip
             built += 1
+    mark_specials(week)
     return built
+
+
+# -- Rising Stars and Icons -----------------------------------------------------------------
+# Design: /mnt/project-files/design/CARD-REVEALS.md (Habeeb approved 2026-10-12).
+
+RISING_STAR, ICON = "rising_star", "icon"
+RISING_MAX = 3  # Rising Stars a week at most: the biggest jumps
+
+
+def thresholds() -> dict[str, int]:
+    """Staff's bars for Rising Stars and Icons (the model's defaults until they save some)."""
+    saved = CardWeights.objects.first() or CardWeights()
+    return {k: getattr(saved, k) for k in ("rising_min", "icon_min", "icon_weeks")}
+
+
+def mark_specials(week: date) -> None:
+    """The week's Rising Stars (the biggest jumps in overall since the player's last card, if
+    big enough) and Icons (``icon_min`` or better for ``icon_weeks`` weeks in a row). Only
+    real cards count: a card carried over for too few matches neither rises nor keeps a
+    streak going."""
+    week = card_week(week)
+    bar = thresholds()
+    this = list(PlayerCard.objects.filter(week=week).select_related("player"))
+    earlier: dict[int, dict[date, PlayerCard]] = defaultdict(dict)
+    before_this = PlayerCard.objects.filter(player__in=[c.player_id for c in this], week__lt=week)
+    for c in before_this.only("player_id", "week", "overall", "stale"):
+        earlier[c.player_id][c.week] = c
+
+    rising: list[tuple[int, PlayerCard]] = []
+    for c in this:
+        mine = earlier[c.player_id]
+        c.streak, at = 0, c
+        while at is not None and not at.stale and at.overall >= bar["icon_min"]:
+            c.streak += 1
+            at = mine.get(at.week - timedelta(weeks=1))
+        c.special = ICON if c.streak >= bar["icon_weeks"] else ""
+        c.rise = None
+        before = mine[max(mine)] if mine else None
+        if (
+            c.special != ICON
+            and before is not None
+            and not (before.stale or c.stale or c.player.hide_card)
+            and c.week_matches >= MIN_MATCHES
+            and c.overall - before.overall >= bar["rising_min"]
+        ):
+            rising.append((c.overall - before.overall, c))
+    rising.sort(key=lambda x: (-x[0], -x[1].overall, x[1].player.display_name.casefold()))
+    for rise, c in rising[:RISING_MAX]:
+        c.special, c.rise = RISING_STAR, rise
+    PlayerCard.objects.bulk_update(this, ["special", "rise", "streak"])
+
+
+def icon_hall() -> list[dict]:
+    """Every run of Icon weeks, player by player: the current Icons first, then the longest."""
+    runs: list[dict] = []
+    for c in (
+        PlayerCard.objects.filter(special=ICON, player__hide_card=False)
+        .select_related("player")
+        .order_by("player", "week")
+    ):
+        last = runs[-1] if runs else None
+        if last and last["player"] == c.player and last["to"] + timedelta(weeks=1) == c.week:
+            last.update(to=c.week, weeks=last["weeks"] + 1, best=max(last["best"], c.overall))
+        else:
+            runs.append({"player": c.player, "from": c.week, "to": c.week, "weeks": 1,
+                         "best": c.overall})  # fmt: skip
+    latest = PlayerCard.objects.order_by("-week").values_list("week", flat=True).first()
+    for r in runs:
+        r["current"] = r["to"] == latest
+    return sorted(runs, key=lambda r: (not r["current"], -r["weeks"], -r["best"]))
 
 
 def weeks_with_matches(now: datetime | None = None) -> list[date]:
@@ -596,6 +667,35 @@ def weeks_with_matches(now: datetime | None = None) -> list[date]:
     }
     now = now or timezone.now()
     return sorted({w for w in (card_week(d) for d in days if d) if release_of(w) <= now})
+
+
+# -- Team of the Week -----------------------------------------------------------------------
+
+
+def team_of_week(week: date) -> list[dict]:
+    """The week's award winners on their card for it; a winner without a card (or a hidden
+    one) gives the slot to the next player in that award."""
+    from .awards import awards
+
+    week = card_week(week)
+    by_player = {
+        c.player_id: c
+        for c in PlayerCard.objects.filter(week=week, player__hide_card=False).select_related(
+            "player", "team"
+        )
+    }
+    slots = []
+    for a in awards("week", week, between=(week, week + timedelta(days=6)))["awards"]:
+        person = next((p for p in a["top"] if p.get("player_id") in by_player), None)
+        slots.append(
+            {
+                "award": a["key"],
+                "title": a["title"],
+                "detail": person["detail"] if person else a.get("blocked", ""),
+                "card": by_player[person["player_id"]] if person else None,
+            }
+        )
+    return slots
 
 
 # -- Team of the Month ----------------------------------------------------------------------

@@ -491,8 +491,18 @@ def _media(f) -> str | None:
     return f.url if f else None
 
 
+def _card_tier(card) -> str:
+    from apps.results.cards import ICON, RISING_STAR, tier
+
+    if card.special == ICON:
+        return "icon"
+    if card.totw:
+        return "totw"
+    return "rising" if card.special == RISING_STAR else tier(card.overall)
+
+
 def _card(card, request) -> dict:
-    from apps.results.cards import ROLE_LABELS, STATS, tier
+    from apps.results.cards import ROLE_LABELS, STATS
 
     team, player = card.team, card.player
     return {
@@ -520,8 +530,11 @@ def _card(card, request) -> dict:
         "suggested_role": card.suggested_role,
         "overall": card.overall,
         "overall_change": card.overall_change,
-        "tier": "totw" if card.totw else tier(card.overall),
+        "tier": _card_tier(card),
         "totw": card.totw,
+        "special": card.special,
+        "rise": card.rise,
+        "streak": card.streak,
         "stats": [{**s, "label": STATS.get(s["key"], s["key"])} for s in card.stats],
         "matches": card.matches,
         "week_matches": card.week_matches,
@@ -572,6 +585,80 @@ class CardsView(APIView):
         )
 
 
+class CardSpecialsView(APIView):
+    """A week's special cards (``?week=`` any day of it; default the newest week with cards):
+    the Team of the Week, the Rising Stars and the Icons, plus every Icon run so far."""
+
+    permission_classes = [PublicRead]
+
+    def get(self, request):
+        from apps.results.cards import (
+            ICON,
+            RISING_STAR,
+            card_week,
+            icon_hall,
+            team_of_week,
+            thresholds,
+        )
+        from apps.results.models import PlayerCard
+
+        weeks = list(
+            PlayerCard.objects.filter(player__hide_card=False)
+            .order_by("-week")
+            .values_list("week", flat=True)
+            .distinct()
+        )
+        try:
+            week = card_week(date.fromisoformat(request.query_params.get("week", "")))
+        except ValueError:
+            week = weeks[0] if weeks else None
+        hall = [
+            {
+                "player_id": r["player"].pk,
+                "name": r["player"].display_name,
+                "photo": _media(r["player"].photo_cutout) or _media(r["player"].photo),
+                "from": r["from"],
+                "to": r["to"],
+                "weeks": r["weeks"],
+                "best": r["best"],
+                "current": r["current"],
+            }
+            for r in icon_hall()
+        ]
+        if week is None:
+            return Response(
+                {"week": None, "end": None, "previous": None, "next": None, "newest": True,
+                 "team_of_week": [], "rising": [], "icons": [], "hall": hall, "bars": thresholds()}
+            )  # fmt: skip
+        team = []
+        for s in team_of_week(week):
+            c = s.pop("card")
+            team.append({**s, "card": {**_card(c, request), "tier": "totw"} if c else None})
+        mine = PlayerCard.objects.filter(week=week, player__hide_card=False).select_related(
+            "player", "team"
+        )
+        rising = sorted(mine.filter(special=RISING_STAR), key=lambda c: (-c.rise, -c.overall))
+        icons = sorted(mine.filter(special=ICON), key=lambda c: (-c.streak, -c.overall))
+        older = [w for w in weeks if w < week]
+        newer = [w for w in weeks if w > week]
+        return Response(
+            {
+                "week": week,
+                "end": week + timedelta(days=6),
+                "previous": older[0] if older else None,
+                "next": newer[-1] if newer else None,
+                # The newest cards start face down on the site.
+                "newest": not newer,
+                "team_of_week": team,
+                "rising": [_card(c, request) for c in rising],
+                "icons": [_card(c, request) for c in icons],
+                "hall": hall,
+                # What it takes: staff can change these.
+                "bars": thresholds(),
+            }
+        )
+
+
 class TeamOfMonthView(APIView):
     """Team of the Month: the month's top player, rusher, sniper and grenader on their latest
     card (``?month=`` any day of it; default the newest month with cards)."""
@@ -609,6 +696,7 @@ class TeamOfMonthView(APIView):
                 "end": end,
                 # Still being played: the winners can change until the month is over.
                 "finished": date.today() > end,
+                "newest": not newer,
                 "previous": older[0] if older else None,
                 "next": newer[-1] if newer else None,
                 "slots": slots,
@@ -645,17 +733,26 @@ class PlayerCardView(APIView):
 
 
 class CardAdminView(APIView):
-    """Staff: card weights per role (GET, PUT ``{"weights": {role: {stat: n}}}``) and
+    """Staff: card weights per role (GET, PUT ``{"weights": {role: {stat: n}}}``), the bars
+    for Rising Stars and Icons (PUT ``{"specials": {rising_min, icon_min, icon_weeks}}``) and
     rebuilding a week's cards (POST ``{"week": "YYYY-MM-DD"}``, later weeks follow)."""
 
     permission_classes = [IsStaff]
 
     def get(self, request):
-        from apps.results.cards import DEFAULT_WEIGHTS, ROLE_LABELS, ROLE_STATS, STATS, weights
+        from apps.results.cards import (
+            DEFAULT_WEIGHTS,
+            ROLE_LABELS,
+            ROLE_STATS,
+            STATS,
+            thresholds,
+            weights,
+        )
 
         return Response(
             {
                 "weights": weights(),
+                "specials": thresholds(),
                 "defaults": DEFAULT_WEIGHTS,
                 "roles": [
                     {"key": r, "label": ROLE_LABELS[r], "stats": ROLE_STATS[r]} for r in ROLE_STATS
@@ -668,6 +765,11 @@ class CardAdminView(APIView):
         from apps.results.cards import ROLE_STATS
         from apps.results.models import CardWeights
 
+        saved = CardWeights.objects.first() or CardWeights()
+        if "specials" in request.data:
+            self._specials(saved, request.data["specials"])
+            if "weights" not in request.data:
+                return self.get(request)
         given = request.data.get("weights")
         if not isinstance(given, dict):
             raise ValidationError({"weights": "Send {role: {stat: weight}}."})
@@ -689,10 +791,29 @@ class CardAdminView(APIView):
             if not any(row.values()):
                 raise ValidationError({"weights": f"Give a {role.lower()} stat some weight."})
             clean[role] = row
-        saved = CardWeights.objects.first() or CardWeights()
         saved.weights = clean
         saved.save()
         return self.get(request)
+
+    @staticmethod
+    def _specials(saved, given) -> None:
+        """New bars for Rising Stars and Icons, applied to every week's cards straight away."""
+        from apps.results.cards import mark_specials
+        from apps.results.models import PlayerCard
+
+        limits = {"rising_min": (1, 59), "icon_min": (40, 99), "icon_weeks": (1, 52)}
+        if not isinstance(given, dict) or not set(given) <= set(limits):
+            raise ValidationError({"specials": "Send {rising_min, icon_min, icon_weeks}."})
+        for key, value in given.items():
+            low, high = limits[key]
+            if not isinstance(value, int) or isinstance(value, bool) or not low <= value <= high:
+                raise ValidationError(
+                    {"specials": f"{key} must be a whole number from {low} to {high}."}
+                )
+            setattr(saved, key, value)
+        saved.save()
+        for week in PlayerCard.objects.order_by("week").values_list("week", flat=True).distinct():
+            mark_specials(week)
 
     def post(self, request):
         from apps.results.tasks import rebuild_cards_task
