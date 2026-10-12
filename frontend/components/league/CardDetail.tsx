@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 
-import { cardFileName, changeText, TIER_LABELS, totwText, weekLabel, type CardDetail as Detail } from "@/lib/cards";
+import { asSpecial, cardFileName, changeText, TIER_LABELS, totwText, weekLabel, type CardDetail as Detail } from "@/lib/cards";
 import { useApi } from "@/lib/useApi";
 
 import { cardImage } from "./cardImage";
@@ -11,10 +11,12 @@ import Loading from "./Loading";
 import PlayerCard from "./PlayerCard";
 
 /** One player's card, big, with what each stat is made of and their rating week by week. */
-export default function CardDetail({ id, week }: { id: string; week?: string }) {
+export default function CardDetail({ id, week, as, award }: { id: string; week?: string; as?: string; award?: string }) {
   const data = useApi<Detail>(`/cards/${id}${week ? `?week=${week}` : ""}`);
   const [saving, setSaving] = useState(false);
-  const card = data.data;
+  // Plain unless opened from a special tab (Team of the Week, Rising Stars...).
+  const card = data.data && asSpecial(data.data, as, award);
+  const special = card && card.tier !== data.data?.tier;
 
   async function save() {
     if (!card) return;
@@ -60,11 +62,11 @@ export default function CardDetail({ id, week }: { id: string; week?: string }) 
           )}
           {` · ${card.matches} matches in the last four weeks, ${card.week_matches} this week`}
         </p>
-        {card.totw.length > 0 && <p className="mt-2 text-sm font-semibold text-accent">{totwText(card.totw)}</p>}
-        {card.special === "rising_star" && card.rise ? (
+        {special && card.tier === "totw" && <p className="mt-2 text-sm font-semibold text-accent">{totwText(card.totw)}</p>}
+        {special && card.tier === "rising" && card.rise ? (
           <p className="mt-2 text-sm font-semibold text-ok">Rising Star: up {card.rise} since their last card</p>
         ) : null}
-        {card.special === "icon" && (
+        {special && card.tier === "icon" && (
           <p className="mt-2 text-sm font-semibold text-accent-2">Icon: {card.streak} weeks in a row at the top</p>
         )}
         {card.stale && (

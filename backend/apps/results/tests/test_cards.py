@@ -259,7 +259,10 @@ def test_cards_api(league):
 
     snipers = get("/cards?role=sniper&week=2026-09-30").json()
     assert snipers["week"] == "2026-09-26" and [c["name"] for c in snipers["cards"]] == ["SNIPE"]
-    assert snipers["cards"][0]["tier"] == "totw" and snipers["next"] == "2026-10-03"
+    # Plain cards here: the Team of the Week version only shows on its own tab.
+    assert snipers["cards"][0]["totw"] == ["player", "sniper"]
+    assert snipers["cards"][0]["tier"] in ("gold", "silver", "bronze")
+    assert snipers["next"] == "2026-10-03"
     assert get("/cards?team=bravo").json()["cards"][0]["team"]["slug"] == "bravo"
 
     one = get(f"/cards/{league.p['RUSH'].pk}").json()
@@ -541,11 +544,13 @@ def test_specials_api(league):
     rush.save()
     latest = get("/cards/specials").json()
     assert latest["newest"] is True
-    assert [(c["name"], c["rise"], c["tier"]) for c in latest["rising"]] == [("RUSH", 11, "totw")]
+    assert [(c["name"], c["rise"], c["tier"]) for c in latest["rising"]] == [("RUSH", 11, "rising")]
     ace = card(league, "ACE", WEEK_B)
     ace.special, ace.streak = cards.ICON, 4
     ace.save()
     latest = get("/cards/specials").json()
     assert latest["icons"][0]["tier"] == "icon" and latest["hall"][0]["current"] is True
+    weekly = {c["name"]: c["tier"] for c in get("/cards").json()["cards"]}
+    assert weekly["ACE"] in ("gold", "silver", "bronze") and weekly["RUSH"] != "rising"
     assert latest["bars"] == {"rising_min": 10, "icon_min": 95, "icon_weeks": 4}
     assert get("/cards/month").json()["newest"] is True
