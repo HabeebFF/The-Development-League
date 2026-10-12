@@ -12,6 +12,7 @@ export default function StaffHome() {
     { href: "/staff/teams", title: "Teams", text: "Name teams, add logos, merge spellings of the same team and invite managers." },
     { href: "/staff/seasons", title: "Seasons", text: "Set up the season and its stages, and move match days into it." },
     { href: "/staff/cards", title: "Player cards", text: "Player photos, card roles and how the weekly ratings are weighted." },
+    { href: "/staff/analytics", title: "Analytics", text: "Who is visiting the website: visitors, top pages, where they came from and their devices." },
     { href: "/staff/coach", title: "Coach", text: "Weekly team reports, and what the coach knows: utility, weapons, the zone and named drop spots." },
     ...(me.is_super_admin
       ? [{ href: "/staff/maps", title: "Map images and calibration", text: "Upload map images and line them up with the game." }]

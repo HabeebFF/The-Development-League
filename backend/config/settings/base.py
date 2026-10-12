@@ -44,6 +44,7 @@ INSTALLED_APPS = [
     "apps.ingest",
     "apps.rotations",
     "apps.coach",
+    "apps.analytics",
 ]
 
 MIDDLEWARE = [
@@ -97,6 +98,8 @@ LANGUAGES = [("en", "English")]
 TIME_ZONE = env("TIME_ZONE", "UTC")
 # Observer PCs write local times without a zone; this is the zone they are read in.
 LOG_TIME_ZONE = env("LOG_TIME_ZONE", TIME_ZONE)
+# Visitor analytics: days and hours are counted in the league's own time.
+ANALYTICS_TIME_ZONE = env("ANALYTICS_TIME_ZONE", "Africa/Lagos")
 USE_I18N = True
 USE_TZ = True
 
@@ -156,6 +159,7 @@ REST_FRAMEWORK = {
         "login": env("THROTTLE_LOGIN", "10/min"),
         "password_reset": env("THROTTLE_PASSWORD_RESET", "5/hour"),
         "invite_accept": env("THROTTLE_INVITE_ACCEPT", "20/hour"),
+        "analytics_hit": env("THROTTLE_ANALYTICS_HIT", "60/min"),
     },
 }
 
@@ -204,6 +208,10 @@ CELERY_BEAT_SCHEDULE = {
         "task": "apps.results.tasks.weekly_cards_task",
         # Saturday 11:00 in Lagos: the week that ended Friday night.
         "schedule": crontab(minute=0, hour=10, day_of_week="sat"),
+    },
+    "analytics-purge-old-views": {
+        "task": "apps.analytics.tasks.purge_old_views_task",
+        "schedule": crontab(minute=10, hour=3),
     },
     "coach-catch-up-reviews": {
         "task": "apps.coach.tasks.catch_up_reviews_task",
