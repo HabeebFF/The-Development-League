@@ -64,7 +64,8 @@ class League:
 
     def match(self, day: dt.date, blank_weapons=False, who=None):
         """One match, one fight: RUSH opens it from 8 m, SNIPE snipes twice (once with no
-        weapon logged, from 130 m), NADE gets two grenade kills, FOE4 knocks ACE."""
+        weapon logged, from 130 m), NADE gets a grenade knock and two grenade kills, FOE4
+        knocks ACE."""
         self.n += 1
         md = MatchDay.objects.create(stage=self.stage, number=self.n, date=day)
         start = dt.datetime.combine(day, dt.time(19), tzinfo=dt.UTC)
@@ -99,6 +100,7 @@ class League:
             hit(K.KILL, 102, "RUSH", "FOE1", RIFLE, dist=8)
             hit(K.KILL, 110, "SNIPE", "FOE2", SNIPER_GUN, dist=150)
             hit(K.KILL, 115, "SNIPE", "FOE4", 0, dist=130)
+            hit(K.KNOCK, 119, "NADE", "FOE3", GRENADE)
             hit(K.KILL, 120, "NADE", "FOE3", GRENADE, dist=20)
             hit(K.KILL, 125, "NADE", "FOE4", GRENADE, dist=25)
             hit(K.KNOCK, 130, "FOE4", "ACE")
@@ -176,8 +178,12 @@ def test_cards_rate_roles_from_how_they_play(league):
 
     assert nade.role == "GRENADER"
     keys = [s["key"] for s in nade.stats]
-    assert keys[-2:] == ["NAD", "UTL"] and stat(nade, "NAD")["extra"]
+    assert keys[-1] == "NAD" and "UTL" not in keys and stat(nade, "NAD")["extra"]
     assert stat(nade, "NAD")["rating"] == 99
+    assert (
+        stat(nade, "NAD")["detail"]
+        == "1.0 knocks and 2.0 kills a match with grenades and launchers"
+    )
 
     # Award winners get a Team of the Week card.
     assert set(snipe.totw) == {"player", "sniper"} and rush.totw == ["rusher"]
@@ -187,6 +193,41 @@ def test_cards_rate_roles_from_how_they_play(league):
     assert stat(rush, "SUR")["value"] == "9:59"
     ace = card(league, "ACE")
     assert ace.role == "ALL_ROUNDER" and stat(ace, "AWR")["value"] == "100%"
+
+
+def test_grenade_counts_knocks_and_ranks_naders_among_naders(league):
+    # NADE also knocks with a grenade; RUSH knocks once with one too.
+    m = league.match(WEEK_A + dt.timedelta(days=4))
+    for actor, target in (("NADE", "FOE2"), ("RUSH", "FOE3")):
+        MatchEvent.objects.create(
+            match=m, kind=K.KNOCK, source="DEBUGGER", game_time_s=140, weapon_id=GRENADE,
+            actor_player=league.p[actor], target_player=league.p[target],
+            actor_team=league.team(actor), target_team=league.team(target),
+        )  # fmt: skip
+    windows = cards.windows_for(WEEK_A)
+    nade, rush = windows[league.p["NADE"].pk], windows[league.p["RUSH"].pk]
+    assert nade.sums["nade_knocks"] == 12 and rush.sums["nade_knocks"] == 2  # 6 and 1, x2 this week
+    assert cards.is_nader(nade) and not cards.is_nader(windows[league.p["SNIPE"].pk])
+
+    def window(knocks: float, kills: float) -> cards.Window:
+        w = cards.Window(n=4, m=4)
+        w.counts["weapons"] = 4
+        w.sums.update(weapons_m=4, nade_knocks=knocks, nades=kills, weapon_kills=8)
+        return w
+
+    pool = {1: window(4, 2), 2: window(8, 4), 3: window(12, 6)}
+    pool.update({pid: window(0, 0) for pid in range(4, 10)})
+    # Against everyone, even the weakest nader is near the top...
+    assert cards.rating(cards.rate_windows(pool)[1]["NAD"]) >= 80
+    # ...among naders only, the spread is the full 40 to 99.
+    places = cards.rate_windows(pool, naders={1, 2, 3})
+    assert [cards.rating(places[p]["NAD"]) for p in (1, 2, 3)] == [40, 70, 99]
+    assert places[4]["NAD"] == cards.rate_windows(pool)[4]["NAD"]  # others as before
+
+
+def test_saved_utility_weight_moves_to_grenade():
+    CardWeights.objects.create(weights={"GRENADER": {"NAD": 25, "UTL": 10, "CQC": 15}})
+    assert cards.weights()["GRENADER"]["NAD"] == 35 and "UTL" not in cards.weights()["GRENADER"]
 
 
 def test_matches_without_weapons_leave_grenades_and_snipes_alone(league):
