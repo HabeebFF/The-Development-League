@@ -659,7 +659,7 @@ class TeamOfMonthView(APIView):
 
     def get(self, request):
         from apps.results.awards import period_of
-        from apps.results.cards import months_with_cards, team_of_month
+        from apps.results.cards import month_opens, months_with_cards, team_of_month
 
         months = months_with_cards()
         try:
@@ -669,9 +669,16 @@ class TeamOfMonthView(APIView):
         if month is None:
             return Response({"month": None, "previous": None, "next": None, "slots": []})
         end = period_of("month", month)[1]
+        opens = month_opens(end)
+        # Until the month is over nobody sees who is in it, not even in the API: only the
+        # slots, face down.
+        locked = timezone.now() < opens
         slots = []
         for s in team_of_month(month):
             card = s.pop("card")
+            if locked:
+                slots.append({**s, "detail": "", "card": None})
+                continue
             slots.append(
                 {
                     **s,
@@ -686,8 +693,10 @@ class TeamOfMonthView(APIView):
             {
                 "month": month,
                 "end": end,
-                # Still being played: the winners can change until the month is over.
-                "finished": date.today() > end,
+                # Still being played: the cards stay locked until ``opens``.
+                "finished": not locked,
+                "locked": locked,
+                "opens": opens,
                 "newest": not newer,
                 "previous": older[0] if older else None,
                 "next": newer[-1] if newer else None,

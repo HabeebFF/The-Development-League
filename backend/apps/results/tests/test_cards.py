@@ -353,6 +353,23 @@ def test_team_of_the_month(league):
     assert get("/cards/month?month=2026-08-01").json()["slots"][0]["card"] is None
 
 
+def test_team_of_the_month_stays_locked_until_the_month_is_over(league, monkeypatch):
+    from django.utils import timezone
+
+    cards.build_week(WEEK_A)
+    # 23:30 UTC on 30 Sep is already 1 Oct in Lagos: open.
+    monkeypatch.setattr(timezone, "now", lambda: dt.datetime(2026, 9, 30, 23, 30, tzinfo=dt.UTC))
+    data = get("/cards/month").json()
+    assert not data["locked"] and data["slots"][2]["card"]["name"] == "SNIPE"
+    # Before midnight in Lagos nobody can see who is in it, not even through the API.
+    monkeypatch.setattr(timezone, "now", lambda: dt.datetime(2026, 9, 30, 22, 30, tzinfo=dt.UTC))
+    data = get("/cards/month").json()
+    assert data["locked"] and data["finished"] is False
+    assert data["opens"].startswith("2026-10-01T00:00:00+01:00")
+    assert [s["award"] for s in data["slots"]] == ["player", "rusher", "sniper", "grenader"]
+    assert all(s["card"] is None and s["detail"] == "" for s in data["slots"])
+
+
 def test_card_weeks_run_saturday_to_friday_and_come_out_saturday_morning():
     assert cards.card_week(dt.date(2026, 10, 9)) == dt.date(2026, 10, 3)  # Friday
     assert cards.card_week(dt.date(2026, 10, 10)) == dt.date(2026, 10, 10)  # Saturday

@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { flipId, readFlipped, saveFlipped, type AwardSlot } from "@/lib/cards";
 
-import FlipCard from "./FlipCard";
+import FlipCard, { LockedCard } from "./FlipCard";
 import PlayerCard from "./PlayerCard";
 
 /** Team of the Week or Month: one card per award. The newest week or month starts face
@@ -16,6 +16,7 @@ export default function AwardSlots({
   periodLabel,
   slots,
   faceDown,
+  lockedNote,
 }: {
   kind: "totw" | "totm";
   /** The week's Saturday or the month's first day. */
@@ -23,6 +24,8 @@ export default function AwardSlots({
   periodLabel: string;
   slots: AwardSlot[];
   faceDown: boolean;
+  /** The period isn't over: every slot stays face down with this note ("Opens 1 Nov"). */
+  lockedNote?: string;
 }) {
   const [flipped, setFlipped] = useState<Set<string>>(new Set());
   const [ready, setReady] = useState(false);
@@ -64,7 +67,7 @@ export default function AwardSlots({
 
   return (
     <>
-      {faceDown && slots.some((s) => s.card) && (
+      {faceDown && !lockedNote && slots.some((s) => s.card) && (
         <div className="mt-3 flex flex-wrap items-center gap-3">
           <p className="text-sm text-muted">
             {hidden.length ? "Tap a card to turn it over." : "All revealed."}
@@ -102,7 +105,13 @@ export default function AwardSlots({
               <p className="font-display text-lg text-accent uppercase">
                 {s.title}
               </p>
-              {s.card && id ? (
+              {lockedNote ? (
+                <LockedCard
+                  title={s.title}
+                  period={periodLabel}
+                  note={lockedNote}
+                />
+              ) : s.card && id ? (
                 faceDown ? (
                   <FlipCard
                     up={up}

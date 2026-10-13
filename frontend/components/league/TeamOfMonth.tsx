@@ -8,6 +8,16 @@ import { useApi } from "@/lib/useApi";
 import AwardSlots from "./AwardSlots";
 import Loading from "./Loading";
 
+/** "1 Nov", the day the cards can be turned over (in Lagos). */
+function openLabel(opens?: string): string {
+  if (!opens) return "after the month";
+  return new Date(opens).toLocaleDateString("en-GB", {
+    day: "numeric",
+    month: "short",
+    timeZone: "Africa/Lagos",
+  });
+}
+
 /** Team of the Month: the month's top player, rusher, sniper and grenader on special cards. */
 export default function TeamOfMonth() {
   const [month, setMonth] = useState<string | null>(null);
@@ -48,8 +58,8 @@ export default function TeamOfMonth() {
       </div>
       <p className="mt-3 text-sm text-muted">
         The month&apos;s award winners on the card they ended the month with.
-        {m.finished === false &&
-          " The month isn't over yet, so this can still change."}
+        {m.locked &&
+          ` The month isn't over yet, so the cards stay face down until ${openLabel(m.opens)}.`}
       </p>
       <AwardSlots
         kind="totm"
@@ -57,6 +67,7 @@ export default function TeamOfMonth() {
         periodLabel={monthLabel(m.month)}
         slots={m.slots}
         faceDown={!!m.newest}
+        lockedNote={m.locked ? `Opens ${openLabel(m.opens)}` : undefined}
       />
     </>
   );
