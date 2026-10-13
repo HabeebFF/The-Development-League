@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import io
 from datetime import datetime
 
 import pytest
@@ -165,6 +166,12 @@ def test_confirm_builds_the_match(upload, confirm, match_day):
     knocks = events.filter(kind="KNOCK")
     assert knocks.exclude(weapon_id=None).count() == 115
     assert knocks.filter(weapon_id=601).count() == 4
+    # Matches uploaded before that get it from knock_weapons.
+    from django.core.management import call_command
+
+    knocks.update(weapon_id=None)
+    call_command("knock_weapons", stdout=io.StringIO())
+    assert knocks.exclude(weapon_id=None).count() == 115
 
     zones = ZonePhase.objects.filter(match=match, state="SHRINK").order_by("stage_index")
     assert [z.inner_radius for z in zones] == [550, 300, 150, 75, 30]
