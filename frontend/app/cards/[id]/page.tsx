@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 
 import CardDetail from "@/components/league/CardDetail";
+import RatingHistory from "@/components/league/RatingHistory";
 
 export const metadata: Metadata = { title: "Player card" };
 
@@ -11,6 +12,7 @@ export default async function PlayerCardPage({ params, searchParams }: PageProps
   return (
     <section className="mx-auto max-w-6xl px-4 py-8">
       <CardDetail id={id} week={one(week)} as={one(as)} award={one(award)} />
+      <RatingHistory id={id} />
     </section>
   );
 }

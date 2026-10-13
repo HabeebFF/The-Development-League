@@ -23,6 +23,11 @@ urlpatterns = [
     *router.urls,
     path("awards", views.AwardsView.as_view(), name="awards"),
     path("kills", views.KillsView.as_view(), name="kills"),
+    path("ratings", views.RatingsView.as_view(), name="ratings"),
+    path(
+        "ratings/player/<int:player_id>", views.PlayerRatingsView.as_view(), name="player-ratings"
+    ),
+    path("admin/ratings", views.RatingAdminView.as_view(), name="admin-ratings"),
     path("cards", views.CardsView.as_view(), name="cards"),
     path("cards/month", views.TeamOfMonthView.as_view(), name="cards-month"),
     path("cards/specials", views.CardSpecialsView.as_view(), name="cards-specials"),

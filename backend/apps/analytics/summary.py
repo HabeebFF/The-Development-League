@@ -25,6 +25,7 @@ PAGES = {
     "/cards": "Player cards",
     "/awards": "Awards",
     "/kills": "Kill list",
+    "/ratings": "Player ratings",
     "/team": "Team home",
     "/team/coach": "Team coach",
     "/team/members": "Team members",

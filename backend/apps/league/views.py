@@ -2,6 +2,7 @@
 
 from datetime import date, timedelta
 
+from django.db import transaction
 from django.db.models import Count, F, Prefetch, ProtectedError, Q
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
@@ -482,6 +483,108 @@ class KillsView(APIView):
         except ValueError:
             day = latest_day() or timezone.localdate()
         return Response(killboard.for_period(kind, day))
+
+
+class RatingsView(APIView):
+    """Player ratings out of 10 (see apps.results.ratings).
+
+    ``?match=<id>`` one match, with how each rating was made; otherwise ``?date=`` one day's
+    averages (default the latest day) and ``?session=<match day id>`` just that session (its
+    day when no date is given).
+    """
+
+    permission_classes = [PublicRead]
+
+    def get(self, request):
+        from apps.results import ratings
+
+        params = request.query_params
+        match = _int_param(request, "match")
+        if match:
+            return Response(
+                ratings.for_match(get_object_or_404(Match, pk=match, status=Match.Status.PUBLISHED))
+            )
+        session = _int_param(request, "session")
+        try:
+            day = date.fromisoformat(params.get("date", ""))
+        except ValueError:
+            day = None
+        if session and day is None:
+            day = ratings.day_of_session(get_object_or_404(MatchDay, pk=session))
+        return Response(ratings.for_day(day, session))
+
+
+class PlayerRatingsView(APIView):
+    """One player's daily ratings and their averages over the last 7 and 30 days."""
+
+    permission_classes = [PublicRead]
+
+    def get(self, request, player_id: int):
+        from apps.results import ratings
+
+        return Response(ratings.for_player(get_object_or_404(Player, pk=player_id)))
+
+
+class RatingAdminView(APIView):
+    """Staff: the points behind player ratings (GET; PUT ``{"points": {...}}`` saves them and
+    rates every match again; POST rates every match again without changing anything)."""
+
+    permission_classes = [IsStaff]
+
+    def get(self, request):
+        from apps.results.ratings import DEFAULT_POINTS, LIMITS, points
+
+        return Response({"points": points(), "defaults": DEFAULT_POINTS, "limits": LIMITS})
+
+    def put(self, request):
+        from apps.results.models import RatingPoints
+        from apps.results.ratings import LIMITS, PLACEMENT_LIMITS, points
+        from apps.results.tasks import refresh_ratings_task
+
+        given = request.data.get("points")
+        if not isinstance(given, dict):
+            raise ValidationError({"points": "Send {name: number}."})
+        clean = {}
+        for key, value in given.items():
+            if key == "placement":
+                low, high = PLACEMENT_LIMITS
+                if (
+                    not isinstance(value, list)
+                    or not 1 <= len(value) <= 30
+                    or not all(
+                        isinstance(v, int | float) and not isinstance(v, bool) and low <= v <= high
+                        for v in value
+                    )
+                ):
+                    raise ValidationError(
+                        {"points": f"placement must be a list of numbers from {low} to {high}."}
+                    )
+                clean[key] = [float(v) for v in value]
+                continue
+            if key not in LIMITS:
+                raise ValidationError({"points": f"Unknown setting {key}."})
+            low, high = LIMITS[key]
+            if (
+                isinstance(value, bool)
+                or not isinstance(value, int | float)
+                or not (low <= value <= high)
+            ):
+                raise ValidationError({"points": f"{key} must be a number from {low} to {high}."})
+            clean[key] = int(value) if key == "potd_min" else float(value)
+        merged = {**points(), **clean}
+        if merged["floor"] >= merged["ceiling"]:
+            raise ValidationError({"points": "The floor must be below the ceiling."})
+        saved = RatingPoints.objects.first() or RatingPoints()
+        saved.points = {**(saved.points or {}), **clean}
+        saved.save()
+        transaction.on_commit(lambda: refresh_ratings_task.delay(None, True))
+        return self.get(request)
+
+    def post(self, request):
+        from apps.results.tasks import refresh_ratings_task
+
+        refresh_ratings_task.delay(None, True)
+        return Response({"queued": True}, status=status.HTTP_202_ACCEPTED)
 
 
 # -- player cards (FUT style; see apps.results.cards) ----------------------------------------
