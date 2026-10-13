@@ -3,6 +3,7 @@
 import Link from "next/link";
 
 import type { KillList } from "@/lib/kills";
+import { ratingsPath, type DayRatings } from "@/lib/ratings";
 import { dayName, shortDate, type MatchDayDetail } from "@/lib/league";
 import { useApi } from "@/lib/useApi";
 
@@ -10,12 +11,14 @@ import KillTable from "./KillTable";
 import Loading, { Skeleton } from "./Loading";
 import MatchDayCard from "./MatchDayCard";
 import PageHeader from "./PageHeader";
+import RatingTable, { StarPlayer } from "./RatingTable";
 import StandingsTable from "./StandingsTable";
 
 /** One match day (a session): its table, its matches and its kill list. */
 export default function MatchDayView({ id }: { id: number }) {
   const day = useApi<MatchDayDetail>(`/match-days/${id}`);
   const kills = useApi<KillList>(`/kills?session=${id}`);
+  const ratings = useApi<DayRatings>(ratingsPath(null, id));
   if (!day.data)
     return (
       <div className="mx-auto max-w-6xl px-4 py-8">
@@ -47,6 +50,22 @@ export default function MatchDayView({ id }: { id: number }) {
             </div>
           </section>
         </div>
+        {ratings.data && ratings.data.matches > 0 && (
+          <section className="mt-10">
+            <div className="flex items-baseline justify-between gap-3">
+              <h2 className="section-title">Top ratings</h2>
+              <Link href={`/ratings?session=${id}`} className="text-sm text-accent hover:underline">
+                All ratings &rarr;
+              </Link>
+            </div>
+            <div className="mt-4 space-y-4">
+              {ratings.data.star != null && (
+                <StarPlayer row={ratings.data.players.find((p) => p.player_id === ratings.data!.star)!} label="Player of the session" />
+              )}
+              <RatingTable board={ratings.data} limit={5} />
+            </div>
+          </section>
+        )}
         <section className="mt-10">
           <h2 className="section-title">Kill list</h2>
           <div className="mt-4">{kills.data ? <KillTable list={kills.data} /> : <Loading error={kills.error} count={6} />}</div>

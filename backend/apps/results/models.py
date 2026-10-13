@@ -257,3 +257,47 @@ class CardWeights(models.Model):
 
     def __str__(self) -> str:
         return "Card weights"
+
+
+class PlayerMatchRating(models.Model):
+    """A player's football-style rating out of 10 for one match (see ``results.ratings``)."""
+
+    match = models.ForeignKey("league.Match", on_delete=models.CASCADE, related_name="ratings")
+    player = models.ForeignKey(
+        "league.Player", on_delete=models.CASCADE, related_name="match_ratings"
+    )
+    team = models.ForeignKey(
+        "league.Team", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+    rating = models.FloatField(help_text="3.0 to 10.0, one decimal")
+    raw = models.FloatField(help_text="Before it was kept between the floor and the ceiling")
+    parts = models.JSONField(
+        default=list, blank=True, help_text="[{key, label, count, points}]: how it was made"
+    )
+    kills = models.PositiveSmallIntegerField(default=0)
+    knocks = models.PositiveSmallIntegerField(default=0)
+    placement = models.PositiveSmallIntegerField(null=True, blank=True)
+    stamp = models.CharField(max_length=64, help_text="What it was worked out from")
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["match", "-rating"]
+        constraints = [
+            models.UniqueConstraint(fields=["match", "player"], name="one_rating_per_player_match")
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.player} in {self.match}: {self.rating}"
+
+
+class RatingPoints(models.Model):
+    """Staff's points for player ratings (one row; empty uses the defaults in ``ratings``)."""
+
+    points = models.JSONField(default=dict, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name_plural = "rating points"
+
+    def __str__(self) -> str:
+        return "Rating points"

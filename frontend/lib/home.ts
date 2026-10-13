@@ -12,5 +12,5 @@ export function isOpenPath(path: string): boolean {
 
 /** League pages visitors can read without an account while the site is public. */
 export function isPublicPath(path: string): boolean {
-  return path === "/" || /^\/(standings|results|teams|matches|awards|kills|cards|protection-points)(\/|$)/.test(path);
+  return path === "/" || /^\/(standings|results|teams|matches|awards|kills|ratings|cards|protection-points)(\/|$)/.test(path);
 }

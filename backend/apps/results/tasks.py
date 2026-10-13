@@ -15,7 +15,23 @@ def rebuild_standings_task(season_id: int) -> int:
     from apps.protection.rules import refresh_season
 
     refresh_season(season)
+    # Player ratings for any match that is new or changed.
+    refresh_ratings_task.delay(season.pk)
     return rows
+
+
+@shared_task
+def refresh_ratings_task(season_id: int | None = None, force: bool = False) -> int:
+    """Rate the season's matches that are new or changed (every match when ``season_id`` is
+    None; every one again when ``force``, after staff change the points)."""
+    from apps.league.models import Match
+
+    from .ratings import refresh
+
+    matches = None
+    if season_id is not None:
+        matches = list(Match.objects.filter(match_day__stage__season_id=season_id))
+    return refresh(matches, force=force)
 
 
 @shared_task
