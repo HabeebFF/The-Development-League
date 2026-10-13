@@ -548,15 +548,18 @@ def _events(
                 )
             )
         for k in block.knocks:
+            t = game_s(k.at)
             events.append(
                 event(
                     K.KNOCK,
                     D,
                     k.knocker,
                     k.victim,
-                    game_time_s=game_s(k.at),
+                    game_time_s=t,
                     wall_time=log_time(k.at),
                     headshot=k.headshot,
+                    # Only the weapon: knock positions would change the replay and rotations.
+                    weapon_id=kill_position(k.knocker, t).get("weapon_id"),
                 )
             )
         for kind, items in ((K.RESPAWN, block.respawns), (K.TELEPORT, block.teleports)):

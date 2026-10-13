@@ -1,5 +1,5 @@
 """Player cards, FIFA Ultimate Team style: an overall rating, a role and six stats from 0 to
-99 (grenaders get two extras), rebuilt every week from what the logs recorded.
+99 (grenaders get Grenade as an extra), rebuilt every week from what the logs recorded.
 
 A card for the week starting on Monday ``week`` looks at the four weeks up to and including
 it; matches in that week count double. Every stat compares the player with every other
@@ -8,9 +8,10 @@ player who has enough matches in the same window:
 1. A number per match (or a rate), pulled towards the league average as if the player had
    played ``PRIOR`` extra average matches, so one lucky night can't give a 99.
 2. Their place among everyone (0 = league worst, 1 = league best), turned into
-   ``40 + 59 x place``.
+   ``40 + 59 x place``. Grenade is the exception: naders are placed among naders only, since
+   next to players who hardly throw anything every nader would sit near 99.
 
-Some stats need data not every match has. Grenade and sniping need the kill's weapon, so
+Some stats need data not every match has. Grenade and sniping need the weapon, so
 they only use matches where most kills have one (Day 15 logged many without); close quarters
 and utility need the replay files. A stat without enough such matches keeps last week's
 rating, marked stale.
@@ -36,7 +37,7 @@ from apps.league.models import Match, Player
 from .awards import GRENADER, _weapon_classes, match_lines, matches_between, period_of
 from .models import CardWeights, MatchEvent, PlayerCard, PlayerMatchResult
 
-RULES = "cards-v1"
+RULES = "cards-v2"  # v2: Grenade counts knocks, naders ranked among naders, no Utility
 WINDOW_WEEKS = 4
 RECENT_WEIGHT = 2  # the week the card is for counts this many times
 MIN_MATCHES = 4  # matches (of the kind a stat needs) before a stat is rated
@@ -72,22 +73,24 @@ STATS = {
 
 ROLE_STATS = {
     RUSHER: ["ENT", "CQC", "FIN", "AIM", "TRD", "SUR"],
-    GRENADER_ROLE: ["ENT", "CQC", "FIN", "AIM", "TRD", "SUR", "NAD", "UTL"],
+    GRENADER_ROLE: ["ENT", "CQC", "FIN", "AIM", "TRD", "SUR", "NAD"],
     SNIPER: ["SNP", "RNG", "AIM", "FIN", "AWR", "SUR"],
     ALL_ROUNDER: ["FIN", "AIM", "ENT", "TRD", "AWR", "SUR"],
 }
-EXTRAS = {GRENADER_ROLE: {"NAD", "UTL"}}
+EXTRAS = {GRENADER_ROLE: {"NAD"}}
+# A nader: at least this share of their knocks and kills (in matches with weapons) came from
+# grenades and launchers. Grenade is ranked among naders only.
+NADER_SHARE = 0.15
 
 DEFAULT_WEIGHTS = {
     RUSHER: {"CQC": 25, "ENT": 20, "FIN": 20, "AIM": 15, "TRD": 10, "SUR": 10},
     GRENADER_ROLE: {
-        "NAD": 25,
+        "NAD": 35,
         "CQC": 15,
         "FIN": 15,
         "ENT": 10,
         "AIM": 10,
         "TRD": 10,
-        "UTL": 10,
         "SUR": 5,
     },  # fmt: skip
     SNIPER: {"SNP": 25, "RNG": 20, "AIM": 15, "FIN": 15, "AWR": 15, "SUR": 10},
@@ -144,8 +147,10 @@ class MatchLine:
     utility: int = 0
     weapons_ok: bool = False  # most of the match's kills have a weapon: nades and snipes count
     weapon_kills: int = 0  # kills in a weapons_ok match (what snipes and nades are out of)
+    weapon_knocks: int = 0  # knocks in a weapons_ok match
     snipes: int = 0
     nades: int = 0
+    nade_knocks: int = 0
     measured: int = 0  # kills with both positions logged
     long_kills: int = 0
     longest: float = 0.0
@@ -206,6 +211,15 @@ def lines_for_match(match: Match, classes: dict[int, str]) -> dict[int, MatchLin
             line.snipes += 1
         elif kind in GRENADER:
             line.nades += 1
+    if ok:
+        for e in MatchEvent.objects.filter(
+            match=match, kind=MatchEvent.Kind.KNOCK, actor_player__isnull=False
+        ):
+            if e.actor_team_id == e.target_team_id:
+                continue
+            line = out.setdefault(e.actor_player_id, MatchLine(tracks=tracks))
+            line.weapon_knocks += 1
+            line.nade_knocks += classes.get(e.weapon_id) in GRENADER
     for line in out.values():
         line.weapons_ok = ok
 
@@ -272,6 +286,8 @@ class Window:
         if line.weapons_ok:
             s["snipes"] += w * line.snipes
             s["nades"] += w * line.nades
+            s["nade_knocks"] += w * line.nade_knocks
+            s["weapon_knocks"] += w * line.weapon_knocks
             s["weapon_kills"] += w * line.weapon_kills
             s["weapons_m"] += w
             c["weapons"] += 1
@@ -305,7 +321,10 @@ PARTS = {
         ("rate", "alone_downs", "known_downs", "review", 0.6, -1),
         ("per", "first_downs", "review_m", "review", 0.4, -1),
     ],  # fmt: skip
-    "NAD": [("per", "nades", "weapons_m", "weapons", 1, 1)],
+    "NAD": [
+        ("per", "nade_knocks", "weapons_m", "weapons", 0.7, 1),
+        ("per", "nades", "weapons_m", "weapons", 0.3, 1),
+    ],  # fmt: skip
     "UTL": [("per", "utility", "tracks_m", "tracks", 1, 1)],
     "SNP": [("per", "snipes", "weapons_m", "weapons", 1, 1)],
     "RNG": [
@@ -342,8 +361,22 @@ def _place(value: float, pool: list[float]) -> float:
     return (less + (equal - 1) / 2) / (len(pool) - 1)
 
 
-def rate_windows(windows: dict[int, Window]) -> dict[int, dict[str, float]]:
-    """Each player's place (0 to 1) in every stat they have enough matches for."""
+def is_nader(w: Window) -> bool:
+    """At least ``NADER_SHARE`` of their knocks and kills came from grenades and launchers."""
+    s = w.sums
+    total = s["weapon_kills"] + s["weapon_knocks"]
+    return (
+        w.counts["weapons"] >= MIN_MATCHES
+        and total >= 5
+        and (s["nades"] + s["nade_knocks"]) / total >= NADER_SHARE
+    )
+
+
+def rate_windows(
+    windows: dict[int, Window], naders: set[int] | None = None
+) -> dict[int, dict[str, float]]:
+    """Each player's place (0 to 1) in every stat they have enough matches for. With
+    ``naders``, those players' Grenade is placed among themselves only."""
     league: dict[str, float] = {}
     for parts in PARTS.values():
         for kind, num, den, *_ in parts:
@@ -357,10 +390,13 @@ def rate_windows(windows: dict[int, Window]) -> dict[int, dict[str, float]]:
     for key, parts in PARTS.items():
         values = [{pid: _part_value(w, p, league) for pid, w in windows.items()} for p in parts]
         pools = [[v for v in vals.values() if v is not None] for vals in values]
+        group = set(naders or ()) & set(windows) if key == "NAD" else set()
+        own = [[vals[pid] for pid in group if vals[pid] is not None] for vals in values]
         for pid in windows:
+            mine = own if pid in group and all(len(p) >= 2 for p in own) else pools
             got = [
                 (p[4], _place(vals[pid], pool))
-                for p, vals, pool in zip(parts, values, pools, strict=True)
+                for p, vals, pool in zip(parts, values, mine, strict=True)
                 if vals[pid] is not None
             ]
             # Every part of a stat is needed, except a range tie-break without the main part.
@@ -379,9 +415,7 @@ def suggest_role(w: Window, places: dict[str, float]) -> str:
     if w.counts["weapons"] >= MIN_MATCHES and weapon_kills >= 5:
         if w.sums["snipes"] / weapon_kills > 0.3:
             return SNIPER
-        if w.sums["nades"] / weapon_kills > 0.2:
-            return GRENADER_ROLE
-    if places.get("UTL", 0) >= 0.85:
+    if is_nader(w):
         return GRENADER_ROLE
     rush = [places[k] for k in ("ENT", "CQC") if k in places]
     if rush and sum(rush) / len(rush) >= 0.5:
@@ -435,8 +469,11 @@ def _detail(key: str, w: Window) -> tuple[str, str]:
             f" in {pct('first_downs', 'review_m')} of matches"
         )
     if key == "NAD":
-        v = per("nades", "weapons_m")
-        return f"{v:.1f}", f"{v:.1f} grenade and launcher kills a match"
+        knocks, kills = per("nade_knocks", "weapons_m"), per("nades", "weapons_m")
+        return (
+            f"{knocks + kills:.1f}",
+            f"{knocks:.1f} knocks and {kills:.1f} kills a match with grenades and launchers",
+        )
     if key == "UTL":
         v = per("utility", "tracks_m")
         return f"{v:.1f}", f"{v:.1f} UAVs, Bolt Makers and Dinoculars used a match"
@@ -457,6 +494,9 @@ def weights() -> dict[str, dict[str, float]]:
         if role in out:
             # A saved role replaces its defaults: a stat staff left out counts for nothing.
             out[role] = {k: float(ws.get(k, 0)) for k in ROLE_STATS[role]}
+            if role == GRENADER_ROLE and "UTL" in ws:
+                # Utility left the grenader card (cards-v2); its share went to Grenade.
+                out[role]["NAD"] += float(ws["UTL"])
     return out
 
 
@@ -517,10 +557,17 @@ def build_week(week: date) -> int:
     """Every player's card for the week starting ``week`` (any day in it is fine)."""
     week = card_week(week)
     windows = windows_for(week)
-    places = rate_windows({pid: w for pid, w in windows.items() if w.n >= MIN_MATCHES})
+    players = Player.objects.in_bulk(list(windows))
+    rated = {pid: w for pid, w in windows.items() if w.n >= MIN_MATCHES}
+    naders = {
+        pid
+        for pid, w in rated.items()
+        if pid in players
+        and (players[pid].card_role or (GRENADER_ROLE if is_nader(w) else "")) == GRENADER_ROLE
+    }
+    places = rate_windows(rated, naders)
     ws = weights()
     winners = _week_winners(week)
-    players = Player.objects.in_bulk(list(windows))
     previous = {}
     for card in PlayerCard.objects.filter(player__in=list(windows), week__lt=week).order_by(
         "player", "-week"

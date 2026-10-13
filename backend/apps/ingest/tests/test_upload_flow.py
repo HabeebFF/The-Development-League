@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import io
 from datetime import datetime
 
 import pytest
@@ -161,6 +162,16 @@ def test_confirm_builds_the_match(upload, confirm, match_day):
     kill = events.filter(kind="KILL").order_by("game_time_s").first()
     assert kill.actor_player.game_uid == 11559421022 and kill.x is not None  # RBL AMK
     assert abs(kill.game_time_s - 74.38) < 1.5  # aligned onto the replay's clock
+    # Knocks take their weapon from the replay's highlights too (4 were Flash Freeze).
+    knocks = events.filter(kind="KNOCK")
+    assert knocks.exclude(weapon_id=None).count() == 115
+    assert knocks.filter(weapon_id=601).count() == 4
+    # Matches uploaded before that get it from knock_weapons.
+    from django.core.management import call_command
+
+    knocks.update(weapon_id=None)
+    call_command("knock_weapons", stdout=io.StringIO())
+    assert knocks.exclude(weapon_id=None).count() == 115
 
     zones = ZonePhase.objects.filter(match=match, state="SHRINK").order_by("stage_index")
     assert [z.inner_radius for z in zones] == [550, 300, 150, 75, 30]
