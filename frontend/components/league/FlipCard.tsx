@@ -51,8 +51,39 @@ export default function FlipCard({
   );
 }
 
+/** A face-down card that can't be turned over yet: ``note`` says when it can. */
+export function LockedCard({
+  title,
+  period,
+  note,
+}: {
+  title: string;
+  period: string;
+  note: string;
+}) {
+  return (
+    <div
+      className="relative aspect-[5/7] w-[9.6em] sm:w-[12.75em]"
+      aria-label={`${title}: ${note}`}
+      role="img"
+    >
+      <CardBack title={title} period={period} badge={note} locked />
+    </div>
+  );
+}
+
 /** The back of a face-down card: the league mark, the slot and the week or month. */
-function CardBack({ title, period }: { title: string; period: string }) {
+function CardBack({
+  title,
+  period,
+  badge = "Tap to reveal",
+  locked = false,
+}: {
+  title: string;
+  period: string;
+  badge?: string;
+  locked?: boolean;
+}) {
   return (
     <span className="absolute inset-0 flex transition duration-200 group-hover:-translate-y-1 group-focus-visible:-translate-y-1">
       <span
@@ -82,8 +113,10 @@ function CardBack({ title, period }: { title: string; period: string }) {
         <span className="relative px-2 text-[0.6rem] text-muted uppercase tracking-widest sm:text-[0.7rem]">
           {period}
         </span>
-        <span className="relative mt-1 border border-accent/60 px-2 py-1 text-[0.55rem] sm:mt-3 sm:px-2.5 sm:text-[0.65rem] font-bold text-accent uppercase tracking-[0.2em] group-hover:bg-accent group-hover:text-bg">
-          Tap to reveal
+        <span
+          className={`relative mt-1 border px-2 py-1 text-[0.55rem] sm:mt-3 sm:px-2.5 sm:text-[0.65rem] font-bold uppercase tracking-[0.2em] ${locked ? "border-line text-muted" : "border-accent/60 text-accent group-hover:bg-accent group-hover:text-bg"}`}
+        >
+          {badge}
         </span>
       </span>
     </span>

@@ -59,6 +59,10 @@ export type TeamOfMonth = {
   end: string | null;
   /** False while the month is still being played: the winners can change. */
   finished?: boolean;
+  /** Still being played: the slots come back without cards and can't be turned over. */
+  locked?: boolean;
+  /** When the month's cards can be turned over (midnight in Lagos after it ends). */
+  opens?: string;
   /** The newest month: its cards start face down. */
   newest?: boolean;
   previous: string | null;

@@ -106,6 +106,17 @@ def card_week(day: date) -> date:
     return day - timedelta(days=(day.weekday() - RELEASE_WEEKDAY) % 7)
 
 
+# Team of the Month stays locked until midnight in Lagos after the month's last day.
+MONTH_TZ = "Africa/Lagos"
+
+
+def month_opens(end: date) -> datetime:
+    """When the Team of the Month for the month ending ``end`` can be turned over."""
+    from zoneinfo import ZoneInfo
+
+    return datetime.combine(end + timedelta(days=1), time(0), tzinfo=ZoneInfo(MONTH_TZ))
+
+
 def release_of(week: date) -> datetime:
     """When the cards of the week starting ``week`` come out: the Saturday after it."""
     return datetime.combine(week + timedelta(days=7), RELEASE_UTC, tzinfo=UTC)
