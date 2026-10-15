@@ -168,6 +168,13 @@ class Market(models.Model):
         PLAYER_H2H = "PLAYER_H2H", "Player head-to-head: more kills"
         FIRST_DEATH = "FIRST_DEATH", "First player to die"
         PLAYER_DAMAGE = "PLAYER_DAMAGE", "Player damage"
+        SESSION_FRAGGER = "SESSION_FRAGGER", "Session top fragger"
+        SESSION_KILLS = "SESSION_KILLS", "Team kills in the session"
+        SESSION_H2H = "SESSION_H2H", "Session head-to-head: more points"
+        RANGE_WINNER = "RANGE_WINNER", "Most points over chosen dates"
+        RANGE_TOP_N = "RANGE_TOP_N", "Top N over chosen dates"
+        RANGE_FRAGGER = "RANGE_FRAGGER", "Top fragger over chosen dates"
+        SEASON_FRAGGER = "SEASON_FRAGGER", "Season top fragger"
 
     class Status(models.TextChoices):
         DRAFT = "DRAFT", "Draft"

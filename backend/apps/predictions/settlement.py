@@ -8,14 +8,17 @@ a request never pays, refunds or corrects twice.
 
 from __future__ import annotations
 
+import datetime as dt
 from collections import Counter
+from dataclasses import dataclass
 
 from django.db import IntegrityError, transaction
-from django.db.models import F
+from django.db.models import F, Sum
 from django.utils import timezone
 
-from apps.league.models import Match, MatchDay
+from apps.league.models import Match, MatchDay, Team
 from apps.results.models import MatchEvent, PlayerMatchResult, StandingRow, TeamMatchResult
+from apps.results.standings import Tally, rank
 
 from .markets import (
     BANDS,
@@ -23,6 +26,7 @@ from .markets import (
     H2H,
     HANDICAPS,
     PLAYER_MARKETS,
+    RANGE_MARKETS,
     SEASON_MARKETS,
     SESSION_MARKETS,
     MarketError,
@@ -394,6 +398,23 @@ def _suggest_session(market: Market) -> dict:
     if market.category == C.SESSION_WINNER:
         tied = {t for t, r in rows.items() if r.rank == 1}
         return _team_winners(market, rows, tied, "session winner", evidence)
+    if market.category == C.SESSION_FRAGGER:
+        return _fragger(market, matches, evidence)
+    if market.category == C.SESSION_KILLS:
+        row = rows.get(market.params["team"])
+        if row is None:
+            return _void("The team didn't play in this session: everyone is refunded.", evidence)
+        code = "yes" if row.kills >= market.params["line"] else "no"
+        winner = next(o for o in market.outcomes.all() if o.code == code)
+        return _settle([winner], note=f"{row.kills} kills in the session.", evidence=evidence)
+    if market.category == C.SESSION_H2H:
+        a, b = market.params["teams"]
+        if a not in rows or b not in rows:
+            return _void("One of the teams didn't play: everyone is refunded.", evidence)
+        if rows[a].total_points == rows[b].total_points:
+            return _void("A tie on points: everyone is refunded.", evidence)
+        winner = a if rows[a].total_points > rows[b].total_points else b
+        return _settle([_by_team(market)[winner]], evidence=evidence)
     most = max(r.booyahs for r in rows.values())
     if most == 0:
         return _void("Nobody has a Booyah: everyone is refunded.", evidence)
@@ -407,6 +428,13 @@ def _suggest_season(market: Market) -> dict:
         match__match_day__stage__season=market.season_id, match__status=Match.Status.PUBLISHED
     )
     rows = _standings(market.season_id, "season", results)
+    if market.category in RANGE_MARKETS:
+        return _suggest_range(market)
+    if market.category == C.SEASON_FRAGGER:
+        matches = Match.objects.filter(
+            match_day__stage__season=market.season_id, status=Match.Status.PUBLISHED
+        )
+        return _fragger(market, list(matches), {"season": market.season_id})
     teams = _teams(market)
     evidence = {
         "season": market.season_id,
@@ -422,6 +450,116 @@ def _suggest_season(market: Market) -> dict:
     code = "yes" if row.rank <= market.params["n"] else "no"
     winner = next(o for o in market.outcomes.all() if o.code == code)
     return _settle([winner], note=f"Ranked {row.rank}.", evidence=evidence)
+
+
+def range_matches(market: Market) -> list[Match]:
+    """The published matches of a date-range market, once the range is over and settled."""
+    start = dt.date.fromisoformat(market.params["from"])
+    end = dt.date.fromisoformat(market.params["to"])
+    if timezone.localdate() <= end:
+        raise MarketError(f"The dates run until {end:%d %b}: settle it after that.", "not_ready")
+    matches = list(
+        Match.objects.filter(
+            match_day__stage__season=market.season_id,
+            match_day__date__gte=start,
+            match_day__date__lte=end,
+        )
+    )
+    waiting = [
+        m for m in matches if m.status in (Match.Status.PROCESSING, Match.Status.NEEDS_REVIEW)
+    ]
+    if waiting:
+        raise MarketError(
+            f"{len(waiting)} match(es) in these dates still need publishing.", "not_ready"
+        )
+    published = [m for m in matches if m.status == Match.Status.PUBLISHED]
+    if not published:
+        raise MarketError("No match in these dates is published.", "not_ready")
+    return published
+
+
+@dataclass
+class RangeRow:
+    """One team's line in a table worked out for a date range (shaped like a StandingRow)."""
+
+    team: Team
+    rank: int
+    total_points: int
+    kills: int
+    booyahs: int
+    matches_played: int
+
+    @property
+    def team_id(self) -> int:
+        return self.team.pk
+
+
+def _suggest_range(market: Market) -> dict:
+    matches = range_matches(market)
+    evidence = {
+        "from": market.params["from"],
+        "to": market.params["to"],
+        "matches": [m.pk for m in matches],
+    }
+    if market.category == C.RANGE_FRAGGER:
+        return _fragger(market, matches, evidence)
+    season = market.season
+    tallies: dict[int, Tally] = {}
+    results = TeamMatchResult.objects.filter(match__in=matches).order_by(
+        "match__match_day__date", "match__match_day__number", "match__number", "placement"
+    )
+    for r in results:
+        tallies.setdefault(r.team_id, Tally(r.team_id)).add(r)
+    names = dict(Team.objects.filter(pk__in=tallies).values_list("pk", "name"))
+    teams = Team.objects.in_bulk(list(tallies))
+    rows = {
+        t.team_id: RangeRow(
+            teams[t.team_id], position, t.total_points, t.kills, t.booyahs, t.matches_played
+        )
+        for position, t in rank(list(tallies.values()), season.tiebreakers, names)
+    }
+    evidence["standings"] = _table(rows, _teams(market))
+    if market.category == C.RANGE_WINNER:
+        tied = {t for t, r in rows.items() if r.rank == 1}
+        return _team_winners(market, rows, tied, "winner over these dates", evidence)
+    row = rows.get(market.params["team"])
+    if row is None:
+        return _void("The team didn't play in these dates: everyone is refunded.", evidence)
+    code = "yes" if row.rank <= market.params["n"] else "no"
+    winner = next(o for o in market.outcomes.all() if o.code == code)
+    return _settle([winner], note=f"Ranked {row.rank}.", evidence=evidence)
+
+
+def _fragger(market: Market, matches: list[Match], evidence: dict) -> dict:
+    """Most kills added up over ``matches``: those level share the win; listed players who
+    didn't play in any of them are refunded."""
+    kills = dict(
+        PlayerMatchResult.objects.filter(match__in=matches)
+        .values("player")
+        .annotate(k=Sum("kills"))
+        .values_list("player", "k")
+    )
+    if not kills:
+        raise MarketError("These matches have no player results.", "not_ready")
+    choices = {o.player_id: o for o in market.outcomes.all() if o.player_id}
+    evidence["kills"] = {str(p): kills.get(p, 0) for p in choices}
+    most = max(kills.values())
+    if most == 0:
+        return _void("Nobody got a kill: everyone is refunded.", evidence)
+    evidence["most_kills"] = most
+    tied = [p for p, k in kills.items() if k == most]
+    winners = [choices[p] for p in tied if p in choices]
+    voids = [o for p, o in choices.items() if p not in kills]
+    notes = []
+    if not winners:
+        notes.append("The top fragger isn't one of the choices: every bet loses.")
+    if len(tied) > 1:
+        notes.append(
+            f"{len(tied)} players tie on {most} kills: winning bets are paid odds / {len(tied)}."
+        )
+    if voids:
+        notes.append("Players who didn't play are refunded.")
+    return _settle(winners, voids, " ".join(notes), evidence, len(tied))
 
 
 def _teams(market: Market) -> set[int]:
@@ -509,6 +647,14 @@ def _apply(market: Market, settlement: Settlement, late_from) -> dict:
 def _late_from(market: Market):
     """When the real play started: bets placed from then on are refunded."""
     fixture = market.fixture
+    if fixture is None and market.category in RANGE_MARKETS:
+        starts = Match.objects.filter(
+            match_day__stage__season=market.season_id,
+            match_day__date__gte=market.params["from"],
+            match_day__date__lte=market.params["to"],
+            started_at__isnull=False,
+        ).values_list("started_at", flat=True)
+        return min(starts, default=None)
     if fixture is None:
         return None
     if fixture.match_number and fixture.match_id:

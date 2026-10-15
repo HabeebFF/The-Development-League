@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import datetime as dt
 import uuid
 from decimal import ROUND_FLOOR, Decimal, InvalidOperation
 
@@ -31,6 +32,11 @@ EDITABLE_ODDS = {S.DRAFT, S.OPEN, S.SUSPENDED}
 H2H = {C.H2H_PLACEMENT, C.H2H_KILLS, C.H2H_POINTS}
 HANDICAPS = {C.KILLS_HANDICAP, C.POINTS_HANDICAP}
 PLAYER_MARKETS = {C.PLAYER_KILLS, C.TOP_FRAGGER, C.PLAYER_H2H, C.FIRST_DEATH, C.PLAYER_DAMAGE}
+# Markets over a range of dates (from and to, both included); like season markets, no fixture.
+RANGE_MARKETS = {C.RANGE_WINNER, C.RANGE_TOP_N, C.RANGE_FRAGGER}
+# Markets on players' kills added up over a session, a date range or the season.
+FRAGGER_MARKETS = {C.SESSION_FRAGGER, C.RANGE_FRAGGER, C.SEASON_FRAGGER}
+MAX_RANGE_DAYS = 62
 # Phase C match markets: these can only be about one match, so they need a one-match fixture.
 NEEDS_MATCH = {
     C.TEAM_KILLS,
@@ -43,10 +49,24 @@ NEEDS_MATCH = {
 }
 # What a market's fixture must be: one match, a whole session, or none (season-long).
 MATCH_MARKETS = {C.BOOYAH, C.TOP_N, *H2H, *NEEDS_MATCH}
-SESSION_MARKETS = {C.SESSION_WINNER, C.MOST_BOOYAHS}
-SEASON_MARKETS = {C.OVERALL_WINNER, C.OVERALL_TOP_N}
+SESSION_MARKETS = {
+    C.SESSION_WINNER,
+    C.MOST_BOOYAHS,
+    C.SESSION_FRAGGER,
+    C.SESSION_KILLS,
+    C.SESSION_H2H,
+}
+SEASON_MARKETS = {C.OVERALL_WINNER, C.OVERALL_TOP_N, C.SEASON_FRAGGER, *RANGE_MARKETS}
 # Markets with one choice per team or player, where those level on the result share the win.
-DEAD_HEAT = {C.SESSION_WINNER, C.MOST_BOOYAHS, C.OVERALL_WINNER, C.TOP_FRAGGER, C.FIRST_DEATH}
+DEAD_HEAT = {
+    C.SESSION_WINNER,
+    C.MOST_BOOYAHS,
+    C.OVERALL_WINNER,
+    C.TOP_FRAGGER,
+    C.FIRST_DEATH,
+    C.RANGE_WINNER,
+    *FRAGGER_MARKETS,
+}
 MAX_KILLS_LINE = 60
 # Lines: (lowest, highest) for each kind of over/under or handicap.
 LINES = {
@@ -56,6 +76,7 @@ LINES = {
     C.POINTS_HANDICAP: (1, 100),
     C.PLAYER_KILLS: (1, 30),
     C.PLAYER_DAMAGE: (100, 20000),
+    C.SESSION_KILLS: (1, 200),
 }
 # Finishing bands: code -> (best place, worst place).
 BANDS = {"band:1": (1, 1), "band:2": (2, 3), "band:4": (4, 6), "band:7": (7, 99)}
@@ -134,8 +155,35 @@ def clean_params(category: str, params: dict) -> dict:
     def one_player() -> int:
         return player_ids([params.get("player")] if params.get("player") else [], 1, 1)[0]
 
+    def dates() -> dict:
+        try:
+            start = dt.date.fromisoformat(str(params.get("from")))
+            end = dt.date.fromisoformat(str(params.get("to")))
+        except ValueError as exc:
+            raise MarketError("Give the dates as from and to, like 2026-10-19.") from exc
+        if end < start:
+            raise MarketError("The end date is before the start date.")
+        if (end - start).days + 1 > MAX_RANGE_DAYS:
+            raise MarketError(f"A date range can cover at most {MAX_RANGE_DAYS} days.")
+        return {"from": start.isoformat(), "to": end.isoformat()}
+
     if category == C.TEAM_KILLS:
         return {"team": one_team(), "line": line()}
+    if category == C.SESSION_KILLS:
+        return {"team": one_team(), "line": line()}
+    if category == C.SESSION_H2H:
+        return {"teams": team_ids(params.get("teams"), at_least=2, exactly=2)}
+    if category in (C.SESSION_FRAGGER, C.SEASON_FRAGGER):
+        return {"players": player_ids(params.get("players"), at_least=2)}
+    if category == C.RANGE_WINNER:
+        return {"teams": team_ids(params.get("teams"), at_least=2), **dates()}
+    if category == C.RANGE_TOP_N:
+        n = params.get("n")
+        if n not in (3, 5, 10):
+            raise MarketError("N must be 3, 5 or 10.")
+        return {"team": one_team(), "n": n, **dates()}
+    if category == C.RANGE_FRAGGER:
+        return {"players": player_ids(params.get("players"), at_least=2), **dates()}
     if category == C.TOTAL_KILLS:
         return {"line": line()}
     if category in HANDICAPS:
@@ -176,7 +224,7 @@ def check_fixture(category: str, fixture) -> None:
 
 def outcome_specs(category: str, params: dict) -> list[dict]:
     """The outcomes a market has: ``[{code, label, team_id}]``, in display order."""
-    if category in (C.TOP_N, C.OVERALL_TOP_N):
+    if category in (C.TOP_N, C.OVERALL_TOP_N, C.RANGE_TOP_N):
         team = Team.objects.get(pk=params["team"])
         return [
             {"code": "yes", "label": f"Yes, {team.name} top {params['n']}", "team_id": None},
@@ -187,6 +235,12 @@ def outcome_specs(category: str, params: dict) -> list[dict]:
         return [
             {"code": "yes", "label": f"{team.name}: {line} or more kills", "team_id": None},
             {"code": "no", "label": f"{team.name}: {line - 1} or fewer kills", "team_id": None},
+        ]
+    if category == C.SESSION_KILLS:
+        name, line = Team.objects.get(pk=params["team"]).name, params["line"]
+        return [
+            {"code": "yes", "label": f"{name}: over {line - 0.5:g} kills", "team_id": None},
+            {"code": "no", "label": f"{name}: under {line - 0.5:g} kills", "team_id": None},
         ]
     if category == C.TOTAL_KILLS:
         line = params["line"]
@@ -214,7 +268,7 @@ def outcome_specs(category: str, params: dict) -> list[dict]:
             {"code": "no", "label": f"{player.display_name}: under {line - 0.5:g} {what}",
              "team_id": None, "player_id": player.pk},
         ]  # fmt: skip
-    if category in PLAYER_MARKETS:
+    if category in PLAYER_MARKETS or category in FRAGGER_MARKETS:
         players = Player.objects.in_bulk(params["players"])
         return [
             {"code": f"player:{p}", "label": players[p].display_name, "team_id": None,

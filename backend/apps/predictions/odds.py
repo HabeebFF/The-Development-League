@@ -16,7 +16,7 @@ from decimal import ROUND_FLOOR, Decimal
 from statistics import median
 
 from django.conf import settings
-from django.db.models import Count, F
+from django.db.models import Count, F, Sum
 
 from apps.league.models import Match, Player, Season, Team
 from apps.results.models import MatchEvent, PlayerMatchResult, StandingRow, TeamMatchResult
@@ -39,6 +39,7 @@ HISTORY = 40  # a team's most recent published matches that count
 PRIOR = 5  # matches' worth of league-wide results blended into every team
 SIMS = 4000
 SEASON_SIMS = 1000
+FRAGGER_SIMS = 2000
 DEFAULT_LOBBY = 12
 DEFAULT_SESSION = 6
 DEFAULT_MATCHES_LEFT = 10
@@ -348,23 +349,94 @@ def _share_wins(shares: defaultdict, leaders: list[int], listed: list[int]) -> N
 
 
 def _session_chances(category, params, sim, lobby, matches, season) -> dict[str, float]:
-    listed = params["teams"]
+    """Session markets, and date-range team markets played as ``matches`` matches in a row."""
+    listed = params.get("teams") or [params["team"]]
     teams = listed + [-n for n in range(1, max(lobby - len(listed), 0) + 1)]
     rule, tiebreakers = season.scoring_rule, season.tiebreakers
     shares: defaultdict = defaultdict(float)
+    ties = 0
     for _ in range(SIMS):
         tallies = {t: Tally() for t in teams}
         for _ in range(matches):
             for t, (place, kills) in sim.match(teams).items():
                 tallies[t].add(place, kills, rule)
-        if category == C.SESSION_WINNER:
+        if category == C.SESSION_KILLS:
+            shares["yes"] += tallies[params["team"]].kills >= params["line"]
+            continue
+        if category == C.SESSION_H2H:
+            a, b = (tallies[t].total_points for t in listed)
+            if a == b:
+                ties += 1  # a tie refunds every bet
+            else:
+                shares[listed[0] if a > b else listed[1]] += 1
+            continue
+        if category == C.RANGE_TOP_N:
+            keys = {t: _key(x, tiebreakers) for t, x in tallies.items()}
+            team = params["team"]
+            shares["yes"] += 1 + sum(k > keys[team] for k in keys.values()) <= params["n"]
+            continue
+        if category in (C.SESSION_WINNER, C.RANGE_WINNER):
             best = max(_key(x, tiebreakers) for x in tallies.values())
             leaders = [t for t, x in tallies.items() if _key(x, tiebreakers) == best]
         else:
             most = max(x.booyahs for x in tallies.values())
             leaders = [t for t, x in tallies.items() if x.booyahs == most]
         _share_wins(shares, leaders, listed)
-    return {f"team:{t}": shares[t] / SIMS for t in listed}
+    if category in (C.SESSION_KILLS, C.RANGE_TOP_N):
+        return {"yes": shares["yes"] / SIMS, "no": 1 - shares["yes"] / SIMS}
+    decided = SIMS - ties
+    if not decided:
+        return {f"team:{t}": 1 / len(listed) for t in listed}
+    return {f"team:{t}": shares[t] / decided for t in listed}
+
+
+def _fragger_chances(players, matches: int, sims: int, rng, start=None, field=None) -> dict:
+    """Most kills over ``matches`` matches: ``start`` kills already scored (the season so far)
+    and ``field``, the other players who could win (unnamed stand-ins when not given)."""
+    history = load_player_history()
+    if not history.pool:
+        raise MarketError("There are no published player results to work from yet.", "no_history")
+    start = start or {}
+    if field is None:
+        field = [-n for n in range(1, max(history.per_match - len(players), 0) + 1)]
+    everyone = list(players) + [p for p in field if p not in players]
+
+    def draw(player: int) -> int:
+        own = history.own.get(player, [])
+        if not own or rng.random() < PRIOR / (len(own) + PRIOR):
+            return rng.choice(history.pool)[0]
+        return rng.choice(own)[0]
+
+    shares: defaultdict = defaultdict(float)
+    nobody = 0
+    for _ in range(sims):
+        kills = {p: start.get(p, 0) + sum(draw(p) for _ in range(matches)) for p in everyone}
+        best = max(kills.values())
+        if best == 0:
+            nobody += 1  # nobody scores: the market is refunded
+            continue
+        leaders = [p for p, k in kills.items() if k == best]
+        for p in leaders:
+            if p in players:
+                shares[p] += 1 / len(leaders)
+    decided = sims - nobody
+    if not decided:
+        return {f"player:{p}": 1 / len(players) for p in players}
+    return {f"player:{p}": shares[p] / decided for p in players}
+
+
+def _season_fragger_chances(params, matches_left, season, rng) -> dict:
+    so_far = dict(
+        PlayerMatchResult.objects.filter(
+            match__match_day__stage__season=season, match__status=Match.Status.PUBLISHED
+        )
+        .values("player")
+        .annotate(k=Sum("kills"))
+        .values_list("player", "k")
+    )
+    return _fragger_chances(
+        params["players"], matches_left, SEASON_SIMS, rng, start=so_far, field=list(so_far)
+    )
 
 
 def _season_chances(category, params, sim, lobby, matches_left, season) -> dict[str, float]:
@@ -427,10 +499,23 @@ def suggest_odds(
     rng = random.Random(f"{season.pk}:{category}:{sorted(params.items())}:{fixture and fixture.pk}")
     sim, lobby = Simulator(history, rng), lobby_size(season)
     info: dict = {"lobby": lobby}
-    if category in SEASON_MARKETS:
-        left = DEFAULT_MATCHES_LEFT if matches_left is None else matches_left
+    left = DEFAULT_MATCHES_LEFT if matches_left is None else matches_left
+    if category == C.SEASON_FRAGGER:
+        chances = _season_fragger_chances(params, left, season, rng)
+        info.update(matches_left=left, simulations=SEASON_SIMS)
+    elif category == C.RANGE_FRAGGER:
+        chances = _fragger_chances(params["players"], left, FRAGGER_SIMS, rng)
+        info.update(matches_left=left, simulations=FRAGGER_SIMS)
+    elif category in (C.RANGE_WINNER, C.RANGE_TOP_N):
+        chances = _session_chances(category, params, sim, lobby, left, season)
+        info.update(matches_left=left, simulations=SIMS)
+    elif category in SEASON_MARKETS:
         chances = _season_chances(category, params, sim, lobby, left, season)
         info.update(matches_left=left, simulations=SEASON_SIMS)
+    elif category == C.SESSION_FRAGGER:
+        matches = session_length(season, fixture)
+        chances = _fragger_chances(params["players"], matches, FRAGGER_SIMS, rng)
+        info.update(matches=matches, simulations=FRAGGER_SIMS)
     elif category in SESSION_MARKETS:
         matches = session_length(season, fixture)
         chances = _session_chances(category, params, sim, lobby, matches, season)
@@ -478,6 +563,10 @@ def suggest_odds(
         C.FIRST_BLOOD,
         C.TOP_FRAGGER,
         C.FIRST_DEATH,
+        C.RANGE_WINNER,
+        C.SESSION_FRAGGER,
+        C.RANGE_FRAGGER,
+        C.SEASON_FRAGGER,
     ):
         if sum(chances.values()) < 0.99:
             notes.append("Choices that aren't listed can win too, so the chances add up to less.")

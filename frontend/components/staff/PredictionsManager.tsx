@@ -8,6 +8,7 @@ import { api, ApiError, type Paged, type TeamRef } from "@/lib/api";
 import {
   categoriesFor,
   coins,
+  datesProblem,
   defaultTitle,
   lineProblem,
   MARKET_STATUS,
@@ -481,6 +482,8 @@ function NewMarket({ fixture, seasonId, teams, onMade }: { fixture: StaffFixture
   const [odds, setOdds] = useState<Record<string, string>>({});
   const [suggestion, setSuggestion] = useState<(OddsSuggestion & { key: string }) | null>(null);
   const [left, setLeft] = useState("10");
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [opens, setOpens] = useState(toLocalInput(new Date().toISOString()));
@@ -505,8 +508,9 @@ function NewMarket({ fixture, seasonId, teams, onMade }: { fixture: StaffFixture
   const playerNote = playersProblem(category, people.length);
   const pickNote = teamNote ?? playerNote;
   const oddsNote = codes.map((c) => oddsProblem(odds[c.code] ?? "")).find(Boolean) ?? null;
-  const blocked = busy || !!pickNote || !!oddsNote || !!lineNote;
-  const suggested = defaultTitle(category, chosen, n, fixture?.match_number ?? null, lineValue, people);
+  const datesNote = kind.dates ? datesProblem(from, to) : null;
+  const blocked = busy || !!pickNote || !!oddsNote || !!lineNote || !!datesNote;
+  const suggested = defaultTitle(category, chosen, n, fixture?.match_number ?? null, lineValue, people, kind.dates && !datesNote ? { from, to } : null);
 
   const season = scopeOf(fixture) === "season";
   const one = (max: number | null) => max === 1;
@@ -515,7 +519,8 @@ function NewMarket({ fixture, seasonId, teams, onMade }: { fixture: StaffFixture
     if (kind.teams[1] !== 0) Object.assign(p, one(kind.teams[1]) ? { team: picked[0] } : { teams: picked });
     if (kind.players[1] !== 0) Object.assign(p, one(kind.players[1]) ? { player: people[0]?.id } : { players: people.map((x) => x.id) });
     if (kind.line) p.line = Number(line);
-    if (category === "TOP_N" || category === "OVERALL_TOP_N") p.n = n;
+    if (category === "TOP_N" || category === "OVERALL_TOP_N" || category === "RANGE_TOP_N") p.n = n;
+    if (kind.dates) Object.assign(p, { from, to });
     return p;
   };
 
@@ -624,7 +629,19 @@ function NewMarket({ fixture, seasonId, teams, onMade }: { fixture: StaffFixture
             <input className="input mt-1" inputMode="numeric" value={line} onChange={(e) => setLine(e.target.value)} />
           </label>
         )}
-        {(category === "TOP_N" || category === "OVERALL_TOP_N") && (
+        {kind.dates && (
+          <>
+            <label className="text-sm">
+              <span className="text-muted">From {datesNote && <span className="text-bad">· {datesNote}</span>}</span>
+              <input className="input mt-1" type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
+            </label>
+            <label className="text-sm">
+              <span className="text-muted">To (settled the day after)</span>
+              <input className="input mt-1" type="date" value={to} onChange={(e) => setTo(e.target.value)} />
+            </label>
+          </>
+        )}
+        {(category === "TOP_N" || category === "OVERALL_TOP_N" || category === "RANGE_TOP_N") && (
           <label className="text-sm">
             <span className="text-muted">Top</span>
             <select className="input mt-1" value={n} onChange={(e) => setN(Number(e.target.value))}>
@@ -705,13 +722,13 @@ function NewMarket({ fixture, seasonId, teams, onMade }: { fixture: StaffFixture
           <div className="mt-1 flex flex-wrap items-end gap-2">
             {season && (
               <label className="text-sm">
-                <span className="block text-muted">Matches left for each team</span>
+                <span className="block text-muted">{kind.dates ? "Matches each plays in these dates" : "Matches left for each team"}</span>
                 <span className="block w-24">
                   <input className="input mt-1 py-1" inputMode="numeric" value={left} onChange={(e) => setLeft(e.target.value)} />
                 </span>
               </label>
             )}
-            <button type="button" className="btn" disabled={busy || !!pickNote || !!lineNote} onClick={suggest}>
+            <button type="button" className="btn" disabled={busy || !!pickNote || !!lineNote || !!datesNote} onClick={suggest}>
               Suggest odds from past results
             </button>
           </div>
@@ -720,7 +737,7 @@ function NewMarket({ fixture, seasonId, teams, onMade }: { fixture: StaffFixture
               <p>
                 Worked out from every team&apos;s published results
                 {hint.matches_left
-                  ? `, with ${hint.matches_left} matches left each`
+                  ? `, with ${hint.matches_left} matches ${kind.dates ? "each in these dates" : "left each"}`
                   : hint.matches && hint.matches > 1
                     ? ` over a ${hint.matches}-match session`
                     : ""}
