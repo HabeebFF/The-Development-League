@@ -65,6 +65,13 @@ export default function SignupForm() {
         {err("password")}
       </label>
       {(errors.detail || errors.non_field_errors) && <p className="text-sm text-bad">{errors.detail || errors.non_field_errors}</p>}
+      <p className="text-xs text-muted">
+        By signing up you agree to our{" "}
+        <Link href="/privacy" className="text-accent hover:underline">
+          Privacy notice
+        </Link>
+        .
+      </p>
       <button type="submit" disabled={busy} className="btn btn-primary w-full">
         {busy ? "Creating account..." : "Create account"}
       </button>
