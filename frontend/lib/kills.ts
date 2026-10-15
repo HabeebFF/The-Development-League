@@ -11,6 +11,8 @@ export type KillRow = {
   kills: number;
   knocks: number;
   headshots: number;
+  /** Damage dealt to enemies; null when none of the player's matches had a replay .bin. */
+  damage: number | null;
   matches: number;
 };
 
