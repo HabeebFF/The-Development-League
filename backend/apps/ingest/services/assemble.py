@@ -23,6 +23,7 @@ from django.utils import timezone
 
 from apps.league.models import Match, MatchDay, Player, PlayerAlias, Team, TeamAlias
 from apps.maps.models import Map
+from apps.results.damage import build_damage, clear_damage
 from apps.results.models import MatchEvent, PlayerMatchResult, TeamMatchResult, ZonePhase
 from apps.results.standings import schedule_rebuild
 from apps.rotations.auto import draft_rotations
@@ -362,9 +363,12 @@ def _build(match: Match, assignment: Assignment, run: ParseRun) -> tuple[dict[st
         objects = build_objects(match, replay_data, entity_uid, players, uid_team)
         if not tracks:
             warnings.append("Replay .bin had no player positions; the live replay is empty.")
+        if problem := build_damage(match, replay_data):
+            warnings.append(problem)
     else:
         PlayerTrack.objects.filter(match=match).delete()
         ReplayObject.objects.filter(match=match).delete()
+        clear_damage(match)
     draft_rotations(match)  # after the tracks: auto points sit on the replay path
 
     # -- consistency checks ----------------------------------------------------------------------

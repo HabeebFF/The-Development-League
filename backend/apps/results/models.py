@@ -57,6 +57,10 @@ class PlayerMatchResult(TimeStampedModel):
     headshot_knocks = models.PositiveSmallIntegerField(null=True, blank=True)
     deaths = models.PositiveSmallIntegerField(null=True, blank=True)
     respawns = models.PositiveSmallIntegerField(null=True, blank=True)
+    # From the replay .bin's hits (``apps.results.damage``); empty without one.
+    damage_dealt = models.PositiveIntegerField(null=True, blank=True)
+    damage_taken = models.PositiveIntegerField(null=True, blank=True)  # from enemies
+    zone_damage = models.PositiveIntegerField(null=True, blank=True)  # zone, falls, own blasts
     is_mvp = models.BooleanField(default=False)
 
     class Meta:
@@ -65,6 +69,17 @@ class PlayerMatchResult(TimeStampedModel):
 
     def __str__(self) -> str:
         return f"{self.match}: {self.display_name}"
+
+
+class MatchDamage(models.Model):
+    """Every hit between enemies in one match, for the live replay's damage counters."""
+
+    match = models.OneToOneField("league.Match", on_delete=models.CASCADE, related_name="damage")
+    # [[t, attacker entity, victim entity, damage], ...] in time order
+    hits = models.JSONField(default=list)
+
+    def __str__(self) -> str:
+        return f"{self.match}: {len(self.hits)} hits"
 
 
 class MatchEvent(models.Model):

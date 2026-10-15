@@ -44,6 +44,13 @@ Bolt Makers at 5:57 and 9:15) and the debugger log's lightning sounds:
   Checked 2026-09-29 on the Day 11 replays: always 6 varints and 50 m, aimed 15-430 m
   away from the scanner, ~90 a match (a player can scan again after a cooldown).
 
+Type 106 is one hit (checked 2026-10-15 on the Day 10 sample against the .json kills: the
+killer is the attacker on the hits around each kill, and the weapon matches the kill's
+weaponDataID): attacker entity, victim entity, damage, 0, zigzag weapon id, 0, 0, hit part.
+A hit whose attacker is its victim is the zone, a fall or the player's own explosive; zone
+ticks carry weapon -1 and 1-8 damage. Types 2010 and 168 repeat the same hits. Identical
+106 messages at the same moment are separate pellets or splash hits and all count.
+
 Standard library only. Never raises on bad or truncated data: it resyncs on the next
 valid message and skips what it cannot decode.
 """
@@ -59,6 +66,7 @@ __all__ = [
     "iter_messages",
     "MSG_POSITIONS",
     "MSG_ENTITY_STATE",
+    "parse_hits",
 ]
 
 MSG_POSITIONS = 2054  # 0x0806: batch of per-player position records
@@ -66,6 +74,7 @@ MSG_ENTITY_STATE = 2055  # 0x0807: batch of per-player state, carries full ids
 MSG_FLYING = 2005  # one sample of a flying object (UAVs)
 MSG_THUNDER_AREA = 157  # a Bolt Maker lightning zone
 MSG_DINOCULARS = 847  # a Dinoculars scan of a spot on the map
+MSG_HIT = 106  # one hit: attacker, victim, damage, weapon
 
 KIND_PLAYER_UAV = 1006
 KIND_GENERAL_UAV = 0
@@ -287,6 +296,25 @@ def _parse_state_ids(pl, id_map):
         low = full & 0xFFFFFF
         if 0 < low and 0 < (full >> 24) < 256 and low not in id_map:
             id_map[low] = full
+
+
+def parse_hits(data):
+    """Every hit in the replay: ``[(t, attacker, victim, damage, weapon_id, part)]``.
+
+    Entities are full ids (team slot in the top byte); ``weapon_id`` is the same number as
+    kill weapons (-1 for the zone). Never raises."""
+    hits = []
+    try:
+        for _off, t, _flag, mtype, pl in iter_messages(data):
+            if mtype != MSG_HIT:
+                continue
+            v = _read_varints(pl)
+            if len(v) != 8 or not (0 < v[0] < 1 << 32 and 0 < v[1] < 1 << 32) or v[2] > 10000:
+                continue
+            hits.append((float(t), v[0], v[1], v[2], _zz(v[4]), v[7]))
+    except Exception:  # never raise on bad data
+        pass
+    return hits
 
 
 def parse_objects(data):

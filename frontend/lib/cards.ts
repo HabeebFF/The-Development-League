@@ -10,7 +10,7 @@ export type CardStat = {
   change: number | null;
   /** Not enough matches with this data: last week's rating, carried over. */
   stale: boolean;
-  /** A grenader's extra stats. */
+  /** Shown in the row under the main six: Damage on every card, Grenade on grenaders. */
   extra?: boolean;
   value: string | null;
   detail: string;
