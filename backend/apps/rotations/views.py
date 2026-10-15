@@ -12,7 +12,13 @@ from rest_framework.views import APIView
 
 from apps.league.models import Match, Team
 from apps.maps.models import MapArea
-from apps.results.models import MatchEvent, PlayerMatchResult, TeamMatchResult, ZonePhase
+from apps.results.models import (
+    MatchDamage,
+    MatchEvent,
+    PlayerMatchResult,
+    TeamMatchResult,
+    ZonePhase,
+)
 from common.permissions import HasFeature, IsStaff
 
 from .auto import draft_rotations
@@ -153,6 +159,11 @@ class MatchReplayView(APIView):
         )
         zones = ZonePhase.objects.filter(match=match).order_by("stage_index", "game_time_s")
         objects = ReplayObject.objects.filter(match=match).select_related("team", "player")
+        damage = MatchDamage.objects.filter(match=match).first()
+        hits = damage.hits if damage else []
+        if wanted:
+            mine = {p["entity_id"] for p in players}
+            hits = [h for h in hits if h[1] in mine or h[2] in mine]
         return Response(
             {
                 "match": match.pk,
@@ -175,6 +186,9 @@ class MatchReplayView(APIView):
                 ],
                 "players": players,
                 "zones": ZonePhaseSerializer(zones, many=True).data,
+                # Hits between enemies, [t, attacker, victim, damage]; empty when the
+                # match has no replay .bin or its hits were incomplete.
+                "hits": hits,
                 # UAVs and Bolt Makers of every team: enemies' scans matter too.
                 "objects": [
                     {

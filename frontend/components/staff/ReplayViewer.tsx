@@ -13,6 +13,7 @@ import { boxOf, statusAt } from "@/lib/livepath";
 import {
   clock,
   enemiesInScan,
+  damageAt,
   killsAt,
   positionAt,
   strikesAt,
@@ -231,6 +232,7 @@ export default function ReplayViewer({
   const single = chosen.size === 1 ? [...chosen][0] : null;
 
   const kills = killsAt(replay.events, t, Object.fromEntries(replay.players.map((p) => [p.entity_id, p.team])));
+  const damage = replay.hits?.length ? damageAt(replay.hits, t) : null;
   // Each player's fixed place within their team, so their labels fan out instead of stacking.
   const slotOf: Record<number, number> = {};
   for (const team of replay.teams) replay.players.filter((p) => p.team === team.slug).forEach((p, i) => (slotOf[p.entity_id] = i));
@@ -312,7 +314,12 @@ export default function ReplayViewer({
                 members.map((p) => (
                   <div key={p.entity_id} className="flex items-center gap-2 py-0.5 pl-7 pr-2 text-xs">
                     <span className="flex-1 truncate">{p.name}</span>
-                    <span className={`tabular-nums ${kills[p.entity_id] ? "text-accent" : "text-muted"}`}>
+                    {damage && (
+                      <span className="tabular-nums text-muted" title="Damage dealt so far">
+                        {(damage[p.entity_id] ?? 0).toLocaleString()} dmg
+                      </span>
+                    )}
+                    <span className={`w-4 text-right tabular-nums ${kills[p.entity_id] ? "text-accent" : "text-muted"}`} title="Kills so far">
                       {kills[p.entity_id] ?? 0}
                     </span>
                   </div>
