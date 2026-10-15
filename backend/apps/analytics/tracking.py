@@ -5,13 +5,16 @@ from __future__ import annotations
 import hashlib
 import hmac
 import re
+import uuid
+from datetime import timedelta
 from urllib.parse import urlsplit
 from zoneinfo import ZoneInfo
 
 from django.conf import settings
+from django.db import models
 from django.utils import timezone
 
-from .models import PageView
+from .models import Action, PageView
 
 # Crawlers, link previews (WhatsApp, Discord...) and scripts. Real browsers never say these.
 BOT = re.compile(
@@ -180,5 +183,105 @@ def record(request, path: str, referrer: str = "", ref: str = "") -> PageView | 
         device=device(ua),
         browser=browser(ua),
         os=operating_system(ua),
+        user=request.user if request.user and request.user.is_authenticated else None,
         audience=audience(request.user),
     )
+
+
+# -- After the page opened: time on page and actions ---------------------------------------
+
+MAX_SECONDS = 60 * 60  # a page left open all night is not an hour of reading
+MAX_ACTIONS_PER_VIEW = 300
+REPORT_WINDOW = timedelta(hours=24)
+
+
+def view_for(key) -> PageView | None:
+    """The page view a browser reports on, if the key is real and recent."""
+    try:
+        key = uuid.UUID(str(key))
+    except ValueError:
+        return None
+    since = timezone.now() - REPORT_WINDOW
+    return PageView.objects.filter(key=key, created_at__gte=since).first()
+
+
+def report_time(view: PageView, seconds) -> None:
+    """The browser sends the total time so far; keep the largest (pings can arrive late)."""
+    try:
+        seconds = min(MAX_SECONDS, max(0, int(seconds)))
+    except (TypeError, ValueError):
+        return
+    PageView.objects.filter(pk=view.pk).filter(
+        models.Q(duration_s__isnull=True) | models.Q(duration_s__lt=seconds)
+    ).update(duration_s=seconds)
+
+
+def _text(value, limit: int) -> str:
+    return re.sub(r"\s+", " ", str(value or "")).strip()[:limit]
+
+
+# What a save or sign-in to the API was, by its first path part.
+API_NOUNS = {
+    "uploads": "match files",
+    "matches": "a match",
+    "teams": "a team",
+    "seasons": "a season",
+    "stages": "a stage",
+    "match-days": "a match day",
+    "players": "a player",
+    "cards": "player cards",
+    "maps": "a map",
+    "coach": "coach settings",
+    "pp": "Protection Points",
+    "ratings": "ratings",
+    "invites": "an invite",
+    "me": "their profile",
+    "groups": "a group",
+    "player-claims": "a player claim",
+    "rosters": "a roster",
+    "scoring-rules": "scoring rules",
+    "staff": "staff access",
+    "team-aliases": "a team name spelling",
+}
+API_VERBS = {"POST": "Saved", "PUT": "Saved", "PATCH": "Edited", "DELETE": "Deleted"}
+
+
+def api_action_name(method: str, path: str, ok: bool) -> str | None:
+    """A readable name for a change the site made through the API, or None to skip it."""
+    method = (method or "").upper()
+    path = _text(path, 120).split("?")[0].strip("/")
+    if method not in API_VERBS or not path or path.startswith(("analytics", "auth/csrf")):
+        return None
+    if path == "auth/refresh":
+        return None
+    if path == "auth/login":
+        return "Signed in" if ok else "Sign-in failed"
+    if path == "auth/logout":
+        return "Signed out"
+    if path.startswith("auth/password-reset"):
+        return "Asked to reset password" if ok else "Password reset failed"
+    if path.startswith("invites/") and method == "POST":
+        return "Accepted an invite" if ok else "Invite failed"
+    if path == "me/link-uid":
+        return "Linked their game ID" if ok else "Game ID link failed"
+    parts = [p for p in path.split("/") if p and p != "admin"]
+    noun = API_NOUNS.get(parts[0] if parts else "", parts[0] if parts else "something")
+    name = f"{API_VERBS[method]} {noun}"
+    return name if ok else f"{name} (failed)"
+
+
+def add_action(view: PageView, data: dict):
+    """Store one thing done on a page. ``data`` is either {name, detail} from a click or
+    pick, or {api: {method, path, ok}} for a change the page made."""
+    if view.actions.count() >= MAX_ACTIONS_PER_VIEW:
+        return None
+    api = data.get("api")
+    if isinstance(api, dict):
+        name = api_action_name(api.get("method"), api.get("path"), bool(api.get("ok")))
+        detail = _text(api.get("path"), 120).split("?")[0]
+    else:
+        name = _text(data.get("name"), 80)
+        detail = _text(data.get("detail"), 120)
+    if not name:
+        return None
+    return Action.objects.create(view=view, name=name, detail=detail)

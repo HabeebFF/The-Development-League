@@ -21,7 +21,7 @@ from typing import Any
 from django.db import connection, transaction
 from django.utils import timezone
 
-from apps.league.models import Match, MatchDay, Player, Team, TeamAlias
+from apps.league.models import Match, MatchDay, Player, PlayerAlias, Team, TeamAlias
 from apps.maps.models import Map
 from apps.results.models import MatchEvent, PlayerMatchResult, TeamMatchResult, ZonePhase
 from apps.results.standings import schedule_rebuild
@@ -250,6 +250,15 @@ def _build(match: Match, assignment: Assignment, run: ParseRun) -> tuple[dict[st
             if uid in players:  # the same account listed twice: keep the first row
                 continue
             name = clean(p.name_raw)
+            alias = PlayerAlias.objects.select_related("player").filter(game_uid=uid).first()
+            if alias is not None:
+                # Another account of a player staff merged: it lands on the kept player,
+                # whose name stays as staff left it.
+                player = alias.player
+                Player.objects.filter(pk=player.pk).update(current_team=team)
+                players[uid] = player
+                uid_team[uid] = team
+                continue
             player, _ = Player.objects.update_or_create(
                 game_uid=uid,
                 defaults={

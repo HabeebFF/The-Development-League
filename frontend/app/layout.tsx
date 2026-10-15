@@ -46,6 +46,9 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
               <Link href="/staff" className="hover:text-white">
                 Staff
               </Link>
+              <Link href="/privacy" className="hover:text-white">
+                Privacy
+              </Link>
             </span>
           </div>
         </footer>
