@@ -524,3 +524,31 @@ def test_full_life_of_a_bet_through_the_api(league, staff, fans):
     history = staff_client.get(f"{base}/settlements").json()
     assert history[0]["version"] == 1 and history[0]["by"] == "staff@tdl.test"
     assert check_wallets() == []
+
+
+def test_leaderboard_keeps_its_three_measures_apart(league, staff, fans, settings):
+    t = league["teams"]
+    market = make_market(league, staff)
+    alpha, bravo = outcome(market, t["Alpha"]), outcome(market, t["Bravo"])
+    for _ in range(10):
+        bet(fans[0], market, alpha, stake=10)  # 10 wins at 2.50
+    for _ in range(9):
+        bet(fans[1], market, bravo, stake=10)  # 9 losses
+    bet(fans[1], market, alpha, stake=500)  # 1 big win
+    wallet_for(fans[2])  # never bets
+    ready(league, market, staff)
+    settle(market, actor=staff, winners=[alpha.pk])
+    client = APIClient()  # public while the site is public
+
+    balance = client.get("/api/v1/predictions/leaderboard?metric=balance").json()["rows"]
+    assert [(r["name"], r["balance"]) for r in balance] == [
+        ("fan1@", 1660),  # 1000 - 590 + 1250
+        ("fan0@", 1150),  # 1000 - 100 + 250
+        ("fan2@", 1000),
+    ]
+    accuracy = client.get("/api/v1/predictions/leaderboard?metric=accuracy").json()["rows"]
+    assert [(r["name"], r["accuracy"]) for r in accuracy] == [("fan0@", 1.0), ("fan1@", 0.1)]
+    wins = client.get("/api/v1/predictions/leaderboard?metric=wins").json()["rows"]
+    assert [(r["name"], r["won"]) for r in wins] == [("fan0@", 10), ("fan1@", 1)]
+    assert "email" not in str(balance)
+    assert client.get("/api/v1/predictions/leaderboard?metric=luck").status_code == 400

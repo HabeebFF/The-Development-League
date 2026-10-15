@@ -1,8 +1,10 @@
 import type { Me } from "./api";
 
-/** Where to go after signing in when no page asked for one: staff to Staff, teams to their area. */
-export function homeFor(me: Pick<Me, "staff_role">): string {
-  return me.staff_role ? "/staff" : "/team";
+/** Where to go after signing in when no page asked for one: staff to Staff, teams to their
+ * area, and fans (no team) to the home page. */
+export function homeFor(me: Pick<Me, "staff_role"> & { memberships?: unknown[] }): string {
+  if (me.staff_role) return "/staff";
+  return me.memberships && me.memberships.length === 0 ? "/" : "/team";
 }
 
 /** Pages anyone can open without signing in: signing in, invites and password resets. */
@@ -12,5 +14,5 @@ export function isOpenPath(path: string): boolean {
 
 /** League pages visitors can read without an account while the site is public. */
 export function isPublicPath(path: string): boolean {
-  return path === "/" || /^\/(standings|results|teams|matches|awards|kills|ratings|cards|protection-points)(\/|$)/.test(path);
+  return path === "/" || /^\/(standings|results|teams|matches|awards|kills|ratings|cards|protection-points|predict)(\/|$)/.test(path);
 }

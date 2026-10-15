@@ -6,7 +6,7 @@ Balances are only ever read here; the one write (a staff adjustment) goes throug
 
 from django.conf import settings
 from django.db import transaction
-from django.db.models import Count, Q, Sum
+from django.db.models import Count, ExpressionWrapper, F, FloatField, Q, Sum
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import mixins, serializers, status, viewsets
@@ -198,6 +198,7 @@ def _team(t) -> dict | None:
         "tag": t.tag,
         "slug": t.slug,
         "logo": t.logo.url if t.logo else None,
+        "primary_color": t.primary_color,
     }
 
 
@@ -237,6 +238,7 @@ def market_data(market: Market, now=None) -> dict:
         "accepting": accepting_bets(market, now),
         "opens_at": market.opens_at,
         "closes_at": market.closes_at,
+        "winners": _winners(market),
         "outcomes": [
             {
                 "id": o.pk,
@@ -249,6 +251,14 @@ def market_data(market: Market, now=None) -> dict:
             for o in market.outcomes.all()
         ],
     }
+
+
+def _winners(market: Market) -> list[int]:
+    """The winning outcomes of a settled market (latest settlement), else empty."""
+    if market.status != S.SETTLED:
+        return []
+    latest = market.settlements.order_by("-version").first()
+    return list(latest.winning_outcomes.values_list("pk", flat=True)) if latest else []
 
 
 def _markets():
@@ -735,3 +745,58 @@ class OutcomeAdminView(APIView):
         except MarketError as exc:
             return _refused(exc)
         return Response(staff_market_data(_markets().get(pk=outcome.market_id)))
+
+
+# -- leaderboard ---------------------------------------------------------------------------------
+
+ACCURACY_MIN_SETTLED = 10
+LEADERBOARD_SIZE = 50
+
+
+def _name(wallet: Wallet) -> str:
+    return wallet.user.display_name or f"Player {wallet.pk}"
+
+
+class LeaderboardView(APIView):
+    """Three separate tables, never mixed:
+
+    - ``balance``: coins now (everyone started with the same amount, so this is profit).
+    - ``accuracy``: won / (won + lost), voids left out, only with at least 10 settled bets.
+    - ``wins``: number of winning bets.
+    """
+
+    permission_classes = [PredictionsOn, PublicRead]
+
+    def get(self, request):
+        metric = request.query_params.get("metric", "balance")
+        won = Count("user__bets", filter=Q(user__bets__status=Bet.Status.WON))
+        lost = Count("user__bets", filter=Q(user__bets__status=Bet.Status.LOST))
+        qs = Wallet.objects.select_related("user").annotate(won=won, lost=lost)
+        if metric == "balance":
+            qs = qs.order_by("-balance", "created_at")
+        elif metric == "accuracy":
+            qs = qs.annotate(settled=F("won") + F("lost")).filter(settled__gte=ACCURACY_MIN_SETTLED)
+            qs = qs.annotate(
+                acc=ExpressionWrapper(F("won") * 1.0 / F("settled"), output_field=FloatField())
+            ).order_by("-acc", "-settled", "created_at")
+        elif metric == "wins":
+            qs = qs.filter(won__gt=0).order_by("-won", "lost", "created_at")
+        else:
+            raise ValidationError({"metric": "Use balance, accuracy or wins."})
+        rows = []
+        for n, w in enumerate(qs[:LEADERBOARD_SIZE], start=1):
+            settled = w.won + w.lost
+            rows.append(
+                {
+                    "rank": n,
+                    "name": _name(w),
+                    "is_me": request.user.is_authenticated and w.user_id == request.user.pk,
+                    "balance": w.balance,
+                    "won": w.won,
+                    "lost": w.lost,
+                    "accuracy": round(w.won / settled, 4) if settled else None,
+                }
+            )
+        return Response(
+            {"metric": metric, "accuracy_min_settled": ACCURACY_MIN_SETTLED, "rows": rows}
+        )
