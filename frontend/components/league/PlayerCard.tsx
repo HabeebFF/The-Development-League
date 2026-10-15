@@ -155,7 +155,7 @@ export default function PlayerCard({
         </div>
         {extras.length > 0 && (
           <div
-            className="absolute inset-x-[2.3em] top-[15.15em] grid grid-cols-2 gap-x-[1em] border-t pt-[0.1em]"
+            className="absolute inset-x-[2.3em] top-[15.4em] grid grid-cols-2 gap-x-[1em] border-t pt-[0.1em]"
             style={{
               borderColor: `color-mix(in srgb, ${ink} 35%, transparent)`,
             }}
