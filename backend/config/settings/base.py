@@ -143,6 +143,8 @@ PREDICTIONS_ENABLED = env_bool("PREDICTIONS_ENABLED", False)
 PREDICTIONS_INITIAL_COINS = int(env("PREDICTIONS_INITIAL_COINS", "1000"))
 PREDICTIONS_MIN_STAKE = int(env("PREDICTIONS_MIN_STAKE", "10"))
 PREDICTIONS_MAX_STAKE = int(env("PREDICTIONS_MAX_STAKE", "500"))
+# Suggested odds keep this share back (0.08 = 8%) so coins don't inflate over time.
+PREDICTIONS_ODDS_MARGIN = float(env("PREDICTIONS_ODDS_MARGIN", "0.08"))
 
 # AI Coach writer: rewrites report tasks and counter plays in plain English. Every claim
 # is checked against our facts; anything that fails (or the writer being off, over its

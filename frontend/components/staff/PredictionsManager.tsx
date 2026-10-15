@@ -25,6 +25,14 @@ import {
 } from "@/lib/predictions";
 
 type Season = { id: number; name: string; slug: string; is_active: boolean };
+type OddsSuggestion = {
+  odds: Record<string, string>;
+  chances: Record<string, number>;
+  margin: number;
+  notes: string[];
+  matches?: number;
+  matches_left?: number;
+};
 type StaffFixture = Fixture & {
   season: number;
   display_title: string;
@@ -465,6 +473,8 @@ function NewMarket({ fixture, seasonId, teams, onMade }: { fixture: StaffFixture
   const [n, setN] = useState(3);
   const [line, setLine] = useState("10");
   const [odds, setOdds] = useState<Record<string, string>>({});
+  const [suggestion, setSuggestion] = useState<(OddsSuggestion & { key: string }) | null>(null);
+  const [left, setLeft] = useState("10");
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [opens, setOpens] = useState(toLocalInput(new Date().toISOString()));
@@ -489,12 +499,35 @@ function NewMarket({ fixture, seasonId, teams, onMade }: { fixture: StaffFixture
   const blocked = busy || !!teamNote || !!oddsNote || !!lineNote;
   const suggested = defaultTitle(category, chosen, n, fixture?.match_number ?? null, Number(line) || 10);
 
+  const season = scopeOf(fixture) === "season";
+  const params = () =>
+    category === "TOP_N" || category === "OVERALL_TOP_N" ? { team: picked[0], n } : kills ? { team: picked[0], line: Number(line) } : { teams: picked };
+
+  // Chances shown under the odds only while they still describe the picked teams.
+  const hintKey = JSON.stringify([category, params(), season ? left : null]);
+  const hint = suggestion?.key === hintKey ? suggestion : null;
+
+  async function suggest() {
+    setBusy(true);
+    setNote(null);
+    try {
+      const got = await api<OddsSuggestion>("/admin/predictions/markets/suggest-odds", {
+        method: "POST",
+        body: { category, season: seasonId, fixture: fixture?.id ?? null, params: params(), ...(season ? { matches_left: Number(left) || 10 } : {}) },
+      });
+      setOdds({ ...odds, ...got.odds });
+      setSuggestion({ ...got, key: hintKey });
+    } catch (e) {
+      setNote(message(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function create(openNow: boolean) {
     setBusy(true);
     setNote(null);
     try {
-      const params =
-        category === "TOP_N" || category === "OVERALL_TOP_N" ? { team: picked[0], n } : kills ? { team: picked[0], line: Number(line) } : { teams: picked };
       const made = await api<StaffMarket>("/admin/predictions/markets", {
         method: "POST",
         body: {
@@ -503,7 +536,7 @@ function NewMarket({ fixture, seasonId, teams, onMade }: { fixture: StaffFixture
           category,
           season: seasonId,
           fixture: fixture?.id ?? null,
-          params,
+          params: params(),
           odds: Object.fromEntries(codes.map((c) => [c.code, odds[c.code]])),
           opens_at: new Date(opens).toISOString(),
           closes_at: new Date(closes).toISOString(),
@@ -517,6 +550,7 @@ function NewMarket({ fixture, seasonId, teams, onMade }: { fixture: StaffFixture
       setOpen(false);
       setPicked([]);
       setOdds({});
+      setSuggestion(null);
       setTitle("");
       setDescription("");
       onMade();
@@ -540,6 +574,7 @@ function NewMarket({ fixture, seasonId, teams, onMade }: { fixture: StaffFixture
               setCategory(e.target.value as Category);
               setPicked([]);
               setOdds({});
+              setSuggestion(null);
             }}
           >
             {kinds.map((c) => (
@@ -592,10 +627,42 @@ function NewMarket({ fixture, seasonId, teams, onMade }: { fixture: StaffFixture
       {codes.length > 0 && (
         <div>
           <p className="text-sm text-muted">Decimal odds {oddsNote && <span className="text-bad">· {oddsNote}</span>}</p>
-          <div className="mt-1 grid gap-2 sm:grid-cols-3">
+          <div className="mt-1 flex flex-wrap items-end gap-2">
+            {season && (
+              <label className="text-sm">
+                <span className="block text-muted">Matches left for each team</span>
+                <span className="block w-24">
+                  <input className="input mt-1 py-1" inputMode="numeric" value={left} onChange={(e) => setLeft(e.target.value)} />
+                </span>
+              </label>
+            )}
+            <button type="button" className="btn" disabled={busy || !!teamNote || !!lineNote} onClick={suggest}>
+              Suggest odds from past results
+            </button>
+          </div>
+          {hint && (
+            <div className="mt-2 space-y-1 text-xs text-muted">
+              <p>
+                Worked out from every team&apos;s published results
+                {hint.matches_left
+                  ? `, with ${hint.matches_left} matches left each`
+                  : hint.matches && hint.matches > 1
+                    ? ` over a ${hint.matches}-match session`
+                    : ""}
+                , keeping {Math.round(hint.margin * 100)}% back as a margin. Change any of them before you create the market.
+              </p>
+              {hint.notes.map((n) => (
+                <p key={n}>{n}</p>
+              ))}
+            </div>
+          )}
+          <div className="mt-2 grid gap-2 sm:grid-cols-3">
             {codes.map((c) => (
               <label key={c.code} className="block text-sm">
-                <span className="block truncate text-muted">{c.label}</span>
+                <span className="block truncate text-muted">
+                  {c.label}
+                  {hint?.chances[c.code] !== undefined && ` · ${(hint.chances[c.code] * 100).toFixed(1)}%`}
+                </span>
                 <input
                   className="input mt-1 py-1"
                   inputMode="decimal"
