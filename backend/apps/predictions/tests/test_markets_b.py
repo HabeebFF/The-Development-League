@@ -9,7 +9,7 @@ from django.utils import timezone
 from apps.accounts.models import Membership, StaffProfile
 from apps.league.models import Match, MatchDay, ScoringRule, Season, Stage, Team
 from apps.predictions.markets import MarketError, create_market, place_bet, transition
-from apps.predictions.models import Bet, Fixture, LedgerEntry, Market, Settlement
+from apps.predictions.models import Bet, Fixture, LedgerEntry, Market, Settlement, Wallet
 from apps.predictions.services import check_wallets, wallet_for
 from apps.predictions.settlement import correct, settle, suggest
 from apps.results.models import TeamMatchResult
@@ -424,3 +424,34 @@ def test_player_cannot_bet_on_own_team_in_session_market(session, staff):
     m = market(session, staff, C.SESSION_WINNER)
     with pytest.raises(MarketError, match="your own team"):
         bet(fan, m, pick(m, "Alpha", session))
+
+
+# -- nobody listed wins, and the simulation ------------------------------------------------------
+
+
+def test_market_settles_when_the_winner_is_not_a_choice(session, staff, fans):
+    m = market(session, staff, C.SESSION_WINNER, teams=("Alpha", "Charlie"))
+    lost = bet(fans[0], m, pick(m, "Alpha", session))
+    publish(session)
+    close(m, staff)
+    s = suggest(m)  # Bravo won the session but isn't a choice
+    assert (s["kind"], s["winners"], s["voids"]) == ("SETTLE", [], [])
+    settle(m, actor=staff, winners=[], voids=[])
+    lost.refresh_from_db()
+    assert (lost.status, lost.payout) == (B.LOST, 0)
+
+
+def test_simulation_checks_every_coin_and_saves_nothing():
+    from io import StringIO
+
+    from django.core.management import call_command
+
+    out = StringIO()
+    call_command(
+        "simulate_predictions", users=6, teams=6, matches=2, sessions=1, bets=4, seed=3, stdout=out
+    )
+    report = out.getvalue()
+    assert "Every wallet matches its ledger" in report
+    assert "rolled back" in report
+    assert not Team.objects.filter(name__startswith="Sim ").exists()
+    assert not Wallet.objects.exists()

@@ -408,8 +408,6 @@ def _decide(
             raise MarketError("A chosen outcome isn't part of this market.", "outcome")
         if winners & voids:
             raise MarketError("An outcome can't both win and be refunded.", "outcome")
-        if kind == Settlement.Kind.SETTLE and not winners and not voids:
-            raise MarketError("Pick the winning outcome.", "outcome")
         late_from = _late_from(market)
         settlement = Settlement.objects.create(
             market=market,
@@ -473,6 +471,9 @@ def settle(
         and set(suggestion["voids"]) == set(voids)
         and suggestion.get("dead_heat", 1) == dead_heat
     )
+    if not winners and not voids and not matches:
+        # "Nobody listed wins" only when the results say so, never by an empty form.
+        raise MarketError("Pick the winning outcome.", "outcome")
     if not matches and not override_reason.strip():
         raise MarketError(
             "That isn't what the match result says. Give a reason to override it.", "override"
@@ -555,6 +556,9 @@ def correct(
         pass  # a void correction may not have a published match
     evidence = suggestion["evidence"] if suggestion else {}
     if kind == Settlement.Kind.SETTLE:
+        nobody = suggestion and suggestion["kind"] == "SETTLE" and not suggestion["winners"]
+        if not winners and not voids and not nobody:
+            raise MarketError("Pick the winning outcome.", "outcome")
         dead_heat = _dead_heat(market, winners, dead_heat, suggestion)
     try:
         return _decide(
