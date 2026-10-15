@@ -633,3 +633,34 @@ def test_a_hand_up_by_the_head_doesnt_change_the_framing():
         head_h, cx = photos._head(a, a.getbbox())
         assert 140 <= head_h <= 175  # the top of the head (60) to the neck (210-240)
         assert 190 <= cx <= 210
+
+
+def test_merging_two_accounts_of_one_player(league):
+    from apps.league.merge import MergeError, merge_players
+    from apps.league.models import PlayerAlias
+
+    cards.build_week(WEEK_A)
+    # RUSH played one more match on a second account, ALT.
+    m = league.match(WEEK_A + dt.timedelta(days=4))
+    alt = Player.objects.create(
+        game_uid=999, current_name_raw="ALT", display_name="ALT", search_name="alt"
+    )
+    rush = league.p["RUSH"]
+    PlayerMatchResult.objects.filter(match=m, player=rush).update(player=alt)
+    MatchEvent.objects.filter(match=m, actor_player=rush).update(actor_player=alt)
+    cards.build_week(WEEK_A)
+
+    client = staff()
+    foe1, foe2 = league.p["FOE1"], league.p["FOE2"]
+    resp = client.post(f"/api/v1/admin/players/{foe1.pk}/merge", {"into": foe2.pk}, format="json")
+    assert resp.status_code == 400 and "same match" in resp.json()["detail"]
+    with pytest.raises(MergeError):
+        merge_players(rush, rush)
+
+    resp = client.post(f"/api/v1/admin/players/{alt.pk}/merge", {"into": rush.pk}, format="json")
+    assert resp.status_code == 200, resp.content
+    assert resp.json()["results"] == 1 and resp.json()["events"] >= 1
+    assert not Player.objects.filter(pk=alt.pk).exists()
+    assert PlayerAlias.objects.get(game_uid=999).player == rush
+    assert PlayerMatchResult.objects.filter(player=rush).count() == 5
+    assert card(league, "RUSH").matches == 5 and not PlayerCard.objects.filter(player_id=alt.pk)

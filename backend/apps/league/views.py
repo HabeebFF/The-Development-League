@@ -16,7 +16,7 @@ from apps.results.models import StandingRow
 from apps.results.standings import schedule_rebuild
 from common.permissions import IsStaff, IsSuperAdmin, PublicRead
 
-from .merge import MergeError, merge_teams
+from .merge import MergeError, merge_players, merge_teams
 from .models import (
     Group,
     Match,
@@ -134,7 +134,7 @@ class PlayerAdminViewSet(
 
     permission_classes = [IsStaff]
     serializer_class = PlayerAdminSerializer
-    http_method_names = ["get", "patch"]
+    http_method_names = ["get", "patch", "post"]
 
     def get_queryset(self):
         qs = Player.objects.select_related("current_team", "user")
@@ -145,6 +145,18 @@ class PlayerAdminViewSet(
             qs = qs.filter(search_name__icontains=search.casefold())
         team = self.request.query_params.get("team")
         return qs.filter(current_team__slug=team) if team else qs
+
+    @action(detail=True, methods=["post"])
+    def merge(self, request, pk=None):
+        """Merge this player into ``{"into": id}``: the same person under another account or
+        name. Their matches move over and this one's game UID becomes an alias."""
+        source = self.get_object()
+        target = get_object_or_404(Player, pk=request.data.get("into") or 0)
+        try:
+            result = merge_players(source, target)
+        except MergeError as exc:
+            raise ValidationError({"detail": str(exc)}) from exc
+        return Response(result)
 
 
 class RosterEntryViewSet(viewsets.ModelViewSet):
