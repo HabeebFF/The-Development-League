@@ -123,7 +123,8 @@ def test_every_suggested_price_expects_to_lose_coins(league):
         result = suggest(league, category, **params)
         for code, chance in result["chances"].items():
             if result["odds"][code] != "1.01":  # the floor can't take a margin
-                assert chance * float(result["odds"][code]) <= 1 / (1 + MARGIN) + 0.001
+                # Chances come back rounded to 4 places, so take off the most rounding can add.
+                assert (chance - 0.00005) * float(result["odds"][code]) <= 1 / (1 + MARGIN)
 
 
 # -- one match ------------------------------------------------------------------------------------
