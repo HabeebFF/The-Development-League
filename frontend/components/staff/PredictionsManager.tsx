@@ -14,7 +14,10 @@ import {
   newKey,
   oddsProblem,
   outcomeCodes,
+  playersProblem,
+  SHARED_WIN,
   signedCoins,
+  spec,
   teamsProblem,
   toLocalInput,
   type Category,
@@ -470,8 +473,11 @@ function NewMarket({ fixture, seasonId, teams, onMade }: { fixture: StaffFixture
   const [open, setOpen] = useState(false);
   const [category, setCategory] = useState<Category>(kinds[0].key);
   const [picked, setPicked] = useState<number[]>([]);
+  const [people, setPeople] = useState<{ id: number; name: string }[]>([]);
+  const [squadTeam, setSquadTeam] = useState("");
+  const [squad, setSquad] = useState<{ id: number; name: string }[]>([]);
   const [n, setN] = useState(3);
-  const [line, setLine] = useState("10");
+  const [line, setLine] = useState(String(spec(kinds[0].key).line?.start ?? 10));
   const [odds, setOdds] = useState<Record<string, string>>({});
   const [suggestion, setSuggestion] = useState<(OddsSuggestion & { key: string }) | null>(null);
   const [left, setLeft] = useState("10");
@@ -490,18 +496,40 @@ function NewMarket({ fixture, seasonId, teams, onMade }: { fixture: StaffFixture
       </button>
     );
 
+  const kind = spec(category);
   const chosen = picked.map((id) => teams.find((t) => t.id === id)!).filter(Boolean);
-  const kills = category === "TEAM_KILLS";
-  const lineNote = kills ? lineProblem(line) : null;
-  const codes = outcomeCodes(category, chosen, n, Number(line) || 10);
+  const lineNote = kind.line ? lineProblem(line, category) : null;
+  const lineValue = Number(line) || kind.line?.start || 10;
+  const codes = outcomeCodes(category, chosen, n, lineValue, people);
   const teamNote = teamsProblem(category, chosen.length);
+  const playerNote = playersProblem(category, people.length);
+  const pickNote = teamNote ?? playerNote;
   const oddsNote = codes.map((c) => oddsProblem(odds[c.code] ?? "")).find(Boolean) ?? null;
-  const blocked = busy || !!teamNote || !!oddsNote || !!lineNote;
-  const suggested = defaultTitle(category, chosen, n, fixture?.match_number ?? null, Number(line) || 10);
+  const blocked = busy || !!pickNote || !!oddsNote || !!lineNote;
+  const suggested = defaultTitle(category, chosen, n, fixture?.match_number ?? null, lineValue, people);
 
   const season = scopeOf(fixture) === "season";
-  const params = () =>
-    category === "TOP_N" || category === "OVERALL_TOP_N" ? { team: picked[0], n } : kills ? { team: picked[0], line: Number(line) } : { teams: picked };
+  const one = (max: number | null) => max === 1;
+  const params = (): Record<string, unknown> => {
+    const p: Record<string, unknown> = {};
+    if (kind.teams[1] !== 0) Object.assign(p, one(kind.teams[1]) ? { team: picked[0] } : { teams: picked });
+    if (kind.players[1] !== 0) Object.assign(p, one(kind.players[1]) ? { player: people[0]?.id } : { players: people.map((x) => x.id) });
+    if (kind.line) p.line = Number(line);
+    if (category === "TOP_N" || category === "OVERALL_TOP_N") p.n = n;
+    return p;
+  };
+
+  async function loadSquad(slug: string) {
+    setSquadTeam(slug);
+    setSquad([]);
+    if (!slug) return;
+    try {
+      const page = await api<Paged<{ id: number; display_name: string }>>(`/admin/players?team=${encodeURIComponent(slug)}&page_size=100`);
+      setSquad(page.results.map((x) => ({ id: x.id, name: x.display_name })));
+    } catch (e) {
+      setNote(message(e));
+    }
+  }
 
   // Chances shown under the odds only while they still describe the picked teams.
   const hintKey = JSON.stringify([category, params(), season ? left : null]);
@@ -549,6 +577,7 @@ function NewMarket({ fixture, seasonId, teams, onMade }: { fixture: StaffFixture
         });
       setOpen(false);
       setPicked([]);
+      setPeople([]);
       setOdds({});
       setSuggestion(null);
       setTitle("");
@@ -571,10 +600,13 @@ function NewMarket({ fixture, seasonId, teams, onMade }: { fixture: StaffFixture
             className="input mt-1"
             value={category}
             onChange={(e) => {
-              setCategory(e.target.value as Category);
+              const next = e.target.value as Category;
+              setCategory(next);
               setPicked([]);
+              setPeople([]);
               setOdds({});
               setSuggestion(null);
+              setLine(String(spec(next).line?.start ?? 10));
             }}
           >
             {kinds.map((c) => (
@@ -584,9 +616,11 @@ function NewMarket({ fixture, seasonId, teams, onMade }: { fixture: StaffFixture
             ))}
           </select>
         </label>
-        {kills && (
+        {kind.line && (
           <label className="text-sm">
-            <span className="text-muted">Kills line {lineNote && <span className="text-bad">· {lineNote}</span>}</span>
+            <span className="text-muted">
+              {kind.line.label} {lineNote && <span className="text-bad">· {lineNote}</span>}
+            </span>
             <input className="input mt-1" inputMode="numeric" value={line} onChange={(e) => setLine(e.target.value)} />
           </label>
         )}
@@ -601,7 +635,48 @@ function NewMarket({ fixture, seasonId, teams, onMade }: { fixture: StaffFixture
           </label>
         )}
       </div>
-      <div>
+      {kind.players[1] !== 0 && (
+        <div>
+          <p className="text-sm text-muted">Players {playerNote && <span className="text-bad">· {playerNote}</span>}</p>
+          {people.length > 0 && (
+            <div className="mt-1 flex flex-wrap gap-1">
+              {people.map((x) => (
+                <button
+                  key={x.id}
+                  type="button"
+                  className="btn btn-primary px-2 py-1 text-xs"
+                  title="Remove"
+                  onClick={() => setPeople(people.filter((y) => y.id !== x.id))}
+                >
+                  {x.name} ×
+                </button>
+              ))}
+            </div>
+          )}
+          <div className="mt-2 grid gap-2 sm:grid-cols-2">
+            <select className="input" aria-label="Team to pick players from" value={squadTeam} onChange={(e) => loadSquad(e.target.value)}>
+              <option value="">Pick players from a team…</option>
+              {teams.map((t) => (
+                <option key={t.id} value={t.slug}>
+                  {t.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          {squad.length > 0 && (
+            <div className="mt-1 flex flex-wrap gap-1">
+              {squad
+                .filter((x) => !people.some((y) => y.id === x.id))
+                .map((x) => (
+                  <button key={x.id} type="button" className="btn px-2 py-1 text-xs text-muted" onClick={() => setPeople([...people, x])}>
+                    {x.name}
+                  </button>
+                ))}
+            </div>
+          )}
+        </div>
+      )}
+      <div className={kind.teams[1] === 0 ? "hidden" : ""}>
         <p className="text-sm text-muted">Teams {teamNote && <span className="text-bad">· {teamNote}</span>}</p>
         <div className="mt-1 flex flex-wrap gap-1">
           {teams.map((t) => {
@@ -636,7 +711,7 @@ function NewMarket({ fixture, seasonId, teams, onMade }: { fixture: StaffFixture
                 </span>
               </label>
             )}
-            <button type="button" className="btn" disabled={busy || !!teamNote || !!lineNote} onClick={suggest}>
+            <button type="button" className="btn" disabled={busy || !!pickNote || !!lineNote} onClick={suggest}>
               Suggest odds from past results
             </button>
           </div>
@@ -710,10 +785,9 @@ function NewMarket({ fixture, seasonId, teams, onMade }: { fixture: StaffFixture
 }
 
 // One choice per team, where tied teams share the win (a dead heat).
-const DEAD_HEAT = new Set<Category>(["SESSION_WINNER", "MOST_BOOYAHS", "OVERALL_WINNER"]);
 
 // Markets where "All teams" is a sensible pick.
-const CATEGORY_ALL = new Set<Category>(["BOOYAH", "SESSION_WINNER", "MOST_BOOYAHS", "OVERALL_WINNER"]);
+const CATEGORY_ALL = new Set<Category>(["BOOYAH", "SESSION_WINNER", "MOST_BOOYAHS", "OVERALL_WINNER", "FIRST_OUT", "FIRST_BLOOD"]);
 
 const MOVES: Record<string, { to: string; label: string }[]> = {
   DRAFT: [{ to: "OPEN", label: "Open" }],
@@ -903,7 +977,7 @@ function SettleForm({ market, onDone }: { market: StaffMarket; onDone: () => voi
   const [deadHeat, setDeadHeat] = useState("1");
   const [note, setNote] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const canTie = DEAD_HEAT.has(market.category as Category);
+  const canTie = SHARED_WIN.has(market.category);
 
   useEffect(() => {
     api<Suggestion>(`/admin/predictions/markets/${market.id}/suggested-result`)

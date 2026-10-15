@@ -203,6 +203,12 @@ def _team(t) -> dict | None:
     }
 
 
+def _player(p) -> dict | None:
+    if p is None:
+        return None
+    return {"id": p.pk, "name": p.display_name, "team": _team(p.current_team)}
+
+
 def _fixture(f: Fixture | None) -> dict | None:
     if f is None:
         return None
@@ -246,6 +252,7 @@ def market_data(market: Market, now=None) -> dict:
                 "code": o.code,
                 "label": o.label,
                 "team": _team(o.team),
+                "player": _player(o.player),
                 "odds": str(o.odds),
                 "is_active": o.is_active,
             }
@@ -263,7 +270,9 @@ def _winners(market: Market) -> list[int]:
 
 
 def _markets():
-    return Market.objects.select_related("season", "fixture").prefetch_related("outcomes__team")
+    return Market.objects.select_related("season", "fixture").prefetch_related(
+        "outcomes__team", "outcomes__player__current_team"
+    )
 
 
 def _refused(exc: MarketError) -> Response:

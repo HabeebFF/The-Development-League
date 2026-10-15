@@ -14,6 +14,8 @@ import {
   MIN_STAKE,
   newKey,
   profit,
+  RULES,
+  SHARED_WIN,
   stakeProblem,
   totalReturn,
   type Bet,
@@ -27,8 +29,6 @@ import { useNow } from "./PredictHome";
 import { useWallet } from "./useWallet";
 
 const QUICK = [10, 50, 100, 250, 500];
-// Markets where tied teams share the win (a dead heat).
-const SHARED_WIN = new Set(["SESSION_WINNER", "MOST_BOOYAHS", "OVERALL_WINNER"]);
 
 type Placed = Bet & { balance: number };
 
@@ -81,8 +81,7 @@ export default function MarketView({ id }: { id: number }) {
         setReload((r) => r + 1);
       }
       setError(
-        data?.detail ??
-          (e instanceof ApiError ? e.message : "No connection. Your coins weren't touched if this didn't go through; check My predictions."),
+        data?.detail ?? (e instanceof ApiError ? e.message : "No connection. Your coins weren't touched if this didn't go through; check My predictions."),
       );
     } finally {
       setBusy(false);
@@ -98,14 +97,14 @@ export default function MarketView({ id }: { id: number }) {
           <h2 className="font-display text-3xl uppercase">{m.title}</h2>
           <p className="mt-1 text-sm text-muted">
             {m.fixture ? `${m.fixture.title} · ` : ""}
-            {m.season.name} ·{" "}
-            <span className={m.accepting ? "text-ok" : ""}>{m.accepting ? closesIn(m.closes_at, now) : MARKET_STATUS[m.status]}</span>
+            {m.season.name} · <span className={m.accepting ? "text-ok" : ""}>{m.accepting ? closesIn(m.closes_at, now) : MARKET_STATUS[m.status]}</span>
             {" · closes "}
             {new Date(m.closes_at).toLocaleString("en-GB", { weekday: "short", hour: "2-digit", minute: "2-digit", day: "numeric", month: "short" })}
           </p>
           {m.description && <p className="mt-3 whitespace-pre-line text-sm">{m.description}</p>}
+          {RULES[m.category as keyof typeof RULES] && <p className="mt-2 text-xs text-muted">{RULES[m.category as keyof typeof RULES]}</p>}
           {SHARED_WIN.has(m.category) && (
-            <p className="mt-2 text-xs text-muted">If teams tie for the win, a winning prediction is paid its return divided by the number of tied teams.</p>
+            <p className="mt-2 text-xs text-muted">If several tie for the win, a winning prediction is paid its return divided by the number tied.</p>
           )}
 
           <div className="mt-5 grid gap-2 sm:grid-cols-2">
@@ -127,8 +126,11 @@ export default function MarketView({ id }: { id: number }) {
                   className={`card flex items-center gap-3 p-3 text-left transition ${on ? "border-accent ring-1 ring-accent" : "card-hover"} disabled:opacity-60`}
                   aria-pressed={on}
                 >
-                  {o.team && <TeamMark team={o.team} size="md" />}
-                  <span className="min-w-0 flex-1 font-semibold">{o.label}</span>
+                  {(o.team ?? o.player?.team) && <TeamMark team={(o.team ?? o.player?.team)!} size="md" />}
+                  <span className="min-w-0 flex-1">
+                    <span className="block font-semibold">{o.label}</span>
+                    {o.player?.team && <span className="block text-xs text-muted">{o.player.team.name}</span>}
+                  </span>
                   {m.winners.includes(o.id) && <span className="chip text-ok">Won</span>}
                   <span className="font-display text-2xl text-accent">{o.odds}</span>
                 </button>
@@ -168,13 +170,7 @@ export default function MarketView({ id }: { id: number }) {
                 <span className="text-muted">
                   Stake ({MIN_STAKE} to {MAX_STAKE} coins)
                 </span>
-                <input
-                  className="input mt-1"
-                  inputMode="numeric"
-                  value={stake}
-                  onChange={(e) => setStake(e.target.value)}
-                  aria-invalid={!!problem}
-                />
+                <input className="input mt-1" inputMode="numeric" value={stake} onChange={(e) => setStake(e.target.value)} aria-invalid={!!problem} />
               </label>
               <div className="flex flex-wrap gap-1">
                 {QUICK.map((q) => (
@@ -213,7 +209,12 @@ export default function MarketView({ id }: { id: number }) {
       </div>
 
       {review && (
-        <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/70 p-4 sm:items-center" role="dialog" aria-modal="true" aria-label="Confirm prediction">
+        <div
+          className="fixed inset-0 z-40 flex items-end justify-center bg-black/70 p-4 sm:items-center"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Confirm prediction"
+        >
           <div className="card page-enter w-full max-w-sm p-5">
             <h3 className="font-display text-2xl uppercase">Confirm prediction</h3>
             <p className="mt-1 text-sm text-muted">{m.title}</p>
