@@ -16,7 +16,7 @@ from rest_framework.permissions import BasePermission, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.league.models import Match, Season
+from apps.league.models import Match, MatchDay, Season
 from common.pagination import DefaultPagination
 from common.permissions import IsStaff, IsSuperAdmin, PublicRead
 
@@ -284,7 +284,11 @@ class MarketListView(APIView):
         now = timezone.now()
         qs = _markets().exclude(status=S.DRAFT)
         if fixture := request.query_params.get("fixture"):
-            qs = qs.filter(fixture_id=fixture)
+            qs = (
+                qs.filter(fixture__isnull=True)
+                if fixture == "none"
+                else qs.filter(fixture_id=fixture)
+            )
         if season := request.query_params.get("season"):
             qs = qs.filter(season_id=season)
         wanted = request.query_params.get("status", "open").upper()
@@ -467,6 +471,31 @@ class FixtureAdminViewSet(viewsets.ModelViewSet):
         ]
         return Response(sorted(rows, key=lambda r: not r["likely"]))
 
+    @action(detail=True, methods=["get"], url_path="candidate-days")
+    def candidate_days(self, request, pk=None):
+        """Match days on the fixture's date, the likely one (same session) first, so staff can
+        link a whole-session fixture to its uploaded match day."""
+        fixture = self.get_object()
+        days = (
+            MatchDay.objects.filter(
+                Q(date=fixture.date) | Q(matches__started_at__date=fixture.date)
+            )
+            .distinct()
+            .prefetch_related("matches")
+            .order_by("title", "pk")
+        )
+        rows = [
+            {
+                "id": d.pk,
+                "title": str(d),
+                "matches": len(d.matches.all()),
+                "published": sum(m.status == Match.Status.PUBLISHED for m in d.matches.all()),
+                "likely": fixture.session in (d.title or "").upper(),
+            }
+            for d in days
+        ]
+        return Response(sorted(rows, key=lambda r: not r["likely"]))
+
     def perform_destroy(self, fixture):
         if fixture.markets.exists():
             raise ValidationError({"detail": "This fixture has markets; void them instead."})
@@ -527,6 +556,7 @@ class SettleSerializer(serializers.Serializer):
     voids = serializers.ListField(child=serializers.IntegerField(), required=False, default=list)
     reference = serializers.CharField(required=False, allow_blank=True, max_length=300)
     override_reason = serializers.CharField(required=False, allow_blank=True, max_length=300)
+    dead_heat = serializers.IntegerField(required=False, min_value=1, max_value=100)
 
 
 class VoidSerializer(serializers.Serializer):
@@ -541,6 +571,7 @@ class CorrectSerializer(serializers.Serializer):
     reason = serializers.CharField(max_length=300)
     reference = serializers.CharField(required=False, allow_blank=True, max_length=300)
     key = serializers.UUIDField()
+    dead_heat = serializers.IntegerField(required=False, min_value=1, max_value=100)
 
 
 class SettlementActions:
@@ -578,6 +609,7 @@ class SettlementActions:
                 voids=v["voids"],
                 reference=v.get("reference", ""),
                 override_reason=v.get("override_reason", ""),
+                dead_heat=v.get("dead_heat"),
             ),
         )
 
@@ -611,6 +643,7 @@ class SettlementActions:
                 voids=v["voids"],
                 reference=v.get("reference", ""),
                 key=str(v["key"]),
+                dead_heat=v.get("dead_heat"),
             ),
         )
 
@@ -638,7 +671,11 @@ class MarketAdminViewSet(SettlementActions, viewsets.ViewSet):
         if wanted := request.query_params.get("status"):
             qs = qs.filter(status=wanted.upper())
         if fixture := request.query_params.get("fixture"):
-            qs = qs.filter(fixture_id=fixture)
+            qs = (
+                qs.filter(fixture__isnull=True)
+                if fixture == "none"
+                else qs.filter(fixture_id=fixture)
+            )
         paginator = DefaultPagination()
         page = paginator.paginate_queryset(qs, request, view=self)
         return paginator.get_paginated_response([staff_market_data(m) for m in page])

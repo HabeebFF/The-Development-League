@@ -6,9 +6,10 @@ import { useCallback, useEffect, useState } from "react";
 import { useStaff } from "@/app/staff/StaffGate";
 import { api, ApiError, type Paged, type TeamRef } from "@/lib/api";
 import {
-  CATEGORIES,
+  categoriesFor,
   coins,
   defaultTitle,
+  lineProblem,
   MARKET_STATUS,
   newKey,
   oddsProblem,
@@ -20,6 +21,7 @@ import {
   type Entry,
   type Fixture,
   type Market,
+  type Scope,
 } from "@/lib/predictions";
 
 type Season = { id: number; name: string; slug: string; is_active: boolean };
@@ -47,10 +49,12 @@ type Candidate = {
   started_at: string | null;
   likely: boolean;
 };
+type Day = { id: number; title: string; matches: number; published: number; likely: boolean };
 type Suggestion = {
   kind: "SETTLE" | "VOID";
   winners: number[];
   voids: number[];
+  dead_heat: number;
   note: string;
   evidence: Record<string, unknown>;
 };
@@ -63,6 +67,7 @@ type SettlementRow = {
   reference: string;
   reason: string;
   summary: Record<string, number>;
+  dead_heat: number;
   by: string;
   created_at: string;
 };
@@ -95,6 +100,11 @@ type StaffWallet = {
 
 function message(e: unknown) {
   return e instanceof ApiError ? e.message : "Something went wrong. Try again.";
+}
+
+/** Where a fixture's markets are about: one match or a whole session. */
+function scopeOf(fixture: StaffFixture | null): Scope {
+  return fixture === null ? "season" : fixture.match_number === null ? "session" : "match";
 }
 
 function when(iso: string) {
@@ -139,14 +149,14 @@ function Markets() {
   const [seasons, setSeasons] = useState<Season[] | null>(null);
   const [teams, setTeams] = useState<TeamRef[]>([]);
   const [fixtures, setFixtures] = useState<StaffFixture[]>([]);
-  const [fixtureId, setFixtureId] = useState<number | null>(null);
+  const [fixtureId, setFixtureId] = useState<number | "season" | null>(null);
   const [note, setNote] = useState<string | null>(null);
 
   const loadFixtures = useCallback(
     () =>
       api<Paged<StaffFixture>>("/admin/predictions/fixtures?page_size=100").then((page) => {
         setFixtures(page.results);
-        setFixtureId((cur) => cur ?? page.results[0]?.id ?? null);
+        setFixtureId((cur) => cur ?? page.results[0]?.id ?? "season");
       }),
     [],
   );
@@ -157,32 +167,38 @@ function Markets() {
       api<Paged<TeamRef>>("/teams?page_size=100").then((p) => setTeams(p.results)),
       api<Paged<StaffFixture>>("/admin/predictions/fixtures?page_size=100").then((page) => {
         setFixtures(page.results);
-        setFixtureId(page.results[0]?.id ?? null);
+        setFixtureId(page.results[0]?.id ?? "season");
       }),
     ]).catch((e) => setNote(message(e)));
   }, []);
 
   if (!seasons) return note ? <p className="mt-6 text-bad">{note}</p> : <p className="mt-6 text-muted">Loading...</p>;
   const fixture = fixtures.find((f) => f.id === fixtureId) ?? null;
+  const season = seasons.find((s) => s.is_active) ?? seasons[0];
 
   return (
     <div className="mt-6 space-y-8">
       <section>
         <h2 className="section-title">Fixtures</h2>
         <p className="mt-1 text-sm text-muted">
-          A fixture is a planned match (or a whole session). Markets hang off it; once the logs are uploaded, link it to the real match to settle.
+          A fixture is a planned match or a whole session. Markets hang off it; once the logs are uploaded, link it to the real match (or match day) to settle.
+          Overall markets cover the season and need no fixture.
         </p>
         <div className="mt-3 flex flex-wrap gap-2">
-          {fixtures.length > 0 && (
-            <select className="input w-auto" value={fixtureId ?? ""} onChange={(e) => setFixtureId(Number(e.target.value))} aria-label="Fixture">
-              {fixtures.map((f) => (
-                <option key={f.id} value={f.id}>
-                  {f.display_title}
-                  {f.match ? " (linked)" : ""}
-                </option>
-              ))}
-            </select>
-          )}
+          <select
+            className="input w-auto"
+            value={fixtureId ?? ""}
+            onChange={(e) => setFixtureId(e.target.value === "season" ? "season" : Number(e.target.value))}
+            aria-label="Fixture"
+          >
+            {fixtures.map((f) => (
+              <option key={f.id} value={f.id}>
+                {f.display_title}
+                {f.match || f.match_day ? " (linked)" : ""}
+              </option>
+            ))}
+            {season && <option value="season">Overall: {season.name}</option>}
+          </select>
         </div>
         <NewFixture
           seasons={seasons}
@@ -192,7 +208,8 @@ function Markets() {
           }}
         />
       </section>
-      {fixture && <FixturePanel key={fixture.id} fixture={fixture} teams={teams} onChanged={loadFixtures} />}
+      {fixture && <FixturePanel key={fixture.id} fixture={fixture} seasonId={fixture.season} teams={teams} onChanged={loadFixtures} />}
+      {fixtureId === "season" && season && <FixturePanel key="season" fixture={null} seasonId={season.id} teams={teams} onChanged={loadFixtures} />}
     </div>
   );
 }
@@ -279,29 +296,44 @@ function NewFixture({ seasons, onMade }: { seasons: Season[]; onMade: (f: StaffF
   );
 }
 
-function FixturePanel({ fixture, teams, onChanged }: { fixture: StaffFixture; teams: TeamRef[]; onChanged: () => void }) {
+function FixturePanel({ fixture, seasonId, teams, onChanged }: { fixture: StaffFixture | null; seasonId: number; teams: TeamRef[]; onChanged: () => void }) {
   const [markets, setMarkets] = useState<StaffMarket[] | null>(null);
   const [note, setNote] = useState<string | null>(null);
+  const key = fixture ? String(fixture.id) : "none";
 
   const load = useCallback(() => {
-    api<Paged<StaffMarket>>(`/admin/predictions/markets?fixture=${fixture.id}&page_size=100`)
-      .then((p) => setMarkets(p.results))
+    api<Paged<StaffMarket>>(`/admin/predictions/markets?fixture=${key}&page_size=100`)
+      .then((p) => setMarkets(p.results.filter((m) => fixture || m.season.id === seasonId)))
       .catch((e) => setNote(message(e)));
-  }, [fixture.id]);
+  }, [key, fixture, seasonId]);
   useEffect(load, [load]);
 
   return (
     <section className="space-y-6">
-      <div>
-        <h2 className="section-title">{fixture.display_title}</h2>
-        <p className="mt-1 text-sm text-muted">
-          Planned start {when(fixture.scheduled_at)} · {fixture.match ? `linked to match ${fixture.match}` : "not linked to a match yet"}
-        </p>
-        <LinkMatch fixture={fixture} onLinked={onChanged} />
-      </div>
-      <NewMarket fixture={fixture} teams={teams} onMade={load} />
+      {fixture ? (
+        <div>
+          <h2 className="section-title">{fixture.display_title}</h2>
+          <p className="mt-1 text-sm text-muted">
+            Planned start {when(fixture.scheduled_at)} ·{" "}
+            {fixture.match_number === null
+              ? fixture.match_day
+                ? `linked to match day ${fixture.match_day}`
+                : "not linked to a match day yet"
+              : fixture.match
+                ? `linked to match ${fixture.match}`
+                : "not linked to a match yet"}
+          </p>
+          {fixture.match_number === null ? <LinkDay fixture={fixture} onLinked={onChanged} /> : <LinkMatch fixture={fixture} onLinked={onChanged} />}
+        </div>
+      ) : (
+        <div>
+          <h2 className="section-title">Overall</h2>
+          <p className="mt-1 text-sm text-muted">Settled from the season standings table. Settle once the last match counting towards it is published.</p>
+        </div>
+      )}
+      <NewMarket key={key} fixture={fixture} seasonId={seasonId} teams={teams} onMade={load} />
       {note && <p className="text-bad">{note}</p>}
-      {markets?.length === 0 && <p className="text-muted">No markets on this fixture yet.</p>}
+      {markets?.length === 0 && <p className="text-muted">No markets here yet.</p>}
       {markets?.map((m) => (
         <MarketPanel key={m.id} market={m} onChanged={load} />
       ))}
@@ -369,16 +401,75 @@ function LinkMatch({ fixture, onLinked }: { fixture: StaffFixture; onLinked: () 
   );
 }
 
-function NewMarket({ fixture, teams, onMade }: { fixture: StaffFixture; teams: TeamRef[]; onMade: () => void }) {
+function LinkDay({ fixture, onLinked }: { fixture: StaffFixture; onLinked: () => void }) {
+  const [rows, setRows] = useState<Day[] | null>(null);
+  const [pick, setPick] = useState<string>(fixture.match_day ? String(fixture.match_day) : "");
+  const [note, setNote] = useState<string | null>(null);
+
+  async function look() {
+    setNote(null);
+    try {
+      const found = await api<Day[]>(`/admin/predictions/fixtures/${fixture.id}/candidate-days`);
+      setRows(found);
+      if (!pick && found[0]?.likely) setPick(String(found[0].id));
+    } catch (e) {
+      setNote(message(e));
+    }
+  }
+
+  async function save() {
+    setNote(null);
+    try {
+      await api(`/admin/predictions/fixtures/${fixture.id}`, { method: "PATCH", body: { match_day: pick ? Number(pick) : null } });
+      setNote("Saved.");
+      onLinked();
+    } catch (e) {
+      setNote(message(e));
+    }
+  }
+
+  return (
+    <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
+      {rows === null ? (
+        <button type="button" className="btn px-3 py-1.5 text-sm" onClick={look}>
+          Link to uploaded match day
+        </button>
+      ) : rows.length === 0 ? (
+        <span className="text-muted">No match days on this date yet.</span>
+      ) : (
+        <>
+          <select className="input w-auto py-1.5" value={pick} onChange={(e) => setPick(e.target.value)} aria-label="Match day">
+            <option value="">Not linked</option>
+            {rows.map((r) => (
+              <option key={r.id} value={r.id}>
+                {r.title} · {r.published} of {r.matches} published
+                {r.likely ? " (likely)" : ""}
+              </option>
+            ))}
+          </select>
+          <button type="button" className="btn btn-primary px-3 py-1.5 text-sm" onClick={save}>
+            Save link
+          </button>
+        </>
+      )}
+      {note && <span className={note === "Saved." ? "text-ok" : "text-bad"}>{note}</span>}
+    </div>
+  );
+}
+
+function NewMarket({ fixture, seasonId, teams, onMade }: { fixture: StaffFixture | null; seasonId: number; teams: TeamRef[]; onMade: () => void }) {
+  const kinds = categoriesFor(scopeOf(fixture));
   const [open, setOpen] = useState(false);
-  const [category, setCategory] = useState<Category>("BOOYAH");
+  const [category, setCategory] = useState<Category>(kinds[0].key);
   const [picked, setPicked] = useState<number[]>([]);
   const [n, setN] = useState(3);
+  const [line, setLine] = useState("10");
   const [odds, setOdds] = useState<Record<string, string>>({});
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [opens, setOpens] = useState(toLocalInput(new Date().toISOString()));
-  const [closes, setCloses] = useState(toLocalInput(fixture.scheduled_at));
+  // Season-long markets default to closing a week out; staff move it to the last day.
+  const [closes, setCloses] = useState(() => toLocalInput(fixture?.scheduled_at ?? new Date(Date.now() + 7 * 864e5).toISOString()));
   const [note, setNote] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -390,23 +481,28 @@ function NewMarket({ fixture, teams, onMade }: { fixture: StaffFixture; teams: T
     );
 
   const chosen = picked.map((id) => teams.find((t) => t.id === id)!).filter(Boolean);
-  const codes = outcomeCodes(category, chosen, n);
+  const kills = category === "TEAM_KILLS";
+  const lineNote = kills ? lineProblem(line) : null;
+  const codes = outcomeCodes(category, chosen, n, Number(line) || 10);
   const teamNote = teamsProblem(category, chosen.length);
   const oddsNote = codes.map((c) => oddsProblem(odds[c.code] ?? "")).find(Boolean) ?? null;
+  const blocked = busy || !!teamNote || !!oddsNote || !!lineNote;
+  const suggested = defaultTitle(category, chosen, n, fixture?.match_number ?? null, Number(line) || 10);
 
   async function create(openNow: boolean) {
     setBusy(true);
     setNote(null);
     try {
-      const params = category === "TOP_N" ? { team: picked[0], n } : { teams: picked };
+      const params =
+        category === "TOP_N" || category === "OVERALL_TOP_N" ? { team: picked[0], n } : kills ? { team: picked[0], line: Number(line) } : { teams: picked };
       const made = await api<StaffMarket>("/admin/predictions/markets", {
         method: "POST",
         body: {
-          title: title.trim() || defaultTitle(category, chosen, n, fixture.match_number),
+          title: title.trim() || suggested,
           description,
           category,
-          season: fixture.season,
-          fixture: fixture.id,
+          season: seasonId,
+          fixture: fixture?.id ?? null,
           params,
           odds: Object.fromEntries(codes.map((c) => [c.code, odds[c.code]])),
           opens_at: new Date(opens).toISOString(),
@@ -446,14 +542,20 @@ function NewMarket({ fixture, teams, onMade }: { fixture: StaffFixture; teams: T
               setOdds({});
             }}
           >
-            {CATEGORIES.map((c) => (
+            {kinds.map((c) => (
               <option key={c.key} value={c.key}>
                 {c.label}
               </option>
             ))}
           </select>
         </label>
-        {category === "TOP_N" && (
+        {kills && (
+          <label className="text-sm">
+            <span className="text-muted">Kills line {lineNote && <span className="text-bad">· {lineNote}</span>}</span>
+            <input className="input mt-1" inputMode="numeric" value={line} onChange={(e) => setLine(e.target.value)} />
+          </label>
+        )}
+        {(category === "TOP_N" || category === "OVERALL_TOP_N") && (
           <label className="text-sm">
             <span className="text-muted">Top</span>
             <select className="input mt-1" value={n} onChange={(e) => setN(Number(e.target.value))}>
@@ -480,7 +582,7 @@ function NewMarket({ fixture, teams, onMade }: { fixture: StaffFixture; teams: T
               </button>
             );
           })}
-          {category === "BOOYAH" && (
+          {CATEGORY_ALL.has(category) && (
             <button type="button" className="btn px-2 py-1 text-xs" onClick={() => setPicked(teams.map((t) => t.id))}>
               All teams
             </button>
@@ -509,12 +611,7 @@ function NewMarket({ fixture, teams, onMade }: { fixture: StaffFixture; teams: T
       <div className="grid gap-3 sm:grid-cols-2">
         <label className="text-sm">
           <span className="text-muted">Title</span>
-          <input
-            className="input mt-1"
-            value={title}
-            placeholder={defaultTitle(category, chosen, n, fixture.match_number)}
-            onChange={(e) => setTitle(e.target.value)}
-          />
+          <input className="input mt-1" value={title} placeholder={suggested} onChange={(e) => setTitle(e.target.value)} />
         </label>
         <label className="text-sm">
           <span className="text-muted">Description (rules in plain words)</span>
@@ -531,10 +628,10 @@ function NewMarket({ fixture, teams, onMade }: { fixture: StaffFixture; teams: T
       </div>
       {note && <p className="text-sm text-bad">{note}</p>}
       <div className="flex flex-wrap gap-2">
-        <button type="button" className="btn btn-primary" disabled={busy || !!teamNote || !!oddsNote} onClick={() => create(true)}>
+        <button type="button" className="btn btn-primary" disabled={blocked} onClick={() => create(true)}>
           Create and open
         </button>
-        <button type="button" className="btn" disabled={busy || !!teamNote || !!oddsNote} onClick={() => create(false)}>
+        <button type="button" className="btn" disabled={blocked} onClick={() => create(false)}>
           Save as draft
         </button>
         <button type="button" className="btn" onClick={() => setOpen(false)}>
@@ -544,6 +641,12 @@ function NewMarket({ fixture, teams, onMade }: { fixture: StaffFixture; teams: T
     </div>
   );
 }
+
+// One choice per team, where tied teams share the win (a dead heat).
+const DEAD_HEAT = new Set<Category>(["SESSION_WINNER", "MOST_BOOYAHS", "OVERALL_WINNER"]);
+
+// Markets where "All teams" is a sensible pick.
+const CATEGORY_ALL = new Set<Category>(["BOOYAH", "SESSION_WINNER", "MOST_BOOYAHS", "OVERALL_WINNER"]);
 
 const MOVES: Record<string, { to: string; label: string }[]> = {
   DRAFT: [{ to: "OPEN", label: "Open" }],
@@ -730,8 +833,10 @@ function SettleForm({ market, onDone }: { market: StaffMarket; onDone: () => voi
   const [voids, setVoids] = useState<number[]>([]);
   const [reference, setReference] = useState("");
   const [override, setOverride] = useState("");
+  const [deadHeat, setDeadHeat] = useState("1");
   const [note, setNote] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const canTie = DEAD_HEAT.has(market.category as Category);
 
   useEffect(() => {
     api<Suggestion>(`/admin/predictions/markets/${market.id}/suggested-result`)
@@ -739,6 +844,7 @@ function SettleForm({ market, onDone }: { market: StaffMarket; onDone: () => voi
         setSuggestion(s);
         setWinners(s.winners);
         setVoids(s.voids);
+        setDeadHeat(String(s.dead_heat ?? 1));
       })
       .catch((e) => setWaiting(message(e)));
   }, [market.id]);
@@ -746,7 +852,9 @@ function SettleForm({ market, onDone }: { market: StaffMarket; onDone: () => voi
   const same =
     suggestion?.kind === "SETTLE" &&
     [...winners].sort().join() === [...suggestion.winners].sort().join() &&
-    [...voids].sort().join() === [...suggestion.voids].sort().join();
+    [...voids].sort().join() === [...suggestion.voids].sort().join() &&
+    Number(deadHeat) === (suggestion.dead_heat ?? 1);
+  const tieNote = canTie && !(/^\d+$/.test(deadHeat) && Number(deadHeat) >= Math.max(1, winners.length)) ? "At least the number of winners." : null;
 
   async function settle() {
     setBusy(true);
@@ -759,6 +867,7 @@ function SettleForm({ market, onDone }: { market: StaffMarket; onDone: () => voi
           voids,
           reference,
           override_reason: same ? "" : override,
+          ...(canTie ? { dead_heat: Number(deadHeat) } : {}),
         },
       });
       onDone();
@@ -775,11 +884,11 @@ function SettleForm({ market, onDone }: { market: StaffMarket; onDone: () => voi
       {waiting ? (
         <p className="text-sm text-muted">{waiting}</p>
       ) : !suggestion ? (
-        <p className="text-sm text-muted">Checking the match...</p>
+        <p className="text-sm text-muted">Checking the results...</p>
       ) : (
         <div className="mt-2 space-y-3">
           <p className="text-sm">
-            <span className="text-muted">The match says:</span>{" "}
+            <span className="text-muted">The results say:</span>{" "}
             {suggestion.kind === "VOID"
               ? `void. ${suggestion.note}`
               : market.outcomes
@@ -789,6 +898,15 @@ function SettleForm({ market, onDone }: { market: StaffMarket; onDone: () => voi
             {suggestion.kind === "SETTLE" && suggestion.note && <span className="text-muted"> · {suggestion.note}</span>}
           </p>
           <Picks market={market} winners={winners} voids={voids} setWinners={setWinners} setVoids={setVoids} />
+          {canTie && (
+            <label className="flex flex-wrap items-center gap-2 text-sm">
+              <span className="text-muted">Teams sharing the win (winning bets are paid odds divided by this)</span>
+              <span className="w-20">
+                <input className="input py-1" inputMode="numeric" value={deadHeat} onChange={(e) => setDeadHeat(e.target.value)} />
+              </span>
+              {tieNote && <span className="text-bad">{tieNote}</span>}
+            </label>
+          )}
           <input className="input" placeholder="Reference (e.g. Day 23 8PM logs)" value={reference} onChange={(e) => setReference(e.target.value)} />
           {!same && (
             <input
@@ -799,7 +917,7 @@ function SettleForm({ market, onDone }: { market: StaffMarket; onDone: () => voi
             />
           )}
           {note && <p className="text-sm text-bad">{note}</p>}
-          <button type="button" className="btn btn-primary" disabled={busy || (!same && !override.trim())} onClick={settle}>
+          <button type="button" className="btn btn-primary" disabled={busy || !!tieNote || (!same && !override.trim())} onClick={settle}>
             {busy ? "Settling..." : "Settle and pay out"}
           </button>
         </div>
@@ -870,7 +988,8 @@ function CorrectForm({ market, onDone }: { market: StaffMarket; onDone: () => vo
         {rows?.map((r) => (
           <li key={r.id}>
             <b>v{r.version}</b> {r.kind === "VOID" ? "voided" : `won: ${r.winners.map((w) => w.label).join(", ") || "none"}`}
-            {r.voids.length > 0 && `, refunded: ${r.voids.map((w) => w.label).join(", ")}`} · {r.by} · {when(r.created_at)}
+            {r.voids.length > 0 && `, refunded: ${r.voids.map((w) => w.label).join(", ")}`}
+            {r.dead_heat > 1 && `, ${r.dead_heat} teams share the win`} · {r.by} · {when(r.created_at)}
             {r.reason && <span className="text-muted"> · {r.reason}</span>}
             {r.summary.coins_unrecovered ? <span className="text-bad"> · {r.summary.coins_unrecovered} coins could not be taken back</span> : null}
           </li>

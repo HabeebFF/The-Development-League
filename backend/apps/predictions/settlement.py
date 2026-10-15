@@ -13,10 +13,10 @@ from collections import Counter
 from django.db import IntegrityError, transaction
 from django.utils import timezone
 
-from apps.league.models import Match
-from apps.results.models import TeamMatchResult
+from apps.league.models import Match, MatchDay
+from apps.results.models import StandingRow, TeamMatchResult
 
-from .markets import H2H, MarketError
+from .markets import DEAD_HEAT, H2H, SEASON_MARKETS, SESSION_MARKETS, MarketError, dead_heat_return
 from .models import Bet, Market, MarketEvent, Outcome, Settlement, Wallet
 from .services import Kind, post_entry
 
@@ -42,10 +42,41 @@ def linked_match(market: Market) -> Match:
 
 
 def suggest(market: Market) -> dict:
-    """What the published match says the result is.
+    """What the published results say the result is.
 
-    Returns ``{"kind", "winners": [outcome ids], "voids": [outcome ids], "note", "evidence"}``.
+    Returns ``{"kind", "winners": [outcome ids], "voids": [outcome ids], "dead_heat", "note",
+    "evidence"}``. ``dead_heat`` is how many teams share the win (1 when nobody ties).
     """
+    if market.category in SESSION_MARKETS:
+        return _suggest_session(market)
+    if market.category in SEASON_MARKETS:
+        return _suggest_season(market)
+    return _suggest_match(market)
+
+
+def _settle(winners, voids=(), note="", evidence=None, dead_heat=1) -> dict:
+    return {
+        "kind": "SETTLE",
+        "winners": [o.pk for o in winners],
+        "voids": [o.pk for o in voids],
+        "dead_heat": dead_heat,
+        "note": note,
+        "evidence": evidence or {},
+    }
+
+
+def _void(note: str, evidence=None) -> dict:
+    return {
+        "kind": "VOID",
+        "winners": [],
+        "voids": [],
+        "dead_heat": 1,
+        "note": note,
+        "evidence": evidence or {},
+    }
+
+
+def _suggest_match(market: Market) -> dict:
     match = linked_match(market)
     outcomes = list(market.outcomes.all())
     rows = {
@@ -75,16 +106,10 @@ def suggest(market: Market) -> dict:
         return next(o for o in outcomes if o.team_id == team_id)
 
     def void(note: str) -> dict:
-        return {"kind": "VOID", "winners": [], "voids": [], "note": note, "evidence": evidence}
+        return _void(note, evidence)
 
     def settle(winners, voids=(), note="") -> dict:
-        return {
-            "kind": "SETTLE",
-            "winners": [o.pk for o in winners],
-            "voids": [o.pk for o in voids],
-            "note": note,
-            "evidence": evidence,
-        }
+        return _settle(winners, voids, note, evidence)
 
     if market.category == C.BOOYAH:
         absent = [o for o in outcomes if o.team_id not in rows]
@@ -116,7 +141,131 @@ def suggest(market: Market) -> dict:
             winner = a if va > vb else b
         return settle([by_team(winner)])
 
+    if market.category == C.TEAM_KILLS:
+        row = rows.get(market.params["team"])
+        if row is None:
+            return void("The team didn't play: everyone is refunded.")
+        code = "yes" if row.kills >= market.params["line"] else "no"
+        return settle([next(o for o in outcomes if o.code == code)], note=f"{row.kills} kills.")
+
     raise MarketError("No automatic result for this kind of market.", "not_ready")
+
+
+def _standings(season_id: int, scope: str, results) -> dict[int, StandingRow]:
+    """The standings table for ``scope``, if it has caught up with ``results`` (the published
+    team results it should count); raises ``MarketError`` while it is being rebuilt."""
+    rows = {
+        r.team_id: r
+        for r in StandingRow.objects.filter(season_id=season_id, scope=scope).select_related("team")
+    }
+    counted = sum(r.matches_played for r in rows.values())
+    if not rows or counted != results.count():
+        raise MarketError("The standings are still being updated. Try again shortly.", "not_ready")
+    return rows
+
+
+def _table(rows: dict[int, StandingRow], teams: set[int]) -> list[dict]:
+    return [
+        {
+            "team": r.team_id,
+            "name": r.team.name,
+            "rank": r.rank,
+            "points": r.total_points,
+            "kills": r.kills,
+            "booyahs": r.booyahs,
+            "matches": r.matches_played,
+        }
+        for r in sorted(rows.values(), key=lambda r: (r.rank, r.team.name))
+        if r.team_id in teams or r.rank == 1
+    ]
+
+
+def _by_team(market: Market) -> dict[int, Outcome]:
+    return {o.team_id: o for o in market.outcomes.all() if o.team_id}
+
+
+def _team_winners(market, rows, tied: set[int], what: str, evidence: dict) -> dict:
+    """Settle a one-choice-per-team market: ``tied`` teams share the win; listed teams that
+    didn't play are refunded."""
+    choices = _by_team(market)
+    winners = [choices[t] for t in tied if t in choices]
+    voids = [o for t, o in choices.items() if t not in rows]
+    notes = []
+    if not winners:
+        notes.append(f"The {what} isn't one of the choices: every bet loses.")
+    if len(tied) > 1:
+        names = ", ".join(sorted(rows[t].team.name for t in tied))
+        notes.append(f"{len(tied)} teams tie ({names}): winning bets are paid odds / {len(tied)}.")
+    if voids:
+        notes.append("Teams that didn't play are refunded.")
+    return _settle(winners, voids, " ".join(notes), evidence, len(tied))
+
+
+def linked_day(market: Market) -> tuple[MatchDay, list[Match]]:
+    """The match day a session market is about and its published matches."""
+    fixture = market.fixture
+    if fixture is None or fixture.match_number is not None:
+        raise MarketError("This market isn't about a whole session.", "not_ready")
+    if fixture.match_day_id is None:
+        raise MarketError("Link the fixture to its uploaded match day first.", "not_ready")
+    day = fixture.match_day
+    matches = list(day.matches.all())
+    waiting = [
+        m for m in matches if m.status in (Match.Status.PROCESSING, Match.Status.NEEDS_REVIEW)
+    ]
+    if waiting:
+        raise MarketError(
+            f"{len(waiting)} match(es) of this session still need publishing.", "not_ready"
+        )
+    published = [m for m in matches if m.status == Match.Status.PUBLISHED]
+    if not published:
+        raise MarketError("No match of this session is published yet.", "not_ready")
+    return day, published
+
+
+def _suggest_session(market: Market) -> dict:
+    day, matches = linked_day(market)
+    results = TeamMatchResult.objects.filter(match__in=matches)
+    rows = _standings(day.stage.season_id, f"day:{day.pk}", results)
+    teams = _teams(market)
+    evidence = {
+        "match_day": day.pk,
+        "match_day_title": str(day),
+        "matches": [m.pk for m in matches],
+        "left_out": [m.pk for m in day.matches.all() if m.status == Match.Status.DRAFT],
+        "standings": _table(rows, teams),
+    }
+    if market.category == C.SESSION_WINNER:
+        tied = {t for t, r in rows.items() if r.rank == 1}
+        return _team_winners(market, rows, tied, "session winner", evidence)
+    most = max(r.booyahs for r in rows.values())
+    if most == 0:
+        return _void("Nobody has a Booyah: everyone is refunded.", evidence)
+    tied = {t for t, r in rows.items() if r.booyahs == most}
+    evidence["most_booyahs"] = most
+    return _team_winners(market, rows, tied, "team with most Booyahs", evidence)
+
+
+def _suggest_season(market: Market) -> dict:
+    results = TeamMatchResult.objects.filter(
+        match__match_day__stage__season=market.season_id, match__status=Match.Status.PUBLISHED
+    )
+    rows = _standings(market.season_id, "season", results)
+    teams = _teams(market)
+    evidence = {
+        "season": market.season_id,
+        "matches_counted": results.values("match").distinct().count(),
+        "standings": _table(rows, teams),
+    }
+    if market.category == C.OVERALL_WINNER:
+        tied = {t for t, r in rows.items() if r.rank == 1}
+        return _team_winners(market, rows, tied, "overall winner", evidence)
+    row = rows.get(market.params["team"])
+    if row is None:
+        return _void("The team hasn't played this season: everyone is refunded.", evidence)
+    code = "yes" if row.rank <= market.params["n"] else "no"
+    winner = next(o for o in market.outcomes.all() if o.code == code)
+    return _settle([winner], note=f"Ranked {row.rank}.", evidence=evidence)
 
 
 def _teams(market: Market) -> set[int]:
@@ -127,13 +276,17 @@ def _teams(market: Market) -> set[int]:
 # -- applying a decision -------------------------------------------------------------------------
 
 
-def _target(bet: Bet, kind: str, winners: set[int], voids: set[int], late_from) -> tuple[str, int]:
+def _target(
+    bet: Bet, kind: str, winners: set[int], voids: set[int], late_from, dead_heat: int = 1
+) -> tuple[str, int]:
     """(status, payout) this bet ends up with under a decision."""
     if kind == Settlement.Kind.VOID or bet.outcome_id in voids:
         return B.VOID, bet.stake
     if late_from is not None and bet.placed_at >= late_from:
         return B.VOID, bet.stake  # placed after the match really started
     if bet.outcome_id in winners:
+        if dead_heat > 1:
+            return B.WON, dead_heat_return(bet.stake, bet.odds_accepted, dead_heat)
         return B.WON, bet.potential_return
     return B.LOST, 0
 
@@ -145,7 +298,9 @@ def _apply(market: Market, settlement: Settlement, late_from) -> dict:
     now = timezone.now()
     counts: Counter = Counter()
     for bet in market.bets.select_related("user").order_by("placed_at", "pk"):
-        status, payout = _target(bet, settlement.kind, winners, voids, late_from)
+        status, payout = _target(
+            bet, settlement.kind, winners, voids, late_from, settlement.dead_heat
+        )
         wallet = Wallet.objects.get(user=bet.user)
         if bet.status == B.PENDING:
             if payout:
@@ -195,6 +350,37 @@ def _apply(market: Market, settlement: Settlement, late_from) -> dict:
     return dict(counts)
 
 
+def _late_from(market: Market):
+    """When the real play started: bets placed from then on are refunded."""
+    fixture = market.fixture
+    if fixture is None:
+        return None
+    if fixture.match_number and fixture.match_id:
+        return fixture.match.started_at
+    if fixture.match_number is None and fixture.match_day_id:
+        starts = [m.started_at for m in fixture.match_day.matches.all() if m.started_at]
+        return min(starts) if starts else None
+    return None
+
+
+def _dead_heat(market: Market, winners, dead_heat: int | None, suggestion=None) -> int:
+    """How many teams share the win. Only one-choice-per-team session and overall markets
+    can tie; given none, it is the suggestion's (when the winners match it) or the number
+    of winners chosen."""
+    winners = set(winners)
+    if dead_heat is None:
+        if suggestion and suggestion["kind"] == "SETTLE" and set(suggestion["winners"]) == winners:
+            dead_heat = suggestion.get("dead_heat", 1)
+        else:
+            dead_heat = len(winners) if market.category in DEAD_HEAT else 1
+    dead_heat = max(int(dead_heat), 1)
+    if dead_heat > 1 and market.category not in DEAD_HEAT:
+        raise MarketError("Only session and overall winner markets can be a dead heat.", "outcome")
+    if market.category in DEAD_HEAT and dead_heat < len(winners):
+        raise MarketError("A dead heat can't be smaller than the number of winners.", "outcome")
+    return dead_heat
+
+
 def _decide(
     market_id: int,
     *,
@@ -207,6 +393,7 @@ def _decide(
     allowed_from: set[str],
     evidence: dict | None = None,
     request_key: str | None = None,
+    dead_heat: int = 1,
 ) -> tuple[Settlement, bool]:
     with transaction.atomic():
         market = Market.objects.select_for_update().get(pk=market_id)
@@ -223,9 +410,7 @@ def _decide(
             raise MarketError("An outcome can't both win and be refunded.", "outcome")
         if kind == Settlement.Kind.SETTLE and not winners and not voids:
             raise MarketError("Pick the winning outcome.", "outcome")
-        late_from = None
-        if market.fixture and market.fixture.match_number and market.fixture.match_id:
-            late_from = market.fixture.match.started_at
+        late_from = _late_from(market)
         settlement = Settlement.objects.create(
             market=market,
             version=(latest.version + 1) if latest else 1,
@@ -236,6 +421,7 @@ def _decide(
             actor=actor,
             supersedes=latest,
             request_key=request_key,
+            dead_heat=dead_heat if kind == Settlement.Kind.SETTLE else 1,
         )
         settlement.winning_outcomes.set(winners)
         settlement.void_outcomes.set(voids)
@@ -256,7 +442,14 @@ def _decide(
 
 
 def settle(
-    market: Market, *, actor, winners, voids=(), reference: str = "", override_reason: str = ""
+    market: Market,
+    *,
+    actor,
+    winners,
+    voids=(),
+    reference: str = "",
+    override_reason: str = "",
+    dead_heat: int | None = None,
 ) -> tuple[Settlement, bool]:
     """Settle a CLOSED market (first time). Repeating the same request changes nothing."""
     market.refresh_from_db()
@@ -268,14 +461,17 @@ def settle(
             latest.version == 1
             and set(latest.winning_outcomes.values_list("pk", flat=True)) == set(winners)
             and set(latest.void_outcomes.values_list("pk", flat=True)) == set(voids)
+            and (dead_heat is None or latest.dead_heat == dead_heat)
         ):
             return latest, False
         raise MarketError("Already settled. Use a correction to change it.", "already_settled")
     suggestion = suggest(market)  # raises when the match isn't ready
+    dead_heat = _dead_heat(market, winners, dead_heat, suggestion)
     matches = (
         suggestion["kind"] == "SETTLE"
         and set(suggestion["winners"]) == set(winners)
         and set(suggestion["voids"]) == set(voids)
+        and suggestion.get("dead_heat", 1) == dead_heat
     )
     if not matches and not override_reason.strip():
         raise MarketError(
@@ -292,12 +488,13 @@ def settle(
             reason=override_reason.strip(),
             allowed_from={S.CLOSED},
             evidence=suggestion["evidence"],
+            dead_heat=dead_heat,
         )
     except MarketError as exc:
         if exc.code != "wrong_status":
             raise
         # Another request settled it a moment ago: same answer, same result.
-        return settle(market, actor=actor, winners=winners, voids=voids)
+        return settle(market, actor=actor, winners=winners, voids=voids, dead_heat=dead_heat)
 
 
 def void(market: Market, *, actor, reason: str, reference: str = "") -> tuple[Settlement, bool]:
@@ -334,6 +531,7 @@ def correct(
     voids=(),
     reference: str = "",
     key: str = "",
+    dead_heat: int | None = None,
 ) -> tuple[Settlement, bool]:
     """Replace a settled or voided result with a new version.
 
@@ -350,11 +548,14 @@ def correct(
         return done, False
     if market.status not in (S.SETTLED, S.VOID) or not market.settlements.exists():
         raise MarketError("Only a settled or voided market can be corrected.", "wrong_status")
-    evidence = {}
+    suggestion = None
     try:
-        evidence = suggest(market)["evidence"]
+        suggestion = suggest(market)
     except MarketError:
         pass  # a void correction may not have a published match
+    evidence = suggestion["evidence"] if suggestion else {}
+    if kind == Settlement.Kind.SETTLE:
+        dead_heat = _dead_heat(market, winners, dead_heat, suggestion)
     try:
         return _decide(
             market.pk,
@@ -367,6 +568,7 @@ def correct(
             allowed_from={S.SETTLED, S.VOID},
             evidence=evidence,
             request_key=request_key,
+            dead_heat=dead_heat or 1,
         )
     except IntegrityError:
         # The same correction was sent twice at once and the other one won.
@@ -387,6 +589,7 @@ def settlement_data(s: Settlement) -> dict:
         "reference": s.reference,
         "reason": s.reason,
         "summary": s.summary,
+        "dead_heat": s.dead_heat,
         "by": s.actor.email,
         "supersedes": s.supersedes.version if s.supersedes else None,
         "created_at": s.created_at,

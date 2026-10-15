@@ -152,6 +152,11 @@ class Market(models.Model):
         H2H_PLACEMENT = "H2H_PLACEMENT", "Head-to-head: finishes higher"
         H2H_KILLS = "H2H_KILLS", "Head-to-head: more kills"
         H2H_POINTS = "H2H_POINTS", "Head-to-head: more points"
+        TEAM_KILLS = "TEAM_KILLS", "Team kills"
+        SESSION_WINNER = "SESSION_WINNER", "Session winner"
+        MOST_BOOYAHS = "MOST_BOOYAHS", "Most Booyahs in the session"
+        OVERALL_WINNER = "OVERALL_WINNER", "Overall winner"
+        OVERALL_TOP_N = "OVERALL_TOP_N", "Overall top N"
 
     class Status(models.TextChoices):
         DRAFT = "DRAFT", "Draft"
@@ -311,6 +316,10 @@ class Settlement(models.Model):
         max_length=300, blank=True, help_text="Why it was voided, corrected or overridden"
     )
     summary = models.JSONField(default=dict, blank=True, help_text="Bets won, lost, refunded...")
+    dead_heat = models.PositiveSmallIntegerField(
+        default=1,
+        help_text="Teams tied for the win: a winning bet is paid stake x odds / this number",
+    )
     actor = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+")
     supersedes = models.OneToOneField(
         "self", on_delete=models.PROTECT, null=True, blank=True, related_name="superseded_by"
@@ -324,6 +333,9 @@ class Settlement(models.Model):
         ordering = ["market", "-version"]
         constraints = [
             models.UniqueConstraint(fields=["market", "version"], name="predictions_settlement_v"),
+            models.CheckConstraint(
+                condition=Q(dead_heat__gte=1), name="predictions_settlement_dead_heat"
+            ),
         ]
 
     def __str__(self) -> str:
