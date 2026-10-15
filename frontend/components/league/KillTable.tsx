@@ -10,12 +10,13 @@ import { TeamMark } from "./TeamBadge";
 
 const FIRST = 15; // rows shown before "Show all"
 
-/** Every player's kills, knocks and headshot knocks, best first. */
+/** Every player's kills, knocks, headshot knocks and damage dealt, best first. */
 export default function KillTable({ list, showMatches = true }: { list: KillList; showMatches?: boolean }) {
   const [all, setAll] = useState(false);
   if (!list.players.length) return <p className="text-sm text-muted">No kills to show.</p>;
   const rows = all ? list.players : list.players.slice(0, FIRST);
   const cell = "px-2 py-2 text-right tabular-nums";
+  const damage = list.players.some((p) => p.damage != null);
   return (
     <>
       <div className="card overflow-x-auto">
@@ -27,6 +28,7 @@ export default function KillTable({ list, showMatches = true }: { list: KillList
               <th className={cell}>Kills</th>
               <th className={cell}>Knocks</th>
               <th className={`${cell} hidden sm:table-cell`}>Headshots</th>
+              {damage && <th className={`${cell} hidden sm:table-cell`}>Damage</th>}
               {showMatches && <th className={`${cell} hidden sm:table-cell`}>Matches</th>}
             </tr>
           </thead>
@@ -50,6 +52,7 @@ export default function KillTable({ list, showMatches = true }: { list: KillList
                 <td className={`${cell} font-display text-xl text-white`}>{p.kills}</td>
                 <td className={cell}>{p.knocks}</td>
                 <td className={`${cell} hidden sm:table-cell`}>{p.headshots}</td>
+                {damage && <td className={`${cell} hidden sm:table-cell`}>{p.damage == null ? "–" : p.damage.toLocaleString()}</td>}
                 {showMatches && <td className={`${cell} hidden text-muted sm:table-cell`}>{p.matches}</td>}
               </tr>
             ))}

@@ -49,6 +49,10 @@ export type PlayerResult = {
   headshot_knocks: number;
   deaths: number;
   respawns: number;
+  /** From the replay .bin; null when the match was uploaded without one. */
+  damage_dealt: number | null;
+  damage_taken: number | null;
+  zone_damage: number | null;
   is_mvp: boolean;
 };
 
