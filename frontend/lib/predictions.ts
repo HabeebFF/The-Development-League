@@ -52,6 +52,29 @@ export type Bet = {
   settled_at: string | null;
 };
 
+export type MultiplePick = {
+  market: { id: number; title: string; status: MarketStatus; fixture: Fixture | null };
+  outcome: { id: number; label: string };
+  odds_accepted: string;
+  status: BetStatus;
+  dead_heat: number;
+};
+
+/** Several picks in one bet, the odds multiplied (an accumulator). */
+export type Multiple = {
+  id: string;
+  stake: number;
+  odds: string;
+  potential_return: number;
+  potential_profit: number;
+  capped: boolean;
+  payout: number | null;
+  status: BetStatus;
+  placed_at: string;
+  settled_at: string | null;
+  picks: MultiplePick[];
+};
+
 export type Wallet = { balance: number; starting_coins: number; created_at: string };
 
 export type Entry = {
@@ -80,6 +103,9 @@ export type Leaderboard = { metric: Metric; accuracy_min_settled: number; rows: 
 
 export const MIN_STAKE = 10;
 export const MAX_STAKE = 500;
+/** Picks in one multiple, and the most a multiple can pay (the server's settings). */
+export const MAX_PICKS = 8;
+export const MAX_RETURN = 50000;
 
 /** Odds "2.55" as whole hundredths (255), so sums stay exact. */
 function hundredths(odds: string): number {
@@ -90,6 +116,68 @@ function hundredths(odds: string): number {
 /** Stake x odds, rounded down to a whole coin: the same sum the server makes. */
 export function totalReturn(stake: number, odds: string): number {
   return Math.floor((stake * hundredths(odds)) / 100);
+}
+
+/** Every pick's odds multiplied, rounded down to 2 decimals, for showing. */
+export function combinedOdds(odds: string[]): string {
+  let total = BigInt(1);
+  for (const o of odds) total *= BigInt(hundredths(o));
+  const scaled = total / BigInt(100) ** BigInt(Math.max(odds.length - 1, 0)); // in hundredths
+  const whole = scaled / BigInt(100);
+  return `${whole}.${String(scaled % BigInt(100)).padStart(2, "0")}`;
+}
+
+/** What a multiple returns if every pick wins: stake x every odds, rounded down, capped.
+ * Whole-number maths, so it matches the server to the coin. */
+export function multipleReturn(stake: number, odds: string[]): number {
+  let top = BigInt(stake);
+  for (const o of odds) top *= BigInt(hundredths(o));
+  const coinsBack = top / BigInt(100) ** BigInt(odds.length);
+  return coinsBack > BigInt(MAX_RETURN) ? MAX_RETURN : Number(coinsBack);
+}
+
+/** One pick on the bet slip, with what's needed to show it and check it. */
+export type SlipPick = {
+  market: number;
+  marketTitle: string;
+  fixture: Pick<Fixture, "id" | "title" | "date" | "session" | "match_number"> | null;
+  season: number;
+  outcome: number;
+  label: string;
+  odds: string;
+};
+
+/** True when two picks can't be in one multiple: the same match, or a whole-session
+ * market and anything in that session. The server checks this again. */
+export function slipClash(a: SlipPick, b: SlipPick): boolean {
+  const x = a.fixture;
+  const y = b.fixture;
+  if (!x || !y || a.season !== b.season || x.date !== y.date || x.session !== y.session) return false;
+  return x.match_number === null || y.match_number === null || x.match_number === y.match_number;
+}
+
+/** Why the slip can't be placed as it is (beyond the stake), or null. */
+export function slipProblem(picks: SlipPick[]): string | null {
+  if (picks.length === 0) return "Tap odds to add picks.";
+  if (picks.length > MAX_PICKS) return `A multiple can have at most ${MAX_PICKS} picks.`;
+  for (let i = 0; i < picks.length; i++)
+    for (const other of picks.slice(i + 1))
+      if (slipClash(picks[i], other)) return `${picks[i].marketTitle} and ${other.marketTitle} are on the same match, so they can't go in one multiple.`;
+  return null;
+}
+
+/** The slip pick for a choice on a market. */
+export function toPick(m: Market, o: Outcome): SlipPick {
+  const f = m.fixture;
+  return {
+    market: m.id,
+    marketTitle: m.title,
+    fixture: f ? { id: f.id, title: f.title, date: f.date, session: f.session, match_number: f.match_number } : null,
+    season: m.season.id,
+    outcome: o.id,
+    label: o.label,
+    odds: o.odds,
+  };
 }
 
 export function profit(stake: number, odds: string): number {

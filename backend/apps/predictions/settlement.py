@@ -33,6 +33,7 @@ from .markets import (
     dead_heat_return,
 )
 from .models import Bet, Market, MarketEvent, Outcome, Settlement, Wallet
+from .multiples import apply_legs
 from .services import Kind, post_entry
 
 C = Market.Category
@@ -641,6 +642,7 @@ def _apply(market: Market, settlement: Settlement, late_from) -> dict:
         counts[status.lower()] += 1
         bet.status, bet.payout, bet.settled_at = status, payout, now
         bet.save(update_fields=["status", "payout", "settled_at", "unrecovered"])
+    counts.update(apply_legs(market, settlement, winners, voids, late_from))
     return dict(counts)
 
 

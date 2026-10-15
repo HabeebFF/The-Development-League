@@ -177,3 +177,32 @@ test("staff: session, date-range and season kinds", async () => {
   assert.ok(categoriesFor("season").some((c) => c.key === "RANGE_FRAGGER" && c.dates));
   assert.ok(SHARED_WIN.has("RANGE_WINNER") && !SHARED_WIN.has("SESSION_H2H"));
 });
+
+test("bet slip: multiples add up like the server", async () => {
+  const { combinedOdds, multipleReturn, slipClash, slipProblem, MAX_RETURN } = await import("./predictions.ts");
+  assert.equal(combinedOdds(["2.00", "3.00", "4.00"]), "24.00");
+  assert.equal(combinedOdds(["1.55", "2.10"]), "3.25"); // 3.255 rounded down
+  assert.equal(combinedOdds(["2.50"]), "2.50");
+  assert.equal(multipleReturn(100, ["1.55", "2.10"]), 325);
+  assert.equal(multipleReturn(33, ["1.01", "1.01", "1.01"]), 33); // 33 x 1.030301 = 33.9999, rounded down
+  assert.equal(multipleReturn(500, ["100.00", "100.00", "100.00"]), MAX_RETURN);
+  const f = (match_number: number | null, date = "2026-10-23") => ({ id: 1, title: "x", date, session: "8PM", match_number });
+  const pick = (market: number, fixture: ReturnType<typeof f> | null) => ({
+    market,
+    marketTitle: `M${market}`,
+    fixture,
+    season: 1,
+    outcome: market * 10,
+    label: "A",
+    odds: "2.00",
+  });
+  assert.ok(slipClash(pick(1, f(1)), pick(2, f(1))));
+  assert.ok(!slipClash(pick(1, f(1)), pick(2, f(2))));
+  assert.ok(slipClash(pick(1, f(null)), pick(2, f(2))));
+  assert.ok(!slipClash(pick(1, f(null)), pick(2, f(null, "2026-10-24"))));
+  assert.ok(!slipClash(pick(1, f(1)), pick(2, null)));
+  assert.equal(slipProblem([]), "Tap odds to add picks.");
+  assert.equal(slipProblem([pick(1, f(1)), pick(2, f(2))]), null);
+  assert.match(slipProblem([pick(1, f(1)), pick(2, f(null))]) ?? "", /same match/);
+  assert.match(slipProblem(Array.from({ length: 9 }, (_, i) => pick(i, null))) ?? "", /at most 8/);
+});

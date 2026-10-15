@@ -49,6 +49,7 @@ def post_entry(
     actor=None,
     bet=None,
     settlement=None,
+    multiple=None,
 ) -> tuple[LedgerEntry, bool]:
     """Add ``amount`` coins (negative to take) once per ``key``.
 
@@ -80,6 +81,7 @@ def post_entry(
             actor=actor,
             bet=bet,
             settlement=settlement,
+            multiple=multiple,
         )
         locked.balance = after
         locked.entry_count += 1

@@ -12,6 +12,7 @@ import random
 import uuid
 from collections import Counter
 from decimal import Decimal
+from fractions import Fraction
 
 from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
@@ -32,7 +33,16 @@ from apps.predictions.markets import (
     place_bet,
     transition,
 )
-from apps.predictions.models import Bet, Fixture, LedgerEntry, Market, Settlement, Wallet
+from apps.predictions.models import (
+    Bet,
+    Fixture,
+    LedgerEntry,
+    Market,
+    Multiple,
+    Settlement,
+    Wallet,
+)
+from apps.predictions.multiples import place_multiple
 from apps.predictions.services import check_wallets, initial_coins, wallet_for
 from apps.predictions.settlement import correct, settle, suggest, void
 from apps.results.models import MatchEvent, PlayerMatchResult, TeamMatchResult
@@ -55,6 +65,7 @@ class Command(BaseCommand):
         parser.add_argument("--matches", type=int, default=4, help="Matches in each session")
         parser.add_argument("--sessions", type=int, default=2)
         parser.add_argument("--bets", type=int, default=12, help="Bets each user tries")
+        parser.add_argument("--multiples", type=int, default=3, help="Multiples each user tries")
         parser.add_argument("--seed", type=int, default=None)
         parser.add_argument("--report", default="", help="Write the report to this file too")
         parser.add_argument(
@@ -155,6 +166,14 @@ class Command(BaseCommand):
             f"- Bets placed: {self.counts['placed']}; resends that didn't charge twice: "
             f"{self.counts['resend_ok']}; refused as they should be: {self.counts['refused_ok']}; "
             f"refused for other reasons: {self.counts['refused_other']}"
+        )
+        for user in users:
+            for _ in range(opts["multiples"]):
+                self.try_multiple(user, markets)
+        self.lines.append(
+            f"- Multiples placed: {self.counts['multiples']}; refused for picks on the same "
+            f"match: {self.counts['same_match']}; for coins: {self.counts['multiple_coins']}; "
+            f"for other reasons: {self.counts['multiple_other']}"
         )
 
         # Play the matches, publish them and rebuild the standings.
@@ -292,6 +311,21 @@ class Command(BaseCommand):
             )
             self.counts["resend_ok" if not created and again.pk == bet.pk else "resend_bad"] += 1
 
+    def try_multiple(self, user, markets) -> None:
+        rng = self.rng
+        picks = []
+        for m in rng.sample(markets, rng.randint(2, 4)):
+            o = rng.choice(list(m.outcomes.all()))
+            picks.append({"market": m.pk, "outcome": o.pk, "expected_odds": str(o.odds)})
+        stake = rng.choice([10, 20, 50, 100])
+        try:
+            place_multiple(user, picks=picks, stake=stake, client_key=uuid.uuid4())
+        except MarketError as exc:
+            key = {"same_match": "same_match", "coins": "multiple_coins"}
+            self.counts[key.get(exc.code, "multiple_other")] += 1
+            return
+        self.counts["multiples"] += 1
+
     def try_refused(self, user, market) -> None:
         outcome = market.outcomes.first()
         balance = wallet_for(user).balance
@@ -363,9 +397,18 @@ class Command(BaseCommand):
                 problems.append(f"bet {bet.pk}: paid {bet.payout}, rules say {want}")
             if LedgerEntry.objects.filter(bet=bet, kind="STAKE").count() != 1:
                 problems.append(f"bet {bet.pk}: stake not taken exactly once")
+        multiples = Multiple.objects.filter(user__in=users).prefetch_related("legs__market")
+        for m in multiples:
+            want = self.expected_multiple(m)
+            if m.status == B.PENDING:
+                problems.append(f"multiple {m.pk} still pending")
+            elif m.payout != want:
+                problems.append(f"multiple {m.pk}: paid {m.payout}, rules say {want}")
+            if LedgerEntry.objects.filter(multiple=m, kind="STAKE").count() != 1:
+                problems.append(f"multiple {m.pk}: stake not taken exactly once")
         for user in users:
             w = Wallet.objects.get(user=user)
-            mine = bets.filter(user=user)
+            mine = [*bets.filter(user=user), *multiples.filter(user=user)]
             owed = start - sum(b.stake for b in mine) + sum(b.payout or 0 for b in mine)
             if w.balance + sum(b.unrecovered for b in mine) != owed:
                 problems.append(f"{user.email}: balance {w.balance} doesn't match its bets")
@@ -373,18 +416,42 @@ class Command(BaseCommand):
                 problems.append(f"{user.email}: negative balance")
 
         coins = sum(Wallet.objects.filter(user__in=users).values_list("balance", flat=True))
-        unrecovered = sum(b.unrecovered for b in bets)
+        unrecovered = sum(b.unrecovered for b in bets) + sum(m.unrecovered for m in multiples)
         self.lines.append(
             f"- Coins: {start * len(users):,} handed out, {coins:,} held at the end; "
             f"{unrecovered} couldn't be taken back by corrections (recorded on the bets)"
         )
-        self.lines.append(f"- Bets checked against the rules: {bets.count()}")
+        self.lines.append(
+            f"- Bets checked against the rules: {bets.count()} singles, "
+            f"{multiples.count()} multiples"
+        )
         if problems:
             self.lines.append(f"- **{len(problems)} problem(s):**")
             self.lines += [f"  - {p}" for p in problems[:50]]
             return False
         self.lines.append("- Every wallet matches its ledger and every bet was paid by the rules.")
         return True
+
+    @staticmethod
+    def expected_multiple(m: Multiple) -> int:
+        """Worked out again from scratch: each pick from its market's latest result."""
+        total = Fraction(m.stake)
+        voids = 0
+        legs = list(m.legs.all())
+        for leg in legs:
+            latest = leg.market.settlements.order_by("-version").first()
+            if (
+                latest.kind == Settlement.Kind.VOID
+                or latest.void_outcomes.filter(pk=leg.outcome_id).exists()
+            ):
+                voids += 1
+            elif latest.winning_outcomes.filter(pk=leg.outcome_id).exists():
+                total *= Fraction(leg.odds_accepted) / latest.dead_heat
+            else:
+                return 0
+        if voids == len(legs):
+            return m.stake
+        return min(int(total), settings.PREDICTIONS_MAX_RETURN)
 
     @staticmethod
     def expected_payout(bet: Bet, latest: Settlement | None) -> int:
