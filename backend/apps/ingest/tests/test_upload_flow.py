@@ -204,6 +204,22 @@ def test_reupload_updates_and_never_duplicates(upload, confirm, match_day):
     assert ParseRun.objects.count() == 2
 
 
+def test_a_merged_players_other_account_lands_on_them(upload, confirm, match_day):
+    from apps.league.models import Player, PlayerAlias
+
+    kept = Player.objects.create(
+        game_uid=1, current_name_raw="VALSI", display_name="VALSI", search_name="valsi"
+    )
+    PlayerAlias.objects.create(game_uid=2063288734, player=kept)  # NB VALSI's account
+    batch = upload(all_files())
+    confirm(batch["id"], [{"game_match_id": str(MATCH_ID), "match_day": match_day.pk, "number": 1}])
+    row = PlayerMatchResult.objects.get(entity_id=167772182)
+    assert row.player == kept and row.kills == 9
+    assert not Player.objects.filter(game_uid=2063288734).exists()
+    kept.refresh_from_db()
+    assert kept.display_name == "VALSI" and kept.current_team is not None
+
+
 def test_reupload_moves_a_match_to_another_day(upload, confirm, match_day):
     # TDL Day 12 was filed under Day 11; uploading it again under the right day moves it.
     first = upload(all_files())

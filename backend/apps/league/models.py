@@ -267,6 +267,21 @@ class Player(TimeStampedModel):
         return f"{self.display_name} ({self.game_uid})"
 
 
+class PlayerAlias(TimeStampedModel):
+    """Another game UID of the same person (a second account, or one recovered by name):
+    uploads with it land on ``player``. Made when staff merge two players."""
+
+    game_uid = models.BigIntegerField(unique=True)
+    player = models.ForeignKey(Player, on_delete=models.CASCADE, related_name="aliases")
+    name = models.CharField(max_length=80, blank=True, help_text="Its name when merged")
+
+    class Meta:
+        ordering = ["game_uid"]
+
+    def __str__(self) -> str:
+        return f"{self.game_uid} -> {self.player}"
+
+
 class RosterEntry(TimeStampedModel):
     """A player on a team for a season."""
 

@@ -12,7 +12,7 @@ test("staff land in Staff and team members in their team area", () => {
 });
 
 test("only sign-in and invite pages are open without an account", () => {
-  for (const path of ["/auth/login", "/auth/reset", "/invite/abc123"]) assert.ok(isOpenPath(path), path);
+  for (const path of ["/auth/login", "/auth/reset", "/invite/abc123", "/privacy"]) assert.ok(isOpenPath(path), path);
   for (const path of ["/", "/standings", "/teams/x", "/staff", "/team", "/authors", "/invites"])
     assert.ok(!isOpenPath(path), path);
 });

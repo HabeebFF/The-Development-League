@@ -116,7 +116,7 @@ def test_visitor_code_is_the_same_all_day_and_new_the_next():
 
 @pytest.mark.django_db
 def test_a_visit_is_stored_without_the_ip():
-    assert hit(path="/standings?ref=wa", ref="wa").status_code == 204
+    assert hit(path="/standings?ref=wa", ref="wa").status_code == 201
     view = PageView.objects.get()
     assert (view.path, view.source, view.device, view.browser, view.os, view.audience) == (
         "/standings", "WhatsApp", "phone", "Chrome", "Android", "guest"
@@ -150,7 +150,7 @@ def test_hits_are_rate_limited():
     with mock.patch("rest_framework.throttling.ScopedRateThrottle.THROTTLE_RATES",
                     {"analytics_hit": "2/min"}):  # fmt: skip
         codes = [hit().status_code for _ in range(3)]
-    assert codes == [204, 204, 429]
+    assert codes == [201, 201, 429]
 
 
 # -- Summary -----------------------------------------------------------------------------
@@ -172,11 +172,12 @@ def test_summary_counts_people_not_staff():
     _view("/staff", "s", audience="staff")
     data = summary("7d")
     assert data["totals"] == {"views": 3, "visitors": 2, "pages_per_visitor": 1.5,
-                              "online_now": 1, "staff_views": 1}  # fmt: skip
+                              "online_now": 1, "staff_views": 1, "actions": 0, "visits": 2,
+                              "avg_visit_s": 0, "bounce_rate": 50}  # fmt: skip
     assert len(data["by_day"]) == 7 and data["by_day"][-1]["views"] == 2
     assert sum(d["visitors"] for d in data["by_day"]) == 2
     assert data["pages"][0] == {"name": "Standings", "path": "/standings", "views": 2,
-                                "visitors": 2}  # fmt: skip
+                                "visitors": 2, "avg_s": 0}  # fmt: skip
     assert {s["name"]: s["views"] for s in data["sources"]} == {"Direct": 2, "WhatsApp": 1}
     assert sum(h["views"] for h in data["hours"]) == 3 and len(data["hours"]) == 24
     assert summary("today")["totals"]["views"] == 2
