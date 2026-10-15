@@ -206,3 +206,17 @@ test("bet slip: multiples add up like the server", async () => {
   assert.match(slipProblem([pick(1, f(1)), pick(2, f(null))]) ?? "", /same match/);
   assert.match(slipProblem(Array.from({ length: 9 }, (_, i) => pick(i, null))) ?? "", /at most 8/);
 });
+
+test("odds format: fractional reads like a bookmaker's", async () => {
+  const { fractional, showOdds } = await import("./predictions.ts");
+  assert.equal(fractional("2.00"), "Evens");
+  assert.equal(fractional("3.25"), "9/4");
+  assert.equal(fractional("2.50"), "3/2");
+  assert.equal(fractional("1.01"), "1/100");
+  assert.equal(fractional("7.40"), "32/5");
+  assert.equal(fractional("11.00"), "10/1");
+  assert.equal(fractional("24.05"), "461/20");
+  assert.equal(fractional("1000000.00"), "999999/1");
+  assert.equal(showOdds("3.25", "decimal"), "3.25");
+  assert.equal(showOdds("3.25", "fractional"), "9/4");
+});

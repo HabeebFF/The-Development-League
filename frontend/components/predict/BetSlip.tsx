@@ -14,13 +14,16 @@ import {
   MIN_STAKE,
   multipleReturn,
   newKey,
+  showOdds,
   slipProblem,
   stakeProblem,
   type Bet,
   type Multiple,
+  type OddsFormat,
   type SlipPick,
 } from "@/lib/predictions";
 
+import { useOddsFormat } from "./oddsFormat";
 import { NOTE } from "./PredictNav";
 import { useSlip } from "./slip";
 import { useWallet } from "./useWallet";
@@ -36,6 +39,7 @@ type Refusal = { code?: string; detail?: string; market?: number; odds?: string;
 export default function BetSlip() {
   const slip = useSlip();
   const { state: wallet, setBalance } = useWallet();
+  const [format] = useOddsFormat();
   const [stake, setStake] = useState("100");
   const [review, setReview] = useState<Review | null>(null);
   const [busy, setBusy] = useState(false);
@@ -50,7 +54,7 @@ export default function BetSlip() {
   const balance = wallet.kind === "ok" ? wallet.wallet.balance : null;
   const odds = picks.map((p) => p.odds);
   const multiple = picks.length > 1;
-  const shown = multiple ? combinedOdds(odds) : (odds[0] ?? "");
+  const shown = showOdds(multiple ? combinedOdds(odds) : (odds[0] ?? "1.00"), format);
   const stakeNote = stakeProblem(stake, balance);
   const picksNote = slipProblem(picks);
   const amount = stakeNote ? 0 : Number(stake);
@@ -125,7 +129,7 @@ export default function BetSlip() {
           {slip.open && (
             <div className="max-h-[70vh] space-y-3 overflow-y-auto p-4 text-sm">
               {placed && picks.length === 0 ? (
-                <PlacedNote placed={placed} onDone={() => setPlaced(null)} />
+                <PlacedNote placed={placed} format={format} onDone={() => setPlaced(null)} />
               ) : (
                 <>
                   <ul className="space-y-1.5">
@@ -141,7 +145,7 @@ export default function BetSlip() {
                             {p.fixture ? ` · ${p.fixture.title}` : ""}
                           </Link>
                         </span>
-                        <span className="font-display text-lg text-accent">{p.odds}</span>
+                        <span className="font-display text-lg text-accent">{showOdds(p.odds, format)}</span>
                         <button
                           type="button"
                           className="px-1 text-muted hover:text-bad"
@@ -257,7 +261,7 @@ export default function BetSlip() {
                     <b>{p.label}</b>
                     <span className="block truncate text-xs text-muted">{p.marketTitle}</span>
                   </span>
-                  <span className="text-accent">{p.odds}</span>
+                  <span className="text-accent">{showOdds(p.odds, format)}</span>
                 </li>
               ))}
             </ul>
@@ -265,7 +269,7 @@ export default function BetSlip() {
               <dt className="text-muted">Stake</dt>
               <dd className="text-right">{coins(review.stake)}</dd>
               <dt className="text-muted">Odds</dt>
-              <dd className="text-right">{combinedOdds(review.picks.map((p) => p.odds))}</dd>
+              <dd className="text-right">{showOdds(combinedOdds(review.picks.map((p) => p.odds)), format)}</dd>
               <dt className="text-muted">Returns if it wins</dt>
               <dd className="text-right font-semibold">
                 {coins(
@@ -300,18 +304,19 @@ export default function BetSlip() {
   );
 }
 
-function PlacedNote({ placed, onDone }: { placed: Placed; onDone: () => void }) {
+function PlacedNote({ placed, format, onDone }: { placed: Placed; format: OddsFormat; onDone: () => void }) {
   return (
     <div className="space-y-2">
       <p className="font-display text-2xl text-ok uppercase">{placed.kind === "multiple" ? "Multiple placed" : "Prediction placed"}</p>
       {placed.kind === "single" ? (
         <p>
-          {placed.bet.outcome.label} · {coins(placed.bet.stake)} at {placed.bet.odds_accepted}. Pays {coins(placed.bet.potential_return)} if it wins.
+          {placed.bet.outcome.label} · {coins(placed.bet.stake)} at {showOdds(placed.bet.odds_accepted, format)}. Pays {coins(placed.bet.potential_return)} if
+          it wins.
         </p>
       ) : (
         <p>
-          {placed.multiple.picks.length} picks · {coins(placed.multiple.stake)} at {placed.multiple.odds}. Pays {coins(placed.multiple.potential_return)} if
-          every pick wins.
+          {placed.multiple.picks.length} picks · {coins(placed.multiple.stake)} at {showOdds(placed.multiple.odds, format)}. Pays{" "}
+          {coins(placed.multiple.potential_return)} if every pick wins.
         </p>
       )}
       <div className="grid grid-cols-2 gap-2">

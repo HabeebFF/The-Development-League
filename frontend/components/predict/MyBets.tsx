@@ -5,9 +5,10 @@ import { useState } from "react";
 
 import Loading from "@/components/league/Loading";
 import type { Paged } from "@/lib/api";
-import { BET_STATUS, coins, MARKET_STATUS, type Bet, type BetStatus, type Multiple } from "@/lib/predictions";
+import { BET_STATUS, coins, MARKET_STATUS, showOdds, type Bet, type BetStatus, type Multiple, type OddsFormat } from "@/lib/predictions";
 import { useApi } from "@/lib/useApi";
 
+import { useOddsFormat } from "./oddsFormat";
 import PredictNav, { NotOpen } from "./PredictNav";
 import { useWallet } from "./useWallet";
 
@@ -26,6 +27,7 @@ function when(iso: string) {
 /** The player's own predictions, newest first, filtered by status. */
 export default function MyBets() {
   const { state } = useWallet();
+  const [format] = useOddsFormat();
   const [filter, setFilter] = useState<BetStatus | null>(null);
   const [kind, setKind] = useState<"bets" | "multiples">("bets");
   const [page, setPage] = useState(1);
@@ -95,7 +97,7 @@ export default function MyBets() {
           </p>
         ) : (
           <ul className="space-y-2">
-            {kind === "multiples" && (bets.data.results as Multiple[]).map((m) => <MultipleItem key={m.id} m={m} />)}
+            {kind === "multiples" && (bets.data.results as Multiple[]).map((m) => <MultipleItem key={m.id} m={m} format={format} />)}
             {kind === "bets" &&
               (bets.data.results as Bet[]).map((b) => (
                 <li key={b.id} className="card p-3 text-sm">
@@ -113,7 +115,7 @@ export default function MyBets() {
                       <span className="text-muted">Pick</span> {b.outcome.label}
                     </span>
                     <span>
-                      <span className="text-muted">Stake</span> {coins(b.stake)} @ {b.odds_accepted}
+                      <span className="text-muted">Stake</span> {coins(b.stake)} @ {showOdds(b.odds_accepted, format)}
                     </span>
                     <span>
                       <span className="text-muted">{b.status === "PENDING" ? "Could return" : "Paid"}</span>{" "}
@@ -144,12 +146,12 @@ export default function MyBets() {
 }
 
 /** A multiple: its picks with how each settled, and what it returns or paid. */
-function MultipleItem({ m }: { m: Multiple }) {
+function MultipleItem({ m, format }: { m: Multiple; format: OddsFormat }) {
   return (
     <li className="card p-3 text-sm">
       <div className="flex flex-wrap items-baseline gap-x-3">
         <span className="font-semibold">
-          {m.picks.length}-pick multiple @ {m.odds}
+          {m.picks.length}-pick multiple @ {showOdds(m.odds, format)}
         </span>
         <span className="text-xs text-muted">{when(m.placed_at)}</span>
         <span className={`ml-auto font-display text-lg uppercase ${BET_STATUS[m.status].tone}`}>{BET_STATUS[m.status].label}</span>
@@ -165,7 +167,7 @@ function MultipleItem({ m }: { m: Multiple }) {
               </Link>
               {p.dead_heat > 1 && <span className="text-xs text-muted"> · shared by {p.dead_heat}</span>}
             </span>
-            <span className="text-accent">{p.odds_accepted}</span>
+            <span className="text-accent">{showOdds(p.odds_accepted, format)}</span>
           </li>
         ))}
       </ul>

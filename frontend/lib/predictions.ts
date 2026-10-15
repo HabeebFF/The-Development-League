@@ -35,6 +35,8 @@ export type Market = {
   closes_at: string;
   /** Winning outcome ids once settled. */
   winners: number[];
+  /** Predictions on it so far: single bets and multiple picks. */
+  predictions: number;
   outcomes: Outcome[];
 };
 
@@ -116,6 +118,29 @@ function hundredths(odds: string): number {
 /** Stake x odds, rounded down to a whole coin: the same sum the server makes. */
 export function totalReturn(stake: number, odds: string): number {
   return Math.floor((stake * hundredths(odds)) / 100);
+}
+
+export type OddsFormat = "decimal" | "fractional";
+
+function gcd(a: number, b: number): number {
+  return b === 0 ? a : gcd(b, a % b);
+}
+
+/** Decimal odds as a bookmaker's fraction: profit over stake, so 3.25 is 9/4 and 2.00 is
+ * Evens. Works for combined odds too (big numbers stay whole: 24.05 is 2305/100 = 461/20). */
+export function fractional(odds: string): string {
+  const [whole, frac = ""] = odds.split(".");
+  const top = BigInt(whole) * BigInt(100) + BigInt((frac + "00").slice(0, 2)) - BigInt(100);
+  if (top <= BigInt(0)) return "0/1";
+  if (top === BigInt(100)) return "Evens";
+  // Reduce by what top shares with 100 (that is all a gcd with 100 can be).
+  const div = gcd(Number(top % BigInt(100)), 100);
+  return `${top / BigInt(div)}/${100 / div}`;
+}
+
+/** Odds as the player chose to see them. The server always works in decimal. */
+export function showOdds(odds: string, format: OddsFormat): string {
+  return format === "fractional" ? fractional(odds) : odds;
 }
 
 /** Every pick's odds multiplied, rounded down to 2 decimals, for showing. */

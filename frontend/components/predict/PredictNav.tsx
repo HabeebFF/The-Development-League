@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 
 import { coins } from "@/lib/predictions";
 
+import { useOddsFormat } from "./oddsFormat";
 import type { WalletState } from "./useWallet";
 
 const LINKS = [
@@ -29,10 +30,37 @@ export default function PredictNav({ wallet }: { wallet: WalletState }) {
           );
         })}
       </nav>
-      <span className="ml-auto">
+      <span className="ml-auto flex items-center gap-3">
+        <OddsSwitch />
         <Balance wallet={wallet} />
       </span>
     </div>
+  );
+}
+
+/** Decimal (2.50) or fractional (6/4) odds: how this viewer likes to read them. */
+function OddsSwitch() {
+  const [format, setFormat] = useOddsFormat();
+  return (
+    <span className="flex text-xs" role="group" aria-label="Odds format">
+      {(
+        [
+          ["decimal", "2.50"],
+          ["fractional", "6/4"],
+        ] as const
+      ).map(([key, label]) => (
+        <button
+          key={key}
+          type="button"
+          aria-pressed={format === key}
+          title={key === "decimal" ? "Decimal odds" : "Fractional odds"}
+          className={`btn px-2 py-1 ${format === key ? "border-accent text-white" : "text-muted"}`}
+          onClick={() => setFormat(key)}
+        >
+          {label}
+        </button>
+      ))}
+    </span>
   );
 }
 

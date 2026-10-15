@@ -46,6 +46,7 @@ from .models import (
     Bet,
     Fixture,
     LedgerEntry,
+    Leg,
     Market,
     Multiple,
     OddsChange,
@@ -260,6 +261,10 @@ def market_data(market: Market, now=None) -> dict:
         "opens_at": market.opens_at,
         "closes_at": market.closes_at,
         "winners": _winners(market),
+        # Predictions on it so far, single bets and multiple picks alike (shows what's popular).
+        "predictions": (
+            market.taken if hasattr(market, "taken") else market.bets.count() + market.legs.count()
+        ),
         "outcomes": [
             {
                 "id": o.pk,
@@ -283,9 +288,17 @@ def _winners(market: Market) -> list[int]:
     return list(latest.winning_outcomes.values_list("pk", flat=True)) if latest else []
 
 
+def _count(model):
+    """How many single bets (``Bet``) or multiple picks (``Leg``) a market has."""
+    rows = model.objects.filter(market=OuterRef("pk")).values("market").annotate(n=Count("pk"))
+    return Coalesce(Subquery(rows.values("n"), output_field=IntegerField()), Value(0))
+
+
 def _markets():
-    return Market.objects.select_related("season", "fixture").prefetch_related(
-        "outcomes__team", "outcomes__player__current_team"
+    return (
+        Market.objects.select_related("season", "fixture")
+        .prefetch_related("outcomes__team", "outcomes__player__current_team")
+        .annotate(taken=_count(Bet) + _count(Leg))
     )
 
 
@@ -301,7 +314,8 @@ def _refused(exc: MarketError) -> Response:
 
 
 class MarketListView(APIView):
-    """Markets people can see (never drafts). ``?status=open|closed|settled|void|all``."""
+    """Markets people can see (never drafts). ``?status=open|closed|settled|void|all``;
+    ``?sort=popular`` puts the most-predicted first and leaves out those with none."""
 
     permission_classes = [PredictionsOn, PublicRead]
 
@@ -327,6 +341,8 @@ class MarketListView(APIView):
             qs = qs.filter(status=wanted).order_by("-closes_at")
         elif wanted != "ALL":
             raise ValidationError({"status": "Use open, closed, settled, void or all."})
+        if request.query_params.get("sort") == "popular":
+            qs = qs.filter(taken__gt=0).order_by("-taken", "closes_at", "pk")
         paginator = DefaultPagination()
         page = paginator.paginate_queryset(qs, request, view=self)
         return paginator.get_paginated_response([market_data(m, now) for m in page])

@@ -2,10 +2,11 @@
 
 import Loading from "@/components/league/Loading";
 import { TeamMark } from "@/components/league/TeamBadge";
-import { closesIn, MARKET_STATUS, RULES, SHARED_WIN, toPick, type Market } from "@/lib/predictions";
+import { closesIn, MARKET_STATUS, RULES, SHARED_WIN, showOdds, toPick, type Market } from "@/lib/predictions";
 import { useApi } from "@/lib/useApi";
 
 import PredictNav, { NOTE, NotOpen } from "./PredictNav";
+import { useOddsFormat } from "./oddsFormat";
 import { useSlip } from "./slip";
 import { useNow } from "./PredictHome";
 import { useWallet } from "./useWallet";
@@ -16,6 +17,7 @@ export default function MarketView({ id }: { id: number }) {
   const market = useApi<Market>(`/predictions/markets/${id}`);
   const now = useNow();
   const slip = useSlip();
+  const [format] = useOddsFormat();
 
   if (market.error === "Not found.") return <NotOpen />;
   if (!market.data) return <Loading error={market.error} count={4} />;
@@ -62,7 +64,7 @@ export default function MarketView({ id }: { id: number }) {
                     {o.player?.team && <span className="block text-xs text-muted">{o.player.team.name}</span>}
                   </span>
                   {m.winners.includes(o.id) && <span className="chip text-ok">Won</span>}
-                  <span className="font-display text-2xl text-accent">{o.odds}</span>
+                  <span className="font-display text-2xl text-accent">{showOdds(o.odds, format)}</span>
                 </button>
               );
             })}
