@@ -5,8 +5,10 @@ Balances are only ever read here; the one write (a staff adjustment) goes throug
 """
 
 from django.conf import settings
-from django.db.models import Q
+from django.db import transaction
+from django.db.models import Count, Q, Sum
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
 from rest_framework import mixins, serializers, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import NotFound, ValidationError
@@ -14,10 +16,20 @@ from rest_framework.permissions import BasePermission, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.league.models import Season
 from common.pagination import DefaultPagination
-from common.permissions import IsStaff, IsSuperAdmin
+from common.permissions import IsStaff, IsSuperAdmin, PublicRead
 
-from .models import LedgerEntry, Wallet
+from .markets import (
+    MarketError,
+    accepting_bets,
+    create_market,
+    place_bet,
+    set_active,
+    set_odds,
+    transition,
+)
+from .models import Bet, Fixture, LedgerEntry, Market, OddsChange, Outcome, Wallet
 from .services import CoinError, Kind, can_play, initial_coins, post_entry, wallet_for
 
 
@@ -155,3 +167,458 @@ class WalletAdminViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
             StaffEntrySerializer(entry).data,
             status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
         )
+
+
+# -- markets and bets ----------------------------------------------------------------------------
+
+S = Market.Status
+
+
+def _is_staff(request) -> bool:
+    u = request.user
+    return bool(u and u.is_authenticated and u.is_league_staff)
+
+
+def _team(t) -> dict | None:
+    if t is None:
+        return None
+    return {
+        "id": t.pk,
+        "name": t.name,
+        "tag": t.tag,
+        "slug": t.slug,
+        "logo": t.logo.url if t.logo else None,
+    }
+
+
+def _fixture(f: Fixture | None) -> dict | None:
+    if f is None:
+        return None
+    return {
+        "id": f.pk,
+        "title": str(f),
+        "date": f.date,
+        "session": f.session,
+        "match_number": f.match_number,
+        "scheduled_at": f.scheduled_at,
+        "match": f.match_id,
+    }
+
+
+def shown_status(market: Market, now=None) -> str:
+    """OPEN or SUSPENDED past the closing time already counts as closed."""
+    now = now or timezone.now()
+    if market.status in (S.OPEN, S.SUSPENDED) and market.closes_at <= now:
+        return S.CLOSED
+    return market.status
+
+
+def market_data(market: Market, now=None) -> dict:
+    now = now or timezone.now()
+    return {
+        "id": market.pk,
+        "title": market.title,
+        "description": market.description,
+        "category": market.category,
+        "category_label": market.get_category_display(),
+        "season": {"id": market.season_id, "name": market.season.name},
+        "fixture": _fixture(market.fixture),
+        "status": shown_status(market, now),
+        "accepting": accepting_bets(market, now),
+        "opens_at": market.opens_at,
+        "closes_at": market.closes_at,
+        "outcomes": [
+            {
+                "id": o.pk,
+                "code": o.code,
+                "label": o.label,
+                "team": _team(o.team),
+                "odds": str(o.odds),
+                "is_active": o.is_active,
+            }
+            for o in market.outcomes.all()
+        ],
+    }
+
+
+def _markets():
+    return Market.objects.select_related("season", "fixture").prefetch_related("outcomes__team")
+
+
+def _refused(exc: MarketError) -> Response:
+    code = {
+        "not_found": status.HTTP_404_NOT_FOUND,
+        "not_allowed": status.HTTP_403_FORBIDDEN,
+        "odds_changed": status.HTTP_409_CONFLICT,
+        "key_reused": status.HTTP_409_CONFLICT,
+    }.get(exc.code, status.HTTP_400_BAD_REQUEST)
+    return Response({"detail": str(exc), "code": exc.code, **exc.extra}, status=code)
+
+
+class MarketListView(APIView):
+    """Markets people can see (never drafts). ``?status=open|closed|settled|void|all``."""
+
+    permission_classes = [PredictionsOn, PublicRead]
+
+    def get(self, request):
+        now = timezone.now()
+        qs = _markets().exclude(status=S.DRAFT)
+        if fixture := request.query_params.get("fixture"):
+            qs = qs.filter(fixture_id=fixture)
+        if season := request.query_params.get("season"):
+            qs = qs.filter(season_id=season)
+        wanted = request.query_params.get("status", "open").upper()
+        if wanted == "OPEN":
+            qs = qs.filter(status__in=[S.OPEN, S.SUSPENDED], closes_at__gt=now)
+        elif wanted == "CLOSED":
+            qs = qs.filter(
+                Q(status=S.CLOSED) | Q(status__in=[S.OPEN, S.SUSPENDED], closes_at__lte=now)
+            )
+        elif wanted in (S.SETTLED, S.VOID):
+            qs = qs.filter(status=wanted).order_by("-closes_at")
+        elif wanted != "ALL":
+            raise ValidationError({"status": "Use open, closed, settled, void or all."})
+        paginator = DefaultPagination()
+        page = paginator.paginate_queryset(qs, request, view=self)
+        return paginator.get_paginated_response([market_data(m, now) for m in page])
+
+
+class MarketDetailView(APIView):
+    permission_classes = [PredictionsOn, PublicRead]
+
+    def get(self, request, pk: int):
+        market = get_object_or_404(_markets().exclude(status=S.DRAFT), pk=pk)
+        return Response(market_data(market))
+
+
+class PlaceBetSerializer(serializers.Serializer):
+    market = serializers.IntegerField()
+    outcome = serializers.IntegerField()
+    stake = serializers.IntegerField()
+    client_key = serializers.UUIDField()
+    expected_odds = serializers.CharField(required=False, max_length=12)
+
+
+def bet_data(bet: Bet) -> dict:
+    return {
+        "id": str(bet.pk),
+        "market": {
+            "id": bet.market_id,
+            "title": bet.market.title,
+            "status": shown_status(bet.market),
+            "fixture": _fixture(bet.market.fixture),
+        },
+        "outcome": {"id": bet.outcome_id, "label": bet.outcome.label},
+        "stake": bet.stake,
+        "odds_accepted": str(bet.odds_accepted),
+        "potential_return": bet.potential_return,
+        "potential_profit": bet.potential_return - bet.stake,
+        "payout": bet.payout,
+        "status": bet.status,
+        "placed_at": bet.placed_at,
+        "settled_at": bet.settled_at,
+    }
+
+
+def _bets():
+    return Bet.objects.select_related("market__fixture", "outcome")
+
+
+class BetsView(APIView):
+    """GET: my bets (``?status=pending|won|lost|void``). POST: place one."""
+
+    permission_classes = [PredictionsOn, IsAuthenticated, CanPlay]
+
+    def get(self, request):
+        qs = _bets().filter(user=request.user)
+        if wanted := request.query_params.get("status"):
+            if wanted.upper() not in Bet.Status.values:
+                raise ValidationError({"status": "Use pending, won, lost or void."})
+            qs = qs.filter(status=wanted.upper())
+        paginator = DefaultPagination()
+        page = paginator.paginate_queryset(qs, request, view=self)
+        return paginator.get_paginated_response([bet_data(b) for b in page])
+
+    def post(self, request):
+        data = PlaceBetSerializer(data=request.data)
+        data.is_valid(raise_exception=True)
+        v = data.validated_data
+        try:
+            bet, created = place_bet(
+                request.user,
+                market_id=v["market"],
+                outcome_id=v["outcome"],
+                stake=v["stake"],
+                client_key=v["client_key"],
+                expected_odds=v.get("expected_odds"),
+            )
+        except MarketError as exc:
+            return _refused(exc)
+        bet = _bets().get(pk=bet.pk)
+        balance = Wallet.objects.get(user=request.user).balance
+        return Response(
+            {**bet_data(bet), "balance": balance},
+            status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
+        )
+
+
+class BetDetailView(APIView):
+    permission_classes = [PredictionsOn, IsAuthenticated, CanPlay]
+
+    def get(self, request, pk):
+        return Response(bet_data(get_object_or_404(_bets(), pk=pk, user=request.user)))
+
+
+# -- staff: fixtures and markets -----------------------------------------------------------------
+
+
+class FixtureSerializer(serializers.ModelSerializer):
+    display_title = serializers.CharField(source="__str__", read_only=True)
+
+    class Meta:
+        model = Fixture
+        fields = [
+            "id",
+            "season",
+            "date",
+            "session",
+            "match_number",
+            "title",
+            "display_title",
+            "scheduled_at",
+            "match",
+            "match_day",
+        ]
+        validators = []  # the unique check below gives a readable message
+
+    def validate(self, attrs):
+        get = lambda k: attrs.get(k, getattr(self.instance, k, None))  # noqa: E731
+        clash = Fixture.objects.filter(
+            season=get("season"),
+            date=get("date"),
+            session=get("session"),
+            match_number=get("match_number"),
+        )
+        if self.instance:
+            clash = clash.exclude(pk=self.instance.pk)
+        if clash.exists():
+            raise ValidationError("That fixture already exists.")
+        return attrs
+
+
+class FixtureAdminViewSet(viewsets.ModelViewSet):
+    permission_classes = [IsStaff]
+    serializer_class = FixtureSerializer
+
+    def get_queryset(self):
+        qs = Fixture.objects.order_by("-date", "session", "match_number")
+        if season := self.request.query_params.get("season"):
+            qs = qs.filter(season_id=season)
+        return qs
+
+    def perform_destroy(self, fixture):
+        if fixture.markets.exists():
+            raise ValidationError({"detail": "This fixture has markets; void them instead."})
+        fixture.delete()
+
+
+class MarketCreateSerializer(serializers.Serializer):
+    title = serializers.CharField(max_length=140)
+    description = serializers.CharField(required=False, allow_blank=True)
+    category = serializers.ChoiceField(choices=Market.Category.choices)
+    season = serializers.PrimaryKeyRelatedField(queryset=Season.objects.all())
+    fixture = serializers.PrimaryKeyRelatedField(
+        queryset=Fixture.objects.all(), required=False, allow_null=True
+    )
+    params = serializers.DictField()
+    odds = serializers.DictField(child=serializers.CharField(max_length=12))
+    opens_at = serializers.DateTimeField()
+    closes_at = serializers.DateTimeField()
+
+    def validate(self, attrs):
+        if attrs["closes_at"] <= attrs["opens_at"]:
+            raise ValidationError({"closes_at": "Must be after the opening time."})
+        fixture = attrs.get("fixture")
+        if fixture and fixture.season_id != attrs["season"].pk:
+            raise ValidationError({"fixture": "That fixture is in another season."})
+        return attrs
+
+
+class MarketUpdateSerializer(serializers.Serializer):
+    title = serializers.CharField(max_length=140, required=False)
+    description = serializers.CharField(required=False, allow_blank=True)
+    opens_at = serializers.DateTimeField(required=False)
+    closes_at = serializers.DateTimeField(required=False)
+
+
+class TransitionSerializer(serializers.Serializer):
+    to = serializers.ChoiceField(choices=[S.OPEN, S.SUSPENDED, S.CLOSED])
+    reason = serializers.CharField(required=False, allow_blank=True, max_length=300)
+
+
+def staff_market_data(market: Market) -> dict:
+    data = market_data(market)
+    data["stored_status"] = market.status
+    data["params"] = market.params
+    totals = {
+        row["outcome"]: row
+        for row in market.bets.values("outcome").annotate(bets=Count("pk"), staked=Sum("stake"))
+    }
+    for o in data["outcomes"]:
+        row = totals.get(o["id"], {})
+        o["bets"], o["staked"] = row.get("bets", 0), row.get("staked") or 0
+    data["bets"] = sum(o["bets"] for o in data["outcomes"])
+    return data
+
+
+class MarketAdminViewSet(viewsets.ViewSet):
+    """Staff: create markets, edit times and text, move status, see bets and history."""
+
+    permission_classes = [IsStaff]
+
+    def get_market(self, pk) -> Market:
+        return get_object_or_404(_markets(), pk=pk)
+
+    def list(self, request):
+        qs = _markets().order_by("-closes_at", "-pk")
+        if wanted := request.query_params.get("status"):
+            qs = qs.filter(status=wanted.upper())
+        if fixture := request.query_params.get("fixture"):
+            qs = qs.filter(fixture_id=fixture)
+        paginator = DefaultPagination()
+        page = paginator.paginate_queryset(qs, request, view=self)
+        return paginator.get_paginated_response([staff_market_data(m) for m in page])
+
+    def retrieve(self, request, pk=None):
+        return Response(staff_market_data(self.get_market(pk)))
+
+    def create(self, request):
+        data = MarketCreateSerializer(data=request.data)
+        data.is_valid(raise_exception=True)
+        v = dict(data.validated_data)
+        try:
+            market = create_market(
+                actor=request.user,
+                category=v.pop("category"),
+                odds=v.pop("odds"),
+                **v,
+            )
+        except MarketError as exc:
+            return _refused(exc)
+        return Response(
+            staff_market_data(self.get_market(market.pk)), status=status.HTTP_201_CREATED
+        )
+
+    def partial_update(self, request, pk=None):
+        data = MarketUpdateSerializer(data=request.data)
+        data.is_valid(raise_exception=True)
+        with transaction.atomic():
+            market = Market.objects.select_for_update().get(pk=self.get_market(pk).pk)
+            if market.status in (S.SETTLED, S.VOID):
+                raise ValidationError({"detail": "A settled or void market can't be edited."})
+            for field, value in data.validated_data.items():
+                setattr(market, field, value)
+            if market.closes_at <= market.opens_at:
+                raise ValidationError({"closes_at": "Must be after the opening time."})
+            market.updated_by = request.user
+            market.save()
+        return Response(staff_market_data(self.get_market(pk)))
+
+    def destroy(self, request, pk=None):
+        market = self.get_market(pk)
+        if market.status != S.DRAFT or market.bets.exists():
+            raise ValidationError({"detail": "Only a draft with no bets can be deleted."})
+        market.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    @action(detail=True, methods=["post"])
+    def transition(self, request, pk=None):
+        data = TransitionSerializer(data=request.data)
+        data.is_valid(raise_exception=True)
+        try:
+            transition(
+                self.get_market(pk),
+                data.validated_data["to"],
+                actor=request.user,
+                reason=data.validated_data.get("reason", ""),
+            )
+        except MarketError as exc:
+            return _refused(exc)
+        return Response(staff_market_data(self.get_market(pk)))
+
+    @action(detail=True, methods=["get"])
+    def bets(self, request, pk=None):
+        market = self.get_market(pk)
+        qs = market.bets.select_related("user", "outcome").order_by("-placed_at")
+        paginator = DefaultPagination()
+        page = paginator.paginate_queryset(qs, request, view=self)
+        return paginator.get_paginated_response(
+            [
+                {
+                    "id": str(b.pk),
+                    "user": {"id": b.user_id, "email": b.user.email, "name": b.user.display_name},
+                    "outcome": b.outcome.label,
+                    "stake": b.stake,
+                    "odds_accepted": str(b.odds_accepted),
+                    "potential_return": b.potential_return,
+                    "payout": b.payout,
+                    "status": b.status,
+                    "placed_at": b.placed_at,
+                }
+                for b in page
+            ]
+        )
+
+    @action(detail=True, methods=["get"])
+    def history(self, request, pk=None):
+        market = self.get_market(pk)
+        events = [
+            {
+                "type": "status",
+                "at": e.at,
+                "from": e.from_status,
+                "to": e.to_status,
+                "by": e.actor.email if e.actor else "system",
+                "reason": e.reason,
+            }
+            for e in market.events.select_related("actor")
+        ]
+        odds = [
+            {
+                "type": "odds",
+                "at": c.at,
+                "outcome": c.outcome.label,
+                "from": str(c.old),
+                "to": str(c.new),
+                "by": c.by.email,
+            }
+            for c in OddsChange.objects.filter(outcome__market=market).select_related(
+                "outcome", "by"
+            )
+        ]
+        return Response(sorted(events + odds, key=lambda r: r["at"], reverse=True))
+
+
+class OutcomeUpdateSerializer(serializers.Serializer):
+    odds = serializers.CharField(required=False, max_length=12)
+    is_active = serializers.BooleanField(required=False)
+
+
+class OutcomeAdminView(APIView):
+    """PATCH an outcome's odds or switch it off. Placed bets keep their accepted odds."""
+
+    permission_classes = [IsStaff]
+
+    def patch(self, request, pk: int):
+        outcome = get_object_or_404(Outcome, pk=pk)
+        data = OutcomeUpdateSerializer(data=request.data)
+        data.is_valid(raise_exception=True)
+        v = data.validated_data
+        try:
+            if "odds" in v:
+                outcome = set_odds(outcome, v["odds"], actor=request.user)
+            if "is_active" in v:
+                outcome = set_active(outcome, v["is_active"], actor=request.user)
+        except MarketError as exc:
+            return _refused(exc)
+        return Response(staff_market_data(_markets().get(pk=outcome.market_id)))

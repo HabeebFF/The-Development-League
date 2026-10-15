@@ -141,6 +141,8 @@ PUBLIC_SIGNUP = env_bool("PUBLIC_SIGNUP", False)
 # Virtual-coin predictions: play money only, no buying or cashing out. Off until switched on.
 PREDICTIONS_ENABLED = env_bool("PREDICTIONS_ENABLED", False)
 PREDICTIONS_INITIAL_COINS = int(env("PREDICTIONS_INITIAL_COINS", "1000"))
+PREDICTIONS_MIN_STAKE = int(env("PREDICTIONS_MIN_STAKE", "10"))
+PREDICTIONS_MAX_STAKE = int(env("PREDICTIONS_MAX_STAKE", "500"))
 
 # AI Coach writer: rewrites report tasks and counter plays in plain English. Every claim
 # is checked against our facts; anything that fails (or the writer being off, over its
@@ -220,6 +222,10 @@ CELERY_BEAT_SCHEDULE = {
     "analytics-purge-old-views": {
         "task": "apps.analytics.tasks.purge_old_views_task",
         "schedule": crontab(minute=10, hour=3),
+    },
+    "predictions-close-due-markets": {
+        "task": "apps.predictions.tasks.close_due_markets_task",
+        "schedule": crontab(),  # every minute
     },
     "predictions-check-wallets": {
         "task": "apps.predictions.tasks.check_wallets_task",
