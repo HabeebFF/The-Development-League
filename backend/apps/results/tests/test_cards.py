@@ -167,7 +167,7 @@ def test_cards_rate_roles_from_how_they_play(league):
     assert cards.build_week(WEEK_A) == 8
     rush, snipe, nade = card(league, "RUSH"), card(league, "SNIPE"), card(league, "NADE")
     assert rush.role == "RUSHER" and rush.role_suggested
-    assert [s["key"] for s in rush.stats] == ["ENT", "CQC", "FIN", "AIM", "TRD", "SUR"]
+    assert [s["key"] for s in rush.stats] == ["ENT", "CQC", "FIN", "AIM", "TRD", "SUR", "DMG"]
     assert stat(rush, "ENT")["rating"] == 99 and stat(rush, "CQC")["rating"] == 99
     assert stat(rush, "ENT")["detail"] == "1.0 fights opened a match"
 
@@ -178,7 +178,7 @@ def test_cards_rate_roles_from_how_they_play(league):
 
     assert nade.role == "GRENADER"
     keys = [s["key"] for s in nade.stats]
-    assert keys[-1] == "NAD" and "UTL" not in keys and stat(nade, "NAD")["extra"]
+    assert keys[-2:] == ["NAD", "DMG"] and "UTL" not in keys and stat(nade, "NAD")["extra"]
     assert stat(nade, "NAD")["rating"] == 99
     assert (
         stat(nade, "NAD")["detail"]
@@ -664,3 +664,21 @@ def test_merging_two_accounts_of_one_player(league):
     assert PlayerAlias.objects.get(game_uid=999).player == rush
     assert PlayerMatchResult.objects.filter(player=rush).count() == 5
     assert card(league, "RUSH").matches == 5 and not PlayerCard.objects.filter(player_id=alt.pk)
+
+
+def test_damage_on_every_card(league):
+    # No damage logged yet: Damage waits, marked stale, and the overall leaves it out.
+    cards.build_week(WEEK_A)
+    dmg = stat(card(league, "SNIPE"), "DMG")
+    assert dmg["stale"] and dmg["rating"] is None and dmg["extra"]
+    # The replay .bin gave everyone their damage: RUSH dealt the most.
+    for i, name in enumerate(league.p):
+        PlayerMatchResult.objects.filter(player=league.p[name]).update(damage_dealt=100 * i)
+    PlayerMatchResult.objects.filter(player=league.p["RUSH"]).update(damage_dealt=1450)
+    Match.objects.update(updated_at=dt.datetime.now(dt.UTC))
+    cards.build_week(WEEK_A)
+    rush = stat(card(league, "RUSH"), "DMG")
+    assert rush["rating"] == 99 and rush["value"] == "1,450"
+    assert rush["detail"] == "1,450 damage dealt to enemies a match"
+    for name in ("SNIPE", "NADE", "ACE"):
+        assert [s["key"] for s in card(league, name).stats][-1] == "DMG"

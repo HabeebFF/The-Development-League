@@ -376,6 +376,9 @@ class PlayerResultSerializer(serializers.ModelSerializer):
             "headshot_knocks",
             "deaths",
             "respawns",
+            "damage_dealt",
+            "damage_taken",
+            "zone_damage",
             "is_mvp",
         ]
 

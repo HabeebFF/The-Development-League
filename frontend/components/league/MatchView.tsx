@@ -105,6 +105,11 @@ export default function MatchView({ id }: { id: number }) {
                               </span>
                               <span className="text-muted">{plural(p.kills, "kill")}</span>
                               <span className="hidden text-muted sm:inline">{plural(p.knocks, "knock")}</span>
+                              {p.damage_dealt != null && (
+                                <span className="text-muted" title={`Damage dealt; ${p.damage_taken ?? 0} taken from enemies`}>
+                                  {p.damage_dealt.toLocaleString()} dmg
+                                </span>
+                              )}
                             </li>
                           ))}
                           {!r.players.length && <li className="text-xs text-muted">No player stats.</li>}
