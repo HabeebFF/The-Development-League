@@ -7,7 +7,7 @@ from datetime import datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
 from django.conf import settings
-from django.db.models import Count, Min
+from django.db.models import Count, Min, Sum
 from django.db.models.functions import ExtractHour, TruncDate
 from django.utils import timezone
 
@@ -31,6 +31,8 @@ PAGES = {
     "/team/members": "Team members",
     "/staff": "Staff home",
     "/auth/login": "Sign in",
+    "/privacy": "Privacy",
+    "/protection-points": "Protection Points",
 }
 
 
@@ -67,22 +69,33 @@ def _counts(rows, field: str, empty: str = "") -> list[dict]:
     ]
 
 
-def summary(range_key: str, now: datetime | None = None) -> dict:
+def summary(range_key: str, now: datetime | None = None, who: str = "everyone") -> dict:
     """Days and hours are in the league's time zone (``ANALYTICS_TIME_ZONE``)."""
     with timezone.override(ZoneInfo(settings.ANALYTICS_TIME_ZONE)):
-        return _summary(range_key, now or timezone.now())
+        return _summary(range_key, now or timezone.now(), who)
 
 
-def _summary(range_key: str, now: datetime) -> dict:
+def range_start(range_key: str, now: datetime) -> datetime:
+    """The start of a range, at midnight league time."""
+    with timezone.override(ZoneInfo(settings.ANALYTICS_TIME_ZONE)):
+        today = timezone.localdate(now)
+        days = RANGES[range_key]
+        if days is None:
+            first = PageView.objects.aggregate(first=Min("created_at"))["first"]
+            start_day = timezone.localdate(first) if first else today
+        else:
+            start_day = today - timedelta(days=days - 1)
+        return timezone.make_aware(datetime.combine(start_day, time.min))
+
+
+def _summary(range_key: str, now: datetime, who: str) -> dict:
+    from .detail import top_actions, visit_stats, who_filter
+    from .models import Action
+
     today = timezone.localdate(now)
-    visits = PageView.objects.exclude(audience=PageView.Audience.STAFF)
-    days = RANGES[range_key]
-    if days is None:
-        first = PageView.objects.aggregate(first=Min("created_at"))["first"]
-        start_day = timezone.localdate(first) if first else today
-    else:
-        start_day = today - timedelta(days=days - 1)
-    start = timezone.make_aware(datetime.combine(start_day, time.min))
+    visits = who_filter(PageView.objects.all(), who)
+    start = range_start(range_key, now)
+    start_day = timezone.localdate(start)
     rows = visits.filter(created_at__gte=start, created_at__lte=now)
 
     views = rows.count()
@@ -116,9 +129,17 @@ def _summary(range_key: str, now: datetime) -> dict:
     )
 
     pages = _counts(rows, "path")
+    # Average over the views that reported a time (older ones and quick exits may not).
+    timed = {
+        path: (s or 0) / n if n else 0
+        for path, s, n in rows.filter(path__in=[p["name"] for p in pages]).values("path")
+        .annotate(s=Sum("duration_s"), n=Count("duration_s")).values_list("path", "s", "n")
+    }  # fmt: skip
     for page in pages:
         page["path"] = page["name"]
         page["name"] = page_name(page["path"])
+        page["avg_s"] = round(timed.get(page["path"], 0))
+    actions = Action.objects.filter(view__in=rows)
 
     online = visits.filter(created_at__gte=now - timedelta(minutes=ONLINE_MINUTES))
     return {
@@ -130,6 +151,8 @@ def _summary(range_key: str, now: datetime) -> dict:
             "visitors": visitors,
             "pages_per_visitor": round(views / visitors, 1) if visitors else 0,
             "online_now": online.values("visitor").distinct().count(),
+            "actions": actions.count(),
+            **visit_stats(rows),
             "staff_views": PageView.objects.filter(
                 audience=PageView.Audience.STAFF, created_at__gte=start, created_at__lte=now
             ).count(),
@@ -142,4 +165,5 @@ def _summary(range_key: str, now: datetime) -> dict:
         "browsers": _counts(rows, "browser"),
         "systems": _counts(rows, "os"),
         "audience": _counts(rows, "audience"),
+        "actions": top_actions(actions),
     }

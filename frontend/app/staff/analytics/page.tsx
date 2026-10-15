@@ -1,4 +1,4 @@
-import AnalyticsView from "@/components/staff/AnalyticsView";
+import AnalyticsView from "@/components/staff/analytics/AnalyticsView";
 
 export default function StaffAnalytics() {
   return <AnalyticsView />;
