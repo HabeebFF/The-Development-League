@@ -1,6 +1,8 @@
 // Talks to the Django API through this site's own /api path (see next.config.ts), so
 // the sign-in cookies stay first-party. Writes carry the CSRF token Django expects.
 
+import { reportApiWrite } from "./analytics";
+
 export class ApiError extends Error {
   constructor(
     public status: number,
@@ -56,6 +58,7 @@ export async function api<T = unknown>(path: string, options: Options = {}): Pro
     });
     if (refreshed.ok) return api<T>(path, { ...options, retry: false });
   }
+  if (response.status !== 401 || options.retry === false || path.startsWith("/auth/")) reportApiWrite(method, path, response.ok);
   const data = response.status === 204 ? null : await response.json().catch(() => null);
   if (!response.ok) throw new ApiError(response.status, data);
   return data as T;

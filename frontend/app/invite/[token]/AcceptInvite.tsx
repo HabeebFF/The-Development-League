@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
@@ -169,6 +170,13 @@ export default function AcceptInvite({ token }: { token: string }) {
           <input name="password" type="password" autoComplete="new-password" required minLength={8} className="input mt-1" />
         </label>
         {error && <p className="text-sm text-bad">{error}</p>}
+        <p className="text-xs text-muted">
+          By creating an account you agree to our{" "}
+          <Link href="/privacy" className="text-accent hover:underline">
+            Privacy notice
+          </Link>
+          .
+        </p>
         <button type="submit" disabled={busy} className="btn btn-primary w-full">
           {busy ? "Joining..." : "Create account and join"}
         </button>
