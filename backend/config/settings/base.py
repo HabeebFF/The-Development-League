@@ -167,6 +167,7 @@ REST_FRAMEWORK = {
         "password_reset": env("THROTTLE_PASSWORD_RESET", "5/hour"),
         "invite_accept": env("THROTTLE_INVITE_ACCEPT", "20/hour"),
         "analytics_hit": env("THROTTLE_ANALYTICS_HIT", "60/min"),
+        "analytics_event": env("THROTTLE_ANALYTICS_EVENT", "240/min"),
         "signup": env("THROTTLE_SIGNUP", "5/hour"),
     },
 }
