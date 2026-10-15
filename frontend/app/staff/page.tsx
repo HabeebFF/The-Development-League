@@ -16,6 +16,7 @@ export default function StaffHome() {
     { href: "/staff/ratings", title: "Player ratings", text: "The points behind each player's rating out of 10: kills, knocks, placement, time alive." },
     { href: "/staff/analytics", title: "Analytics", text: "Who is visiting the website: visitors, top pages, where they came from and their devices." },
     { href: "/staff/coach", title: "Coach", text: "Weekly team reports, and what the coach knows: utility, weapons, the zone and named drop spots." },
+    { href: "/staff/predictions", title: "Predictions", text: "Fixtures, markets and odds, settling from the match result, corrections and coin wallets." },
     ...(me.is_super_admin
       ? [{ href: "/staff/maps", title: "Map images and calibration", text: "Upload map images and line them up with the game." }]
       : []),

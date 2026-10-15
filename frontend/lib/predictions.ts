@@ -172,3 +172,68 @@ export function byFixture(markets: Market[]): { key: string; title: string; mark
   }
   return [...groups.values()];
 }
+
+// -- staff ---------------------------------------------------------------------------------------
+
+export type Category = "BOOYAH" | "TOP_N" | "H2H_PLACEMENT" | "H2H_KILLS" | "H2H_POINTS";
+
+export const CATEGORIES: { key: Category; label: string; teams: [number, number | null] }[] = [
+  { key: "BOOYAH", label: "Booyah (match winner)", teams: [2, null] },
+  { key: "TOP_N", label: "Team finishes top N (yes/no)", teams: [1, 1] },
+  { key: "H2H_PLACEMENT", label: "Head-to-head: finishes higher", teams: [2, 2] },
+  { key: "H2H_KILLS", label: "Head-to-head: more kills (tie refunds)", teams: [2, 2] },
+  { key: "H2H_POINTS", label: "Head-to-head: more points (tie refunds)", teams: [2, 2] },
+];
+
+/** The outcome codes the server will create, in order, so staff can give odds for each. */
+export function outcomeCodes(category: Category, teams: { id: number; name: string }[], n = 3): { code: string; label: string }[] {
+  if (category === "TOP_N") {
+    const name = teams[0]?.name ?? "Team";
+    return [
+      { code: "yes", label: `Yes, ${name} top ${n}` },
+      { code: "no", label: `No, ${name} outside top ${n}` },
+    ];
+  }
+  return teams.map((t) => ({ code: `team:${t.id}`, label: t.name }));
+}
+
+/** A starting title for a new market. */
+export function defaultTitle(category: Category, teams: { name: string }[], n = 3, matchNumber: number | null = null): string {
+  const where = matchNumber ? ` · Match ${matchNumber}` : "";
+  const [a, b] = teams.map((t) => t.name);
+  switch (category) {
+    case "BOOYAH":
+      return `Booyah${where}`;
+    case "TOP_N":
+      return `${a ?? "Team"} top ${n}${where}`;
+    case "H2H_PLACEMENT":
+      return `${a ?? "?"} v ${b ?? "?"}: finishes higher${where}`;
+    case "H2H_KILLS":
+      return `${a ?? "?"} v ${b ?? "?"}: more kills${where}`;
+    case "H2H_POINTS":
+      return `${a ?? "?"} v ${b ?? "?"}: more points${where}`;
+  }
+}
+
+/** Why the team picks don't fit the market type, or null. */
+export function teamsProblem(category: Category, count: number): string | null {
+  const [min, max] = CATEGORIES.find((c) => c.key === category)!.teams;
+  if (count < min) return `Pick at least ${min} team${min > 1 ? "s" : ""}.`;
+  if (max !== null && count > max) return `Pick exactly ${max} team${max > 1 ? "s" : ""}.`;
+  return null;
+}
+
+/** Odds as staff type them: 1.01 to 1000, at most 2 decimals. */
+export function oddsProblem(text: string): string | null {
+  if (!/^\d+(\.\d{1,2})?$/.test(text.trim())) return "Use a number like 2.50.";
+  const n = Number(text);
+  if (n < 1.01 || n > 1000) return "Between 1.01 and 1000.";
+  return null;
+}
+
+/** ISO time to the value a datetime-local input wants (local time). */
+export function toLocalInput(iso: string): string {
+  const d = new Date(iso);
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+}

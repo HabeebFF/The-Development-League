@@ -552,3 +552,12 @@ def test_leaderboard_keeps_its_three_measures_apart(league, staff, fans, setting
     assert [(r["name"], r["won"]) for r in wins] == [("fan0@", 10), ("fan1@", 1)]
     assert "email" not in str(balance)
     assert client.get("/api/v1/predictions/leaderboard?metric=luck").status_code == 400
+
+
+def test_candidate_matches_for_linking_a_fixture(league, staff, fans):
+    league["match"].match_day.title = "TDL DAY 1 8PM"
+    league["match"].match_day.save()
+    url = f"/api/v1/admin/predictions/fixtures/{league['fixture'].pk}/candidate-matches"
+    assert as_user(fans[0]).get(url).status_code == 403
+    rows = as_user(staff).get(url).json()
+    assert [(r["id"], r["likely"]) for r in rows] == [(league["match"].pk, True)]

@@ -54,3 +54,20 @@ test("markets group under their fixture", () => {
     ],
   );
 });
+
+test("staff: outcome codes, titles and checks", async () => {
+  const { outcomeCodes, defaultTitle, teamsProblem, oddsProblem } = await import("./predictions.ts");
+  const teams = [
+    { id: 1, name: "Alpha" },
+    { id: 2, name: "Bravo" },
+  ];
+  assert.deepEqual(outcomeCodes("H2H_KILLS", teams).map((o) => o.code), ["team:1", "team:2"]);
+  assert.deepEqual(outcomeCodes("TOP_N", teams.slice(0, 1), 5).map((o) => o.label), ["Yes, Alpha top 5", "No, Alpha outside top 5"]);
+  assert.equal(defaultTitle("H2H_PLACEMENT", teams, 3, 2), "Alpha v Bravo: finishes higher · Match 2");
+  assert.equal(defaultTitle("BOOYAH", teams), "Booyah");
+  assert.equal(teamsProblem("BOOYAH", 1), "Pick at least 2 teams.");
+  assert.equal(teamsProblem("H2H_KILLS", 3), "Pick exactly 2 teams.");
+  assert.equal(teamsProblem("TOP_N", 1), null);
+  for (const bad of ["0", "1.00", "-2", "2.555", "abc", "1000.01", ""]) assert.ok(oddsProblem(bad), bad);
+  for (const good of ["1.01", "2.5", "1000", "15.00"]) assert.equal(oddsProblem(good), null, good);
+});

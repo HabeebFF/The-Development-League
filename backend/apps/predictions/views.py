@@ -16,7 +16,7 @@ from rest_framework.permissions import BasePermission, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.league.models import Season
+from apps.league.models import Match, Season
 from common.pagination import DefaultPagination
 from common.permissions import IsStaff, IsSuperAdmin, PublicRead
 
@@ -435,6 +435,37 @@ class FixtureAdminViewSet(viewsets.ModelViewSet):
         if season := self.request.query_params.get("season"):
             qs = qs.filter(season_id=season)
         return qs
+
+    @action(detail=True, methods=["get"], url_path="candidate-matches")
+    def candidate_matches(self, request, pk=None):
+        """Uploaded matches on the fixture's date, the likely one first (same session and
+        number), so staff can link the fixture to the real match."""
+        fixture = self.get_object()
+        qs = (
+            Match.objects.filter(Q(match_day__date=fixture.date) | Q(started_at__date=fixture.date))
+            .select_related("match_day", "map")
+            .order_by("match_day__title", "number")
+        )
+
+        def likely(m: Match) -> bool:
+            title = (m.match_day.title or "").upper()
+            return fixture.session in title and (
+                fixture.match_number is None or m.number == fixture.match_number
+            )
+
+        rows = [
+            {
+                "id": m.pk,
+                "title": str(m),
+                "number": m.number,
+                "map": m.map.name if m.map else None,
+                "status": m.status,
+                "started_at": m.started_at,
+                "likely": likely(m),
+            }
+            for m in qs
+        ]
+        return Response(sorted(rows, key=lambda r: not r["likely"]))
 
     def perform_destroy(self, fixture):
         if fixture.markets.exists():
