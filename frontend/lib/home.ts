@@ -7,9 +7,9 @@ export function homeFor(me: Pick<Me, "staff_role"> & { memberships?: unknown[] }
   return me.memberships && me.memberships.length === 0 ? "/" : "/team";
 }
 
-/** Pages anyone can open without signing in: signing in, invites and password resets. */
+/** Pages anyone can open without signing in: signing in, invites, password resets, privacy. */
 export function isOpenPath(path: string): boolean {
-  return /^\/(auth|invite)(\/|$)/.test(path);
+  return /^\/(auth|invite|privacy)(\/|$)/.test(path);
 }
 
 /** League pages visitors can read without an account while the site is public. */
