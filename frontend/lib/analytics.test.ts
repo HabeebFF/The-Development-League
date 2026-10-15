@@ -28,3 +28,45 @@ test("bar widths", () => {
   assert.equal(share(1, 1000), 2);
   assert.equal(share(3, 0), 0);
 });
+
+test("clicks become actions", async () => {
+  const { describeClick } = await import("./analytics.ts");
+  const origin = "https://tdl.test";
+  assert.deepEqual(describeClick({ tag: "button", label: "  Play\n" }), { name: 'Pressed "Play"' });
+  assert.deepEqual(describeClick({ tag: "button", label: "" }), { name: "Pressed a button" });
+  assert.deepEqual(describeClick({ tag: "a", label: "OUTPOST-33", href: "/teams/outpost-33", origin }), {
+    name: 'Clicked "OUTPOST-33"',
+    detail: "/teams/outpost-33",
+  });
+  assert.deepEqual(describeClick({ tag: "a", label: "VOD", href: "https://youtube.com/watch?v=1", origin }), {
+    name: "Opened a link to another site",
+    detail: "youtube.com/watch",
+  });
+  assert.equal(describeClick({ tag: "a", label: "Mail", href: "mailto:x@y.z", origin }), null);
+  assert.deepEqual(describeClick({ tag: "button", label: "x", track: "Followed a team", trackDetail: "Vortex" }), {
+    name: "Followed a team",
+    detail: "Vortex",
+  });
+});
+
+test("changes become actions, typing never does", async () => {
+  const { describeChange, duration } = await import("./analytics.ts");
+  assert.deepEqual(describeChange({ tag: "select", label: "Team", value: "Vortex" }), { name: 'Picked "Vortex"', detail: "Team" });
+  assert.deepEqual(describeChange({ tag: "input", type: "checkbox", label: "Show labels", checked: false }), { name: 'Unticked "Show labels"' });
+  assert.deepEqual(describeChange({ tag: "input", type: "range", label: "Time", value: "312" }), { name: 'Moved "Time"', detail: "312" });
+  assert.deepEqual(describeChange({ tag: "input", type: "search", label: "", value: "habeeb" }), { name: "Searched", detail: "habeeb" });
+  assert.equal(describeChange({ tag: "input", type: "password", label: "Password", value: "secret" }), null);
+  assert.equal(describeChange({ tag: "input", type: "text", label: "Name", value: "x" }), null);
+  assert.deepEqual(describeChange({ tag: "input", type: "file", label: "Logs", files: 3 }), { name: "Chose 3 files", detail: "Logs" });
+  assert.deepEqual([duration(null), duration(45), duration(80), duration(7500)], ["–", "45s", "1m 20s", "2h 05m"]);
+});
+
+test("league time helpers", async () => {
+  const { clock, deviceLine, leagueToday, shiftDay } = await import("./analytics.ts");
+  assert.equal(clock("2026-10-15T19:14:00Z"), "20:14");
+  assert.equal(leagueToday(new Date("2026-10-15T23:30:00Z")), "2026-10-16");
+  assert.equal(shiftDay("2026-10-01", -1), "2026-09-30");
+  assert.equal(shiftDay("2026-12-31", 1), "2027-01-01");
+  assert.equal(deviceLine({ device: "phone", os: "Android", browser: "Chrome" }), "Android phone, Chrome");
+  assert.equal(deviceLine({ device: "desktop", os: "Other", browser: "Firefox" }), "computer, Firefox");
+});
