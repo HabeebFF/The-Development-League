@@ -64,6 +64,9 @@ class LedgerEntry(models.Model):
     bet = models.ForeignKey(
         "Bet", on_delete=models.PROTECT, null=True, blank=True, related_name="entries"
     )
+    settlement = models.ForeignKey(
+        "Settlement", on_delete=models.PROTECT, null=True, blank=True, related_name="entries"
+    )
     actor = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.PROTECT,
@@ -263,7 +266,12 @@ class Bet(models.Model):
     odds_accepted = models.DecimalField(max_digits=7, decimal_places=2)
     potential_return = models.PositiveIntegerField(help_text="stake x odds, rounded down")
     status = models.CharField(max_length=8, choices=Status.choices, default=Status.PENDING)
-    payout = models.PositiveIntegerField(null=True, blank=True, help_text="Coins credited")
+    payout = models.PositiveIntegerField(
+        null=True, blank=True, help_text="What the latest settlement says this bet is owed"
+    )
+    unrecovered = models.PositiveIntegerField(
+        default=0, help_text="Coins a correction could not take back (balance was too low)"
+    )
     client_key = models.UUIDField(help_text="One per tap on Confirm, so a resend is not a new bet")
     placed_at = models.DateTimeField(auto_now_add=True, db_index=True)
     settled_at = models.DateTimeField(null=True, blank=True)
@@ -280,3 +288,43 @@ class Bet(models.Model):
 
     def __str__(self) -> str:
         return f"{self.user} {self.stake} on {self.outcome}"
+
+
+class Settlement(models.Model):
+    """One decision about a market's result. Never edited: a correction is a new version
+    that supersedes the previous one, so the full history stays readable."""
+
+    class Kind(models.TextChoices):
+        SETTLE = "SETTLE", "Settled"
+        VOID = "VOID", "Voided"
+
+    market = models.ForeignKey(Market, on_delete=models.PROTECT, related_name="settlements")
+    version = models.PositiveSmallIntegerField()
+    kind = models.CharField(max_length=6, choices=Kind.choices)
+    winning_outcomes = models.ManyToManyField(Outcome, blank=True, related_name="+")
+    void_outcomes = models.ManyToManyField(
+        Outcome, blank=True, related_name="+", help_text="Bets on these are refunded"
+    )
+    evidence = models.JSONField(default=dict, blank=True, help_text="Results it was based on")
+    reference = models.CharField(max_length=300, blank=True)
+    reason = models.CharField(
+        max_length=300, blank=True, help_text="Why it was voided, corrected or overridden"
+    )
+    summary = models.JSONField(default=dict, blank=True, help_text="Bets won, lost, refunded...")
+    actor = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+")
+    supersedes = models.OneToOneField(
+        "self", on_delete=models.PROTECT, null=True, blank=True, related_name="superseded_by"
+    )
+    request_key = models.CharField(
+        max_length=120, unique=True, null=True, blank=True, help_text="Makes a resend a no-op"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["market", "-version"]
+        constraints = [
+            models.UniqueConstraint(fields=["market", "version"], name="predictions_settlement_v"),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.market} v{self.version} {self.kind}"

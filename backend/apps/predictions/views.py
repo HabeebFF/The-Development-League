@@ -20,6 +20,7 @@ from apps.league.models import Season
 from common.pagination import DefaultPagination
 from common.permissions import IsStaff, IsSuperAdmin, PublicRead
 
+from . import settlement
 from .markets import (
     MarketError,
     accepting_bets,
@@ -29,7 +30,16 @@ from .markets import (
     set_odds,
     transition,
 )
-from .models import Bet, Fixture, LedgerEntry, Market, OddsChange, Outcome, Wallet
+from .models import (
+    Bet,
+    Fixture,
+    LedgerEntry,
+    Market,
+    OddsChange,
+    Outcome,
+    Settlement,
+    Wallet,
+)
 from .services import CoinError, Kind, can_play, initial_coins, post_entry, wallet_for
 
 
@@ -471,7 +481,110 @@ def staff_market_data(market: Market) -> dict:
     return data
 
 
-class MarketAdminViewSet(viewsets.ViewSet):
+class SettleSerializer(serializers.Serializer):
+    winners = serializers.ListField(child=serializers.IntegerField(), allow_empty=True)
+    voids = serializers.ListField(child=serializers.IntegerField(), required=False, default=list)
+    reference = serializers.CharField(required=False, allow_blank=True, max_length=300)
+    override_reason = serializers.CharField(required=False, allow_blank=True, max_length=300)
+
+
+class VoidSerializer(serializers.Serializer):
+    reason = serializers.CharField(max_length=300)
+    reference = serializers.CharField(required=False, allow_blank=True, max_length=300)
+
+
+class CorrectSerializer(serializers.Serializer):
+    kind = serializers.ChoiceField(choices=Settlement.Kind.choices)
+    winners = serializers.ListField(child=serializers.IntegerField(), required=False, default=list)
+    voids = serializers.ListField(child=serializers.IntegerField(), required=False, default=list)
+    reason = serializers.CharField(max_length=300)
+    reference = serializers.CharField(required=False, allow_blank=True, max_length=300)
+    key = serializers.UUIDField()
+
+
+class SettlementActions:
+    """Mixed into ``MarketAdminViewSet``: result, settle, void, correct, settlement history."""
+
+    @action(detail=True, methods=["get"], url_path="suggested-result")
+    def suggested_result(self, request, pk=None):
+        try:
+            return Response(settlement.suggest(self.get_market(pk)))
+        except MarketError as exc:
+            return _refused(exc)
+
+    def _decided(self, request, pk, run) -> Response:
+        try:
+            done, created = run(self.get_market(pk))
+        except MarketError as exc:
+            return _refused(exc)
+        return Response(
+            settlement.settlement_data(done),
+            status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
+        )
+
+    @action(detail=True, methods=["post"])
+    def settle(self, request, pk=None):
+        data = SettleSerializer(data=request.data)
+        data.is_valid(raise_exception=True)
+        v = data.validated_data
+        return self._decided(
+            request,
+            pk,
+            lambda m: settlement.settle(
+                m,
+                actor=request.user,
+                winners=v["winners"],
+                voids=v["voids"],
+                reference=v.get("reference", ""),
+                override_reason=v.get("override_reason", ""),
+            ),
+        )
+
+    @action(detail=True, methods=["post"])
+    def void(self, request, pk=None):
+        data = VoidSerializer(data=request.data)
+        data.is_valid(raise_exception=True)
+        v = data.validated_data
+        return self._decided(
+            request,
+            pk,
+            lambda m: settlement.void(
+                m, actor=request.user, reason=v["reason"], reference=v.get("reference", "")
+            ),
+        )
+
+    @action(detail=True, methods=["post"])
+    def correct(self, request, pk=None):
+        data = CorrectSerializer(data=request.data)
+        data.is_valid(raise_exception=True)
+        v = data.validated_data
+        return self._decided(
+            request,
+            pk,
+            lambda m: settlement.correct(
+                m,
+                actor=request.user,
+                kind=v["kind"],
+                reason=v["reason"],
+                winners=v["winners"],
+                voids=v["voids"],
+                reference=v.get("reference", ""),
+                key=str(v["key"]),
+            ),
+        )
+
+    @action(detail=True, methods=["get"])
+    def settlements(self, request, pk=None):
+        market = self.get_market(pk)
+        return Response(
+            [
+                settlement.settlement_data(s)
+                for s in market.settlements.select_related("actor", "supersedes")
+            ]
+        )
+
+
+class MarketAdminViewSet(SettlementActions, viewsets.ViewSet):
     """Staff: create markets, edit times and text, move status, see bets and history."""
 
     permission_classes = [IsStaff]

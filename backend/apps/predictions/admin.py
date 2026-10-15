@@ -2,7 +2,7 @@
 
 from django.contrib import admin
 
-from .models import LedgerEntry, Wallet
+from .models import Bet, LedgerEntry, Market, Settlement, Wallet
 
 
 class ReadOnlyAdmin(admin.ModelAdmin):
@@ -27,3 +27,20 @@ class LedgerEntryAdmin(ReadOnlyAdmin):
     list_display = ["created_at", "wallet", "seq", "kind", "amount", "balance_after", "actor"]
     list_filter = ["kind"]
     search_fields = ["wallet__user__email", "idempotency_key"]
+
+
+@admin.register(Bet)
+class BetAdmin(ReadOnlyAdmin):
+    list_display = ["placed_at", "user", "market", "outcome", "stake", "odds_accepted", "status"]
+    list_filter = ["status"]
+
+
+@admin.register(Market)
+class MarketAdmin(ReadOnlyAdmin):
+    list_display = ["title", "category", "status", "closes_at"]
+    list_filter = ["status", "category"]
+
+
+@admin.register(Settlement)
+class SettlementAdmin(ReadOnlyAdmin):
+    list_display = ["market", "version", "kind", "actor", "created_at"]
