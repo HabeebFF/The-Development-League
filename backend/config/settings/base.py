@@ -46,6 +46,7 @@ INSTALLED_APPS = [
     "apps.coach",
     "apps.analytics",
     "apps.protection",
+    "apps.predictions",
 ]
 
 MIDDLEWARE = [
@@ -135,6 +136,11 @@ FILE_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024
 # Open the league pages, replays and rotations to visitors without an account. Staff
 # pages, team areas and coach reports still need a sign-in. Set to false to lock it again.
 PUBLIC_SITE = env_bool("PUBLIC_SITE", True)
+# Anyone can make an account at /auth/signup (otherwise accounts come from staff and invites).
+PUBLIC_SIGNUP = env_bool("PUBLIC_SIGNUP", False)
+# Virtual-coin predictions: play money only, no buying or cashing out. Off until switched on.
+PREDICTIONS_ENABLED = env_bool("PREDICTIONS_ENABLED", False)
+PREDICTIONS_INITIAL_COINS = int(env("PREDICTIONS_INITIAL_COINS", "1000"))
 
 # AI Coach writer: rewrites report tasks and counter plays in plain English. Every claim
 # is checked against our facts; anything that fails (or the writer being off, over its
@@ -161,6 +167,7 @@ REST_FRAMEWORK = {
         "password_reset": env("THROTTLE_PASSWORD_RESET", "5/hour"),
         "invite_accept": env("THROTTLE_INVITE_ACCEPT", "20/hour"),
         "analytics_hit": env("THROTTLE_ANALYTICS_HIT", "60/min"),
+        "signup": env("THROTTLE_SIGNUP", "5/hour"),
     },
 }
 
@@ -213,6 +220,10 @@ CELERY_BEAT_SCHEDULE = {
     "analytics-purge-old-views": {
         "task": "apps.analytics.tasks.purge_old_views_task",
         "schedule": crontab(minute=10, hour=3),
+    },
+    "predictions-check-wallets": {
+        "task": "apps.predictions.tasks.check_wallets_task",
+        "schedule": crontab(minute=50, hour=3),
     },
     "coach-catch-up-reviews": {
         "task": "apps.coach.tasks.catch_up_reviews_task",

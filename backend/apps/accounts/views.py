@@ -5,7 +5,7 @@ from __future__ import annotations
 from django.conf import settings
 from django.contrib.auth import authenticate
 from django.contrib.auth.tokens import default_token_generator
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django.utils.decorators import method_decorator
@@ -14,7 +14,7 @@ from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
 from django.views.decorators.csrf import ensure_csrf_cookie
 from rest_framework import generics, mixins, status, viewsets
 from rest_framework.decorators import action
-from rest_framework.exceptions import ValidationError
+from rest_framework.exceptions import NotFound, ValidationError
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
@@ -40,6 +40,7 @@ from .serializers import (
     PasswordResetConfirmSerializer,
     PasswordResetSerializer,
     PlayerClaimSerializer,
+    SignupSerializer,
     StaffMemberSerializer,
     validate_new_password,
 )
@@ -98,7 +99,13 @@ class SiteView(APIView):
     authentication_classes: list = []
 
     def get(self, request):
-        return Response({"public": settings.PUBLIC_SITE})
+        return Response(
+            {
+                "public": settings.PUBLIC_SITE,
+                "signup": settings.PUBLIC_SIGNUP,
+                "predictions": settings.PREDICTIONS_ENABLED,
+            }
+        )
 
 
 @method_decorator(ensure_csrf_cookie, name="get")
@@ -134,6 +141,35 @@ class LoginView(APIView):
         user.last_login = timezone.now()
         user.save(update_fields=["last_login"])
         return signed_in(user, request)
+
+
+class SignupView(APIView):
+    """Anyone can make an ordinary account (no team, not staff) when ``PUBLIC_SIGNUP`` is on."""
+
+    permission_classes = [AllowAny]
+    authentication_classes: list = []
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "signup"
+
+    def post(self, request):
+        if not settings.PUBLIC_SIGNUP:
+            raise NotFound()
+        enforce_csrf(request)
+        data = SignupSerializer(data=request.data)
+        data.is_valid(raise_exception=True)
+        v = data.validated_data
+        try:
+            with transaction.atomic():
+                user = User.objects.create_user(
+                    email=v["email"], password=v["password"], display_name=v["display_name"]
+                )
+        except IntegrityError as exc:  # the same email sent twice at once
+            raise ValidationError(
+                {"email": ["An account with this email already exists."]}
+            ) from exc
+        user.last_login = timezone.now()
+        user.save(update_fields=["last_login"])
+        return signed_in(user, request, status.HTTP_201_CREATED)
 
 
 class RefreshView(APIView):

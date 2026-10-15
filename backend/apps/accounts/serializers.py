@@ -82,6 +82,30 @@ class LoginSerializer(serializers.Serializer):
     password = serializers.CharField(trim_whitespace=False)
 
 
+class SignupSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+    password = serializers.CharField(trim_whitespace=False)
+    display_name = serializers.CharField(min_length=2, max_length=30)
+
+    def validate_email(self, value: str) -> str:
+        email = value.strip().lower()
+        if User.objects.filter(email__iexact=email).exists():
+            raise serializers.ValidationError("An account with this email already exists.")
+        return email
+
+    def validate_display_name(self, value: str) -> str:
+        name = " ".join(value.split())
+        if User.objects.filter(display_name__iexact=name).exists():
+            raise serializers.ValidationError("That name is taken. Pick another.")
+        return name
+
+    def validate(self, attrs):
+        validate_new_password(
+            attrs["password"], User(email=attrs["email"], display_name=attrs["display_name"])
+        )
+        return attrs
+
+
 class PasswordResetSerializer(serializers.Serializer):
     email = serializers.EmailField()
 

@@ -13,6 +13,7 @@ urlpatterns = [
     path("site", views.SiteView.as_view(), name="site"),
     path("auth/csrf", views.CsrfView.as_view(), name="auth-csrf"),
     path("auth/login", views.LoginView.as_view(), name="auth-login"),
+    path("auth/signup", views.SignupView.as_view(), name="auth-signup"),
     path("auth/refresh", views.RefreshView.as_view(), name="auth-refresh"),
     path("auth/logout", views.LogoutView.as_view(), name="auth-logout"),
     path("auth/password-reset", views.PasswordResetView.as_view(), name="password-reset"),
