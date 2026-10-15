@@ -58,6 +58,8 @@ export type Replay = {
   players: ReplayPlayer[];
   zones: Zone[];
   events: ReplayEvent[];
+  /** Hits between enemies: [t, attacker, victim, damage]. Empty without a replay .bin. */
+  hits?: [number, number, number, number][];
   objects?: ReplayObject[];
 };
 
@@ -216,6 +218,16 @@ export function killsAt(events: ReplayEvent[], t: number, teamOf: Record<number,
     // Zone, fall and own-explosive deaths can be logged against a teammate: not a kill.
     if (e.target != null && teamOf[e.actor] != null && teamOf[e.actor] === teamOf[e.target]) continue;
     out[e.actor] = (out[e.actor] ?? 0) + 1;
+  }
+  return out;
+}
+
+/** Damage each player (by entity id) has dealt by time ``t``, from the replay's hits. */
+export function damageAt(hits: [number, number, number, number][], t: number): Record<number, number> {
+  const out: Record<number, number> = {};
+  for (const [at, attacker, , damage] of hits) {
+    if (at > t) break; // hits are in time order
+    out[attacker] = (out[attacker] ?? 0) + damage;
   }
   return out;
 }

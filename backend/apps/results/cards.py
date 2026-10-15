@@ -1,5 +1,6 @@
 """Player cards, FIFA Ultimate Team style: an overall rating, a role and six stats from 0 to
-99 (grenaders get Grenade as an extra), rebuilt every week from what the logs recorded.
+99 (plus Damage on every card, and Grenade for grenaders), rebuilt every week from what the
+logs recorded.
 
 A card for the week starting on Monday ``week`` looks at the four weeks up to and including
 it; matches in that week count double. Every stat compares the player with every other
@@ -37,7 +38,7 @@ from apps.league.models import Match, Player
 from .awards import GRENADER, _weapon_classes, match_lines, matches_between, period_of
 from .models import CardWeights, MatchEvent, PlayerCard, PlayerMatchResult
 
-RULES = "cards-v2"  # v2: Grenade counts knocks, naders ranked among naders, no Utility
+RULES = "cards-v3"  # v2: Grenade counts knocks, naders among naders, no Utility; v3: Damage
 WINDOW_WEEKS = 4
 RECENT_WEIGHT = 2  # the week the card is for counts this many times
 MIN_MATCHES = 4  # matches (of the kind a stat needs) before a stat is rated
@@ -69,21 +70,24 @@ STATS = {
     "UTL": "Utility",
     "SNP": "Sniping",
     "RNG": "Range",
+    "DMG": "Damage",
 }
 
 ROLE_STATS = {
-    RUSHER: ["ENT", "CQC", "FIN", "AIM", "TRD", "SUR"],
-    GRENADER_ROLE: ["ENT", "CQC", "FIN", "AIM", "TRD", "SUR", "NAD"],
-    SNIPER: ["SNP", "RNG", "AIM", "FIN", "AWR", "SUR"],
-    ALL_ROUNDER: ["FIN", "AIM", "ENT", "TRD", "AWR", "SUR"],
+    RUSHER: ["ENT", "CQC", "FIN", "AIM", "TRD", "SUR", "DMG"],
+    GRENADER_ROLE: ["ENT", "CQC", "FIN", "AIM", "TRD", "SUR", "NAD", "DMG"],
+    SNIPER: ["SNP", "RNG", "AIM", "FIN", "AWR", "SUR", "DMG"],
+    ALL_ROUNDER: ["FIN", "AIM", "ENT", "TRD", "AWR", "SUR", "DMG"],
 }
-EXTRAS = {GRENADER_ROLE: {"NAD"}}
+# Shown in a row of their own under the six main stats: Damage on every card (Habeeb
+# 2026-10-15), Grenade on grenaders.
+EXTRAS = {role: {"DMG"} for role in ROLE_STATS} | {GRENADER_ROLE: {"NAD", "DMG"}}
 # A nader: at least this share of their knocks and kills (in matches with weapons) came from
 # grenades and launchers. Grenade is ranked among naders only.
 NADER_SHARE = 0.15
 
 DEFAULT_WEIGHTS = {
-    RUSHER: {"CQC": 25, "ENT": 20, "FIN": 20, "AIM": 15, "TRD": 10, "SUR": 10},
+    RUSHER: {"CQC": 25, "ENT": 20, "FIN": 20, "AIM": 15, "TRD": 10, "SUR": 10, "DMG": 15},
     GRENADER_ROLE: {
         "NAD": 35,
         "CQC": 15,
@@ -92,8 +96,9 @@ DEFAULT_WEIGHTS = {
         "AIM": 10,
         "TRD": 10,
         "SUR": 5,
+        "DMG": 15,
     },  # fmt: skip
-    SNIPER: {"SNP": 25, "RNG": 20, "AIM": 15, "FIN": 15, "AWR": 15, "SUR": 10},
+    SNIPER: {"SNP": 25, "RNG": 20, "AIM": 15, "FIN": 15, "AWR": 15, "SUR": 10, "DMG": 15},
     ALL_ROUNDER: {k: 1 for k in ROLE_STATS[ALL_ROUNDER]},
 }
 
@@ -154,6 +159,7 @@ class MatchLine:
     measured: int = 0  # kills with both positions logged
     long_kills: int = 0
     longest: float = 0.0
+    damage: int | None = None  # damage dealt to enemies (needs the replay .bin)
     review: bool = False  # the coach's after-match counts exist for this player
     alive_s: float | None = None
     trades: int = 0
@@ -181,11 +187,12 @@ def lines_for_match(match: Match, classes: dict[int, str]) -> dict[int, MatchLin
             tracks=tracks,
             close_knocks=ln.close_knocks if tracks else 0,
         )
-    for pid, deaths in PlayerMatchResult.objects.filter(match=match).values_list(
-        "player_id", "deaths"
+    for pid, deaths, damage in PlayerMatchResult.objects.filter(match=match).values_list(
+        "player_id", "deaths", "damage_dealt"
     ):
         if pid in out:
             out[pid].deaths = deaths
+            out[pid].damage = damage
 
     kills = [
         e
@@ -274,6 +281,10 @@ class Window:
             self.teams[line.team] += w
         for k in ("kills", "knocks", "headshots", "openings", "measured", "long_kills"):
             s[k] += w * getattr(line, k)
+        if line.damage is not None:
+            s["damage"] += w * line.damage
+            s["damage_m"] += w
+            c["damage"] += 1
         if line.deaths is not None:
             s["deaths"] += w * line.deaths
             s["deaths_m"] += w
@@ -327,6 +338,7 @@ PARTS = {
     ],  # fmt: skip
     "UTL": [("per", "utility", "tracks_m", "tracks", 1, 1)],
     "SNP": [("per", "snipes", "weapons_m", "weapons", 1, 1)],
+    "DMG": [("per", "damage", "damage_m", "damage", 1, 1)],
     "RNG": [
         ("rate", "long_kills", "measured", "measured", 0.85, 1),
         ("max", "longest", None, "measured", 0.15, 1),
@@ -477,6 +489,9 @@ def _detail(key: str, w: Window) -> tuple[str, str]:
     if key == "UTL":
         v = per("utility", "tracks_m")
         return f"{v:.1f}", f"{v:.1f} UAVs, Bolt Makers and Dinoculars used a match"
+    if key == "DMG":
+        v = per("damage", "damage_m")
+        return f"{v:,.0f}", f"{v:,.0f} damage dealt to enemies a match"
     if key == "SNP":
         v = per("snipes", "weapons_m")
         return f"{v:.1f}", f"{v:.1f} sniper and marksman kills a match"
@@ -494,6 +509,9 @@ def weights() -> dict[str, dict[str, float]]:
         if role in out:
             # A saved role replaces its defaults: a stat staff left out counts for nothing.
             out[role] = {k: float(ws.get(k, 0)) for k in ROLE_STATS[role]}
+            # Staff weights saved before Damage existed: it gets its default weight.
+            if "DMG" not in ws:
+                out[role]["DMG"] = DEFAULT_WEIGHTS[role]["DMG"]
             if role == GRENADER_ROLE and "UTL" in ws:
                 # Utility left the grenader card (cards-v2); its share went to Grenade.
                 out[role]["NAD"] += float(ws["UTL"])
