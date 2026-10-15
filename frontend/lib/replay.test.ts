@@ -3,6 +3,7 @@ import { describe, it, test } from "node:test";
 
 import {
   clock,
+  damageAt,
   enemiesInScan,
   killsAt,
   positionAt,
@@ -107,4 +108,15 @@ test("kills count up as the replay plays, without knocks or self-kills", () => {
   assert.deepEqual(killsAt(events, 60), { 1: 2 });
   // A teammate's death isn't a kill.
   assert.deepEqual(killsAt(events, 60, { 1: "a", 2: "b", 3: "a" }), { 1: 1 });
+});
+
+test("damage adds up as the replay plays", () => {
+  const hits: [number, number, number, number][] = [
+    [10, 1, 2, 90],
+    [11, 1, 2, 60],
+    [12, 2, 1, 40],
+  ];
+  assert.deepEqual(damageAt(hits, 5), {});
+  assert.deepEqual(damageAt(hits, 11), { 1: 150 });
+  assert.deepEqual(damageAt(hits, 60), { 1: 150, 2: 40 });
 });
