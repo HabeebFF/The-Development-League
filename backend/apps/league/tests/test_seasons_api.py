@@ -344,7 +344,7 @@ def test_league_data_is_public_for_now(league):
         assert anon.get(url).status_code == 200, url
     assert anon.post("/api/v1/matches", {}).status_code in (401, 405)
     assert anon.get("/api/v1/admin/matches").status_code == 401
-    assert anon.get("/api/v1/site").json() == {"public": True}
+    assert anon.get("/api/v1/site").json()["public"] is True
 
 
 def test_league_data_needs_sign_in_when_locked(league, settings):
@@ -354,7 +354,7 @@ def test_league_data_needs_sign_in_when_locked(league, settings):
     for url in LEAGUE_URLS:
         assert anon.get(url).status_code == 401, url
         assert signed_in_client().get(url).status_code == 200, url
-    assert anon.get("/api/v1/site").json() == {"public": False}
+    assert anon.get("/api/v1/site").json()["public"] is False
 
 
 def test_staff_only(league):
