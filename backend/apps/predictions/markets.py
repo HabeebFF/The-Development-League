@@ -9,7 +9,7 @@ from django.conf import settings
 from django.db import IntegrityError, transaction
 from django.utils import timezone
 
-from apps.league.models import Team
+from apps.league.models import Player, Team
 
 from .models import MAX_ODDS, MIN_ODDS, Bet, Market, MarketEvent, OddsChange, Outcome
 from .services import CoinError, Kind, can_play, post_entry, wallet_for
@@ -29,13 +29,37 @@ TRANSITIONS: dict[str, set[str]] = {
 }
 EDITABLE_ODDS = {S.DRAFT, S.OPEN, S.SUSPENDED}
 H2H = {C.H2H_PLACEMENT, C.H2H_KILLS, C.H2H_POINTS}
+HANDICAPS = {C.KILLS_HANDICAP, C.POINTS_HANDICAP}
+PLAYER_MARKETS = {C.PLAYER_KILLS, C.TOP_FRAGGER, C.PLAYER_H2H, C.FIRST_DEATH, C.PLAYER_DAMAGE}
+# Phase C match markets: these can only be about one match, so they need a one-match fixture.
+NEEDS_MATCH = {
+    C.TEAM_KILLS,
+    C.TOTAL_KILLS,
+    *HANDICAPS,
+    C.FINISH_BAND,
+    C.FIRST_OUT,
+    C.FIRST_BLOOD,
+    *PLAYER_MARKETS,
+}
 # What a market's fixture must be: one match, a whole session, or none (season-long).
-MATCH_MARKETS = {C.BOOYAH, C.TOP_N, C.TEAM_KILLS, *H2H}
+MATCH_MARKETS = {C.BOOYAH, C.TOP_N, *H2H, *NEEDS_MATCH}
 SESSION_MARKETS = {C.SESSION_WINNER, C.MOST_BOOYAHS}
 SEASON_MARKETS = {C.OVERALL_WINNER, C.OVERALL_TOP_N}
-# Markets with one choice per team, where teams level on the result share the win.
-DEAD_HEAT = {C.SESSION_WINNER, C.MOST_BOOYAHS, C.OVERALL_WINNER}
+# Markets with one choice per team or player, where those level on the result share the win.
+DEAD_HEAT = {C.SESSION_WINNER, C.MOST_BOOYAHS, C.OVERALL_WINNER, C.TOP_FRAGGER, C.FIRST_DEATH}
 MAX_KILLS_LINE = 60
+# Lines: (lowest, highest) for each kind of over/under or handicap.
+LINES = {
+    C.TEAM_KILLS: (1, MAX_KILLS_LINE),
+    C.TOTAL_KILLS: (1, 300),
+    C.KILLS_HANDICAP: (1, 30),
+    C.POINTS_HANDICAP: (1, 100),
+    C.PLAYER_KILLS: (1, 30),
+    C.PLAYER_DAMAGE: (100, 20000),
+}
+# Finishing bands: code -> (best place, worst place).
+BANDS = {"band:1": (1, 1), "band:2": (2, 3), "band:4": (4, 6), "band:7": (7, 99)}
+BAND_LABELS = {"band:1": "1st", "band:2": "2nd-3rd", "band:4": "4th-6th", "band:7": "7th or lower"}
 
 
 class MarketError(Exception):
@@ -79,12 +103,53 @@ def clean_params(category: str, params: dict) -> dict:
         return {"team": team, "n": n}
     if category in H2H:
         return {"teams": team_ids(params.get("teams"), at_least=2, exactly=2)}
+
+    def player_ids(value, at_least: int, exactly: int | None = None) -> list[int]:
+        if not isinstance(value, list) or not all(isinstance(p, int) for p in value):
+            raise MarketError("players must be a list of player ids.")
+        ids = list(dict.fromkeys(value))
+        if len(ids) != len(value):
+            raise MarketError("A player is listed twice.")
+        if exactly is not None and len(ids) != exactly:
+            raise MarketError(f"Pick exactly {exactly} players.")
+        if len(ids) < at_least:
+            raise MarketError(f"Pick at least {at_least} players.")
+        found = set(Player.objects.filter(pk__in=ids).values_list("pk", flat=True))
+        if missing := [p for p in ids if p not in found]:
+            raise MarketError(f"Unknown player id(s): {missing}.")
+        return ids
+
+    def line() -> int:
+        lo, hi = LINES[category]
+        value = params.get("line")
+        if not isinstance(value, int) or isinstance(value, bool) or not lo <= value <= hi:
+            what = {C.PLAYER_DAMAGE: "damage line", **dict.fromkeys(HANDICAPS, "handicap")}
+            name = what.get(category, "kills line")
+            raise MarketError(f"The {name} must be a whole number from {lo} to {hi}.")
+        return value
+
+    def one_team() -> int:
+        return team_ids([params.get("team")] if params.get("team") else [], 1, 1)[0]
+
+    def one_player() -> int:
+        return player_ids([params.get("player")] if params.get("player") else [], 1, 1)[0]
+
     if category == C.TEAM_KILLS:
-        line = params.get("line")
-        if not isinstance(line, int) or isinstance(line, bool) or not 1 <= line <= MAX_KILLS_LINE:
-            raise MarketError(f"The kills line must be a whole number from 1 to {MAX_KILLS_LINE}.")
-        team = team_ids([params.get("team")] if params.get("team") else [], 1, 1)[0]
-        return {"team": team, "line": line}
+        return {"team": one_team(), "line": line()}
+    if category == C.TOTAL_KILLS:
+        return {"line": line()}
+    if category in HANDICAPS:
+        return {"teams": team_ids(params.get("teams"), at_least=2, exactly=2), "line": line()}
+    if category == C.FINISH_BAND:
+        return {"team": one_team()}
+    if category in (C.FIRST_OUT, C.FIRST_BLOOD):
+        return {"teams": team_ids(params.get("teams"), at_least=2)}
+    if category in (C.PLAYER_KILLS, C.PLAYER_DAMAGE):
+        return {"player": one_player(), "line": line()}
+    if category in (C.TOP_FRAGGER, C.FIRST_DEATH):
+        return {"players": player_ids(params.get("players"), at_least=2)}
+    if category == C.PLAYER_H2H:
+        return {"players": player_ids(params.get("players"), at_least=2, exactly=2)}
     if category in (C.SESSION_WINNER, C.MOST_BOOYAHS, C.OVERALL_WINNER):
         return {"teams": team_ids(params.get("teams"), at_least=2)}
     if category == C.OVERALL_TOP_N:
@@ -105,8 +170,8 @@ def check_fixture(category: str, fixture) -> None:
         return
     if category in SESSION_MARKETS and (fixture is None or fixture.match_number is not None):
         raise MarketError("Session markets need a whole-session fixture (no match number).")
-    if category == C.TEAM_KILLS and (fixture is None or fixture.match_number is None):
-        raise MarketError("A team kills market needs a fixture for one match.")
+    if category in NEEDS_MATCH and (fixture is None or fixture.match_number is None):
+        raise MarketError("This market needs a fixture for one match.")
 
 
 def outcome_specs(category: str, params: dict) -> list[dict]:
@@ -123,13 +188,53 @@ def outcome_specs(category: str, params: dict) -> list[dict]:
             {"code": "yes", "label": f"{team.name}: {line} or more kills", "team_id": None},
             {"code": "no", "label": f"{team.name}: {line - 1} or fewer kills", "team_id": None},
         ]
+    if category == C.TOTAL_KILLS:
+        line = params["line"]
+        return [
+            {"code": "yes", "label": f"Over {line - 0.5:g} kills", "team_id": None},
+            {"code": "no", "label": f"Under {line - 0.5:g} kills", "team_id": None},
+        ]
+    if category in HANDICAPS:
+        teams = Team.objects.in_bulk(params["teams"])
+        (a, b), start = params["teams"], params["line"] - 0.5
+        what = "kills" if category == C.KILLS_HANDICAP else "points"
+        return [
+            {"code": f"team:{a}", "label": f"{teams[a].name} -{start:g} {what}", "team_id": a},
+            {"code": f"team:{b}", "label": f"{teams[b].name} +{start:g} {what}", "team_id": b},
+        ]
+    if category == C.FINISH_BAND:
+        name = Team.objects.get(pk=params["team"]).name
+        return [{"code": c, "label": f"{name}: {BAND_LABELS[c]}", "team_id": None} for c in BANDS]
+    if category in (C.PLAYER_KILLS, C.PLAYER_DAMAGE):
+        player, line = Player.objects.get(pk=params["player"]), params["line"]
+        what = "kills" if category == C.PLAYER_KILLS else "damage"
+        return [
+            {"code": "yes", "label": f"{player.display_name}: over {line - 0.5:g} {what}",
+             "team_id": None, "player_id": player.pk},
+            {"code": "no", "label": f"{player.display_name}: under {line - 0.5:g} {what}",
+             "team_id": None, "player_id": player.pk},
+        ]  # fmt: skip
+    if category in PLAYER_MARKETS:
+        players = Player.objects.in_bulk(params["players"])
+        return [
+            {"code": f"player:{p}", "label": players[p].display_name, "team_id": None,
+             "player_id": p}
+            for p in params["players"]
+        ]  # fmt: skip
     teams = Team.objects.in_bulk(params["teams"])
     return [{"code": f"team:{t}", "label": teams[t].name, "team_id": t} for t in params["teams"]]
 
 
 def market_team_ids(market: Market) -> set[int]:
+    """Teams a market is about, including the current teams of the players it is about."""
     p = market.params or {}
-    return set(p.get("teams") or []) | ({p["team"]} if p.get("team") else set())
+    players = list(p.get("players") or []) + ([p["player"]] if p.get("player") else [])
+    teams = set(
+        Player.objects.filter(pk__in=players, current_team__isnull=False).values_list(
+            "current_team_id", flat=True
+        )
+    )
+    return teams | set(p.get("teams") or []) | ({p["team"]} if p.get("team") else set())
 
 
 def clean_odds(value) -> Decimal:
@@ -174,6 +279,7 @@ def create_market(*, actor, category: str, odds: dict, **fields) -> Market:
             code=spec["code"],
             label=spec["label"],
             team_id=spec["team_id"],
+            player_id=spec.get("player_id"),
             odds=clean_odds(odds[spec["code"]]),
             sort=n,
         )

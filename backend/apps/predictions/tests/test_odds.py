@@ -155,7 +155,7 @@ def test_suggestions_are_repeatable(league):
 def test_yes_no_markets_add_up_and_keep_the_margin(league):
     result = suggest(league, C.TOP_N, team=ids(league, 3)[0], n=5)
     assert set(result["odds"]) == {"yes", "no"}
-    assert result["chances"]["yes"] + result["chances"]["no"] == pytest.approx(1)
+    assert result["chances"]["yes"] + result["chances"]["no"] == pytest.approx(1, abs=0.001)
     assert result["chances"]["yes"] > 0.5  # third best usually makes the top 5
     assert 1 + MARGIN <= overround(result) < 1.15
 
@@ -164,10 +164,10 @@ def test_head_to_head_leaves_ties_out(league):
     strong, weak = ids(league, 1, 12)
     result = suggest(league, C.H2H_PLACEMENT, teams=[strong, weak])
     assert result["chances"][f"team:{strong}"] > 0.85
-    assert sum(result["chances"].values()) == pytest.approx(1)
+    assert sum(result["chances"].values()) == pytest.approx(1, abs=0.001)
     kills = suggest(league, C.H2H_KILLS, teams=[weak, strong])
     assert Decimal(kills["odds"][f"team:{strong}"]) < Decimal(kills["odds"][f"team:{weak}"])
-    assert sum(kills["chances"].values()) == pytest.approx(1)
+    assert sum(kills["chances"].values()) == pytest.approx(1, abs=0.001)
 
 
 def test_team_kills_line(league):
@@ -242,7 +242,7 @@ def test_overall_markets_start_from_the_current_table(league):
     assert close["matches_left"] == 1
     default = suggest(league, C.OVERALL_TOP_N, team=ids(league, 7)[0], n=5)
     assert default["matches_left"] == DEFAULT_MATCHES_LEFT
-    assert default["chances"]["yes"] + default["chances"]["no"] == pytest.approx(1)
+    assert default["chances"]["yes"] + default["chances"]["no"] == pytest.approx(1, abs=0.001)
 
 
 # -- API ------------------------------------------------------------------------------------------

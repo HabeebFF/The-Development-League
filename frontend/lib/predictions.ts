@@ -17,7 +17,9 @@ export type Fixture = {
 export type MarketStatus = "DRAFT" | "OPEN" | "SUSPENDED" | "CLOSED" | "SETTLED" | "VOID";
 export type BetStatus = "PENDING" | "WON" | "LOST" | "VOID";
 
-export type Outcome = { id: number; code: string; label: string; team: PTeam | null; odds: string; is_active: boolean };
+export type PPlayer = { id: number; name: string; team: PTeam | null };
+
+export type Outcome = { id: number; code: string; label: string; team: PTeam | null; player?: PPlayer | null; odds: string; is_active: boolean };
 
 export type Market = {
   id: number;
@@ -182,6 +184,17 @@ export type Category =
   | "H2H_KILLS"
   | "H2H_POINTS"
   | "TEAM_KILLS"
+  | "TOTAL_KILLS"
+  | "KILLS_HANDICAP"
+  | "POINTS_HANDICAP"
+  | "FINISH_BAND"
+  | "FIRST_OUT"
+  | "FIRST_BLOOD"
+  | "PLAYER_KILLS"
+  | "TOP_FRAGGER"
+  | "PLAYER_H2H"
+  | "FIRST_DEATH"
+  | "PLAYER_DAMAGE"
   | "SESSION_WINNER"
   | "MOST_BOOYAHS"
   | "OVERALL_WINNER"
@@ -190,54 +203,218 @@ export type Category =
 /** What a market is about: one match, a whole session, or the whole season (no fixture). */
 export type Scope = "match" | "session" | "season";
 
-export const CATEGORIES: { key: Category; label: string; teams: [number, number | null]; scope: Scope }[] = [
-  { key: "BOOYAH", label: "Booyah (match winner)", teams: [2, null], scope: "match" },
-  { key: "TOP_N", label: "Team finishes top N (yes/no)", teams: [1, 1], scope: "match" },
-  { key: "H2H_PLACEMENT", label: "Head-to-head: finishes higher", teams: [2, 2], scope: "match" },
-  { key: "H2H_KILLS", label: "Head-to-head: more kills (tie refunds)", teams: [2, 2], scope: "match" },
-  { key: "H2H_POINTS", label: "Head-to-head: more points (tie refunds)", teams: [2, 2], scope: "match" },
-  { key: "TEAM_KILLS", label: "Team kills (over/under a line)", teams: [1, 1], scope: "match" },
-  { key: "SESSION_WINNER", label: "Session winner (most points)", teams: [2, null], scope: "session" },
-  { key: "MOST_BOOYAHS", label: "Most Booyahs in the session (ties share)", teams: [2, null], scope: "session" },
-  { key: "OVERALL_WINNER", label: "Overall winner (season table)", teams: [2, null], scope: "season" },
-  { key: "OVERALL_TOP_N", label: "Overall top N (yes/no)", teams: [1, 1], scope: "season" },
+/** A line staff type in: its range, what it's called and where it starts. */
+export type Line = { min: number; max: number; label: string; start: number };
+
+export type CategorySpec = {
+  key: Category;
+  label: string;
+  /** How many teams and players to pick: [at least, at most (null: any)]. */
+  teams: [number, number | null];
+  players: [number, number | null];
+  line: Line | null;
+  scope: Scope;
+};
+
+const NONE: [number, number | null] = [0, 0];
+const KILLS_LINE: Line = { min: 1, max: 60, label: "Kills line", start: 10 };
+
+export const CATEGORIES: CategorySpec[] = [
+  { key: "BOOYAH", label: "Booyah (match winner)", teams: [2, null], players: NONE, line: null, scope: "match" },
+  { key: "TOP_N", label: "Team finishes top N (yes/no)", teams: [1, 1], players: NONE, line: null, scope: "match" },
+  { key: "FINISH_BAND", label: "Finishing position (1st, 2nd-3rd, 4th-6th, 7th+)", teams: [1, 1], players: NONE, line: null, scope: "match" },
+  { key: "H2H_PLACEMENT", label: "Head-to-head: finishes higher", teams: [2, 2], players: NONE, line: null, scope: "match" },
+  { key: "H2H_KILLS", label: "Head-to-head: more kills (tie refunds)", teams: [2, 2], players: NONE, line: null, scope: "match" },
+  { key: "H2H_POINTS", label: "Head-to-head: more points (tie refunds)", teams: [2, 2], players: NONE, line: null, scope: "match" },
+  {
+    key: "KILLS_HANDICAP",
+    label: "Kills handicap (first team gives a head start)",
+    teams: [2, 2],
+    players: NONE,
+    line: { min: 1, max: 30, label: "Handicap (kills)", start: 3 },
+    scope: "match",
+  },
+  {
+    key: "POINTS_HANDICAP",
+    label: "Points handicap (first team gives a head start)",
+    teams: [2, 2],
+    players: NONE,
+    line: { min: 1, max: 100, label: "Handicap (points)", start: 5 },
+    scope: "match",
+  },
+  { key: "TEAM_KILLS", label: "Team kills (over/under a line)", teams: [1, 1], players: NONE, line: KILLS_LINE, scope: "match" },
+  {
+    key: "TOTAL_KILLS",
+    label: "Total kills in the match (over/under)",
+    teams: NONE,
+    players: NONE,
+    line: { min: 1, max: 300, label: "Kills line", start: 70 },
+    scope: "match",
+  },
+  { key: "FIRST_OUT", label: "First team out", teams: [2, null], players: NONE, line: null, scope: "match" },
+  { key: "FIRST_BLOOD", label: "First blood (team with the first kill)", teams: [2, null], players: NONE, line: null, scope: "match" },
+  {
+    key: "PLAYER_KILLS",
+    label: "Player kills (over/under)",
+    teams: NONE,
+    players: [1, 1],
+    line: { min: 1, max: 30, label: "Kills line", start: 3 },
+    scope: "match",
+  },
+  {
+    key: "PLAYER_DAMAGE",
+    label: "Player damage (over/under)",
+    teams: NONE,
+    players: [1, 1],
+    line: { min: 100, max: 20000, label: "Damage line", start: 1000 },
+    scope: "match",
+  },
+  { key: "TOP_FRAGGER", label: "Top fragger (ties share)", teams: NONE, players: [2, null], line: null, scope: "match" },
+  { key: "PLAYER_H2H", label: "Player head-to-head: more kills (tie refunds)", teams: NONE, players: [2, 2], line: null, scope: "match" },
+  { key: "FIRST_DEATH", label: "First player to die (ties share)", teams: NONE, players: [2, null], line: null, scope: "match" },
+  { key: "SESSION_WINNER", label: "Session winner (most points)", teams: [2, null], players: NONE, line: null, scope: "session" },
+  { key: "MOST_BOOYAHS", label: "Most Booyahs in the session (ties share)", teams: [2, null], players: NONE, line: null, scope: "session" },
+  { key: "OVERALL_WINNER", label: "Overall winner (season table)", teams: [2, null], players: NONE, line: null, scope: "season" },
+  { key: "OVERALL_TOP_N", label: "Overall top N (yes/no)", teams: [1, 1], players: NONE, line: null, scope: "season" },
 ];
 
+/** Markets where those level on the result share the win (a dead heat). */
+export const SHARED_WIN = new Set<string>(["SESSION_WINNER", "MOST_BOOYAHS", "OVERALL_WINNER", "TOP_FRAGGER", "FIRST_DEATH"]);
+
+/** How each kind of market is settled, in one line for players. */
+export const RULES: Partial<Record<Category, string>> = {
+  BOOYAH: "Settled on the team that finishes 1st. A listed team that doesn't play is refunded.",
+  TOP_N: "Settled on the team's final position in the match.",
+  FINISH_BAND: "Settled on the team's final position in the match. Refunded if the team doesn't play.",
+  H2H_PLACEMENT: "The team that finishes higher wins. Refunded if either team doesn't play.",
+  H2H_KILLS: "The team with more kills wins. A tie is refunded.",
+  H2H_POINTS: "The team with more points wins. A tie is refunded.",
+  KILLS_HANDICAP: "The handicap is applied to the final kills. The half-kill means there's never a tie.",
+  POINTS_HANDICAP: "The handicap is applied to the final points. The half-point means there's never a tie.",
+  TEAM_KILLS: "Settled on the team's kills on the final scoreboard.",
+  TOTAL_KILLS: "Every team's kills on the final scoreboard, added up.",
+  FIRST_OUT: "The team that finishes last is the first one out.",
+  FIRST_BLOOD: "The team of the player who gets the first kill. Kills on a team-mate don't count.",
+  PLAYER_KILLS: "Settled on the player's kills on the final scoreboard. Refunded if they don't play.",
+  PLAYER_DAMAGE: "Settled on the damage the player deals to enemies. Refunded if they don't play or the match has no damage figures.",
+  TOP_FRAGGER: "The player with the most kills in the match. A listed player who doesn't play is refunded.",
+  PLAYER_H2H: "The player with more kills wins. A tie, or either player not playing, is refunded.",
+  FIRST_DEATH: "The first player in the match to die, from any cause.",
+};
+
+export function spec(category: Category): CategorySpec {
+  return CATEGORIES.find((c) => c.key === category)!;
+}
+
+type Named = { id: number; name: string };
+
+/** "19.5" for a line of 20: the half-point that keeps over/under from tying. */
+const half = (line: number) => String(line - 0.5);
+
 /** The outcome codes the server will create, in order, so staff can give odds for each. */
-export function outcomeCodes(category: Category, teams: { id: number; name: string }[], n = 3, line = 10): { code: string; label: string }[] {
+export function outcomeCodes(category: Category, teams: Named[], n = 3, line = 10, players: Named[] = []): { code: string; label: string }[] {
   const name = teams[0]?.name ?? "Team";
-  if (category === "TOP_N" || category === "OVERALL_TOP_N") {
-    return [
-      { code: "yes", label: `Yes, ${name} top ${n}` },
-      { code: "no", label: `No, ${name} outside top ${n}` },
-    ];
+  const who = players[0]?.name ?? "Player";
+  switch (category) {
+    case "TOP_N":
+    case "OVERALL_TOP_N":
+      return [
+        { code: "yes", label: `Yes, ${name} top ${n}` },
+        { code: "no", label: `No, ${name} outside top ${n}` },
+      ];
+    case "TEAM_KILLS":
+      return [
+        { code: "yes", label: `${name}: ${line} or more kills` },
+        { code: "no", label: `${name}: ${line - 1} or fewer kills` },
+      ];
+    case "TOTAL_KILLS":
+      return [
+        { code: "yes", label: `Over ${half(line)} kills` },
+        { code: "no", label: `Under ${half(line)} kills` },
+      ];
+    case "KILLS_HANDICAP":
+    case "POINTS_HANDICAP": {
+      const what = category === "KILLS_HANDICAP" ? "kills" : "points";
+      const [a, b] = teams;
+      if (!a || !b) return [];
+      return [
+        { code: `team:${a.id}`, label: `${a.name} -${half(line)} ${what}` },
+        { code: `team:${b.id}`, label: `${b.name} +${half(line)} ${what}` },
+      ];
+    }
+    case "FINISH_BAND":
+      if (!teams[0]) return [];
+      return [
+        { code: "band:1", label: `${name}: 1st` },
+        { code: "band:2", label: `${name}: 2nd-3rd` },
+        { code: "band:4", label: `${name}: 4th-6th` },
+        { code: "band:7", label: `${name}: 7th or lower` },
+      ];
+    case "PLAYER_KILLS":
+    case "PLAYER_DAMAGE": {
+      const what = category === "PLAYER_KILLS" ? "kills" : "damage";
+      if (!players[0]) return [];
+      return [
+        { code: "yes", label: `${who}: over ${half(line)} ${what}` },
+        { code: "no", label: `${who}: under ${half(line)} ${what}` },
+      ];
+    }
+    case "TOP_FRAGGER":
+    case "PLAYER_H2H":
+    case "FIRST_DEATH":
+      return players.map((p) => ({ code: `player:${p.id}`, label: p.name }));
+    default:
+      return teams.map((t) => ({ code: `team:${t.id}`, label: t.name }));
   }
-  if (category === "TEAM_KILLS") {
-    return [
-      { code: "yes", label: `${name}: ${line} or more kills` },
-      { code: "no", label: `${name}: ${line - 1} or fewer kills` },
-    ];
-  }
-  return teams.map((t) => ({ code: `team:${t.id}`, label: t.name }));
 }
 
 /** A starting title for a new market. */
-export function defaultTitle(category: Category, teams: { name: string }[], n = 3, matchNumber: number | null = null, line = 10): string {
+export function defaultTitle(
+  category: Category,
+  teams: { name: string }[],
+  n = 3,
+  matchNumber: number | null = null,
+  line = 10,
+  players: { name: string }[] = [],
+): string {
   const where = matchNumber ? ` · Match ${matchNumber}` : "";
   const [a, b] = teams.map((t) => t.name);
+  const [p, q] = players.map((x) => x.name);
   switch (category) {
     case "BOOYAH":
       return `Booyah${where}`;
     case "TOP_N":
       return `${a ?? "Team"} top ${n}${where}`;
+    case "FINISH_BAND":
+      return `${a ?? "Team"} finishing position${where}`;
     case "H2H_PLACEMENT":
       return `${a ?? "?"} v ${b ?? "?"}: finishes higher${where}`;
     case "H2H_KILLS":
       return `${a ?? "?"} v ${b ?? "?"}: more kills${where}`;
     case "H2H_POINTS":
       return `${a ?? "?"} v ${b ?? "?"}: more points${where}`;
+    case "KILLS_HANDICAP":
+      return `${a ?? "?"} v ${b ?? "?"}: kills handicap${where}`;
+    case "POINTS_HANDICAP":
+      return `${a ?? "?"} v ${b ?? "?"}: points handicap${where}`;
     case "TEAM_KILLS":
       return `${a ?? "Team"}: ${line}+ kills${where}`;
+    case "TOTAL_KILLS":
+      return `Total kills: over/under ${half(line)}${where}`;
+    case "FIRST_OUT":
+      return `First team out${where}`;
+    case "FIRST_BLOOD":
+      return `First blood${where}`;
+    case "PLAYER_KILLS":
+      return `${p ?? "Player"}: over/under ${half(line)} kills${where}`;
+    case "PLAYER_DAMAGE":
+      return `${p ?? "Player"}: over/under ${half(line)} damage${where}`;
+    case "TOP_FRAGGER":
+      return `Top fragger${where}`;
+    case "PLAYER_H2H":
+      return `${p ?? "?"} v ${q ?? "?"}: more kills${where}`;
+    case "FIRST_DEATH":
+      return `First player to die${where}`;
     case "SESSION_WINNER":
       return "Session winner";
     case "MOST_BOOYAHS":
@@ -254,17 +431,26 @@ export function categoriesFor(scope: Scope) {
   return CATEGORIES.filter((c) => c.scope === scope);
 }
 
-/** A kills line as staff type it: a whole number from 1 to 60. */
-export function lineProblem(text: string): string | null {
-  return /^\d+$/.test(text.trim()) && Number(text) >= 1 && Number(text) <= 60 ? null : "A whole number from 1 to 60.";
+/** A line as staff type it: a whole number in the market type's range (1 to 60 for team kills). */
+export function lineProblem(text: string, category: Category = "TEAM_KILLS"): string | null {
+  const { min, max } = spec(category).line ?? KILLS_LINE;
+  return /^\d+$/.test(text.trim()) && Number(text) >= min && Number(text) <= max ? null : `A whole number from ${min} to ${max}.`;
+}
+
+function pickProblem([min, max]: [number, number | null], count: number, what: string): string | null {
+  if (count < min) return `Pick at least ${min} ${what}${min > 1 ? "s" : ""}.`;
+  if (max !== null && count > max) return max === 0 ? `This type has no ${what}s.` : `Pick exactly ${max} ${what}${max > 1 ? "s" : ""}.`;
+  return null;
 }
 
 /** Why the team picks don't fit the market type, or null. */
 export function teamsProblem(category: Category, count: number): string | null {
-  const [min, max] = CATEGORIES.find((c) => c.key === category)!.teams;
-  if (count < min) return `Pick at least ${min} team${min > 1 ? "s" : ""}.`;
-  if (max !== null && count > max) return `Pick exactly ${max} team${max > 1 ? "s" : ""}.`;
-  return null;
+  return pickProblem(spec(category).teams, count, "team");
+}
+
+/** Why the player picks don't fit the market type, or null. */
+export function playersProblem(category: Category, count: number): string | null {
+  return pickProblem(spec(category).players, count, "player");
 }
 
 /** Odds as staff type them: 1.01 to 1000, at most 2 decimals. */

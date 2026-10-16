@@ -11,12 +11,23 @@ from __future__ import annotations
 from collections import Counter
 
 from django.db import IntegrityError, transaction
+from django.db.models import F
 from django.utils import timezone
 
 from apps.league.models import Match, MatchDay
-from apps.results.models import StandingRow, TeamMatchResult
+from apps.results.models import MatchEvent, PlayerMatchResult, StandingRow, TeamMatchResult
 
-from .markets import DEAD_HEAT, H2H, SEASON_MARKETS, SESSION_MARKETS, MarketError, dead_heat_return
+from .markets import (
+    BANDS,
+    DEAD_HEAT,
+    H2H,
+    HANDICAPS,
+    PLAYER_MARKETS,
+    SEASON_MARKETS,
+    SESSION_MARKETS,
+    MarketError,
+    dead_heat_return,
+)
 from .models import Bet, Market, MarketEvent, Outcome, Settlement, Wallet
 from .services import Kind, post_entry
 
@@ -148,7 +159,152 @@ def _suggest_match(market: Market) -> dict:
         code = "yes" if row.kills >= market.params["line"] else "no"
         return settle([next(o for o in outcomes if o.code == code)], note=f"{row.kills} kills.")
 
+    def by_code(code: str) -> Outcome:
+        return next(o for o in outcomes if o.code == code)
+
+    if market.category == C.TOTAL_KILLS:
+        total = sum(r.kills for r in rows.values())
+        evidence["total_kills"] = total
+        code = "yes" if total >= market.params["line"] else "no"
+        return settle([by_code(code)], note=f"{total} kills in the match.")
+
+    if market.category in HANDICAPS:
+        (a, b), line = market.params["teams"], market.params["line"]
+        if a not in rows or b not in rows:
+            return void("One of the teams didn't play: everyone is refunded.")
+        field = "kills" if market.category == C.KILLS_HANDICAP else "total_points"
+        lead = getattr(rows[a], field) - getattr(rows[b], field)
+        # The first team gives a head start of line - 0.5, so there is never a tie.
+        return settle([by_team(a if lead >= line else b)], note=f"Margin {lead:+d}.")
+
+    if market.category == C.FINISH_BAND:
+        row = rows.get(market.params["team"])
+        if row is None:
+            return void("The team didn't play: everyone is refunded.")
+        code = next(c for c, (lo, hi) in BANDS.items() if lo <= row.placement <= hi)
+        return settle([by_code(code)], note=f"Finished #{row.placement}.")
+
+    if market.category == C.FIRST_OUT:
+        last = max(r.placement for r in rows.values())
+        out = next(r for r in rows.values() if r.placement == last)
+        absent = [o for o in outcomes if o.team_id not in rows]
+        winners = [by_team(out.team_id)] if out.team_id in _teams(market) else []
+        notes = [f"{out.team.name} went out first (#{last})."]
+        if not winners:
+            notes.append("That team isn't one of the choices: every bet loses.")
+        if absent:
+            notes.append("Teams that didn't play are refunded.")
+        return settle(winners, absent, " ".join(notes))
+
+    if market.category == C.FIRST_BLOOD:
+        first = (
+            MatchEvent.objects.filter(
+                match=match, kind=MatchEvent.Kind.KILL, game_time_s__isnull=False
+            )
+            .exclude(actor_team__isnull=True)
+            .exclude(actor_team=F("target_team"))
+            .select_related("actor_team")
+            .order_by("game_time_s", "pk")
+            .first()
+        )
+        if first is None:
+            return void("The logs have no timed kills: everyone is refunded.")
+        evidence["first_blood"] = {"team": first.actor_team_id, "at_s": first.game_time_s}
+        absent = [o for o in outcomes if o.team_id not in rows]
+        winners = [by_team(first.actor_team_id)] if first.actor_team_id in _teams(market) else []
+        notes = [f"{first.actor_team.name} got the first kill at {first.game_time_s:.0f}s."]
+        if not winners:
+            notes.append("That team isn't one of the choices: every bet loses.")
+        if absent:
+            notes.append("Teams that didn't play are refunded.")
+        return settle(winners, absent, " ".join(notes))
+
+    if market.category in PLAYER_MARKETS:
+        return _suggest_player(market, match, outcomes, evidence)
+
     raise MarketError("No automatic result for this kind of market.", "not_ready")
+
+
+def _suggest_player(market: Market, match: Match, outcomes, evidence: dict) -> dict:
+    """Player markets, settled from the match scoreboard and its events."""
+    p = market.params
+    listed = list(p.get("players") or [p["player"]])
+    players = {
+        r.player_id: r
+        for r in PlayerMatchResult.objects.filter(match=match).select_related("player")
+    }
+    if not players:
+        raise MarketError("The match has no player results.", "not_ready")
+    evidence["players"] = [
+        {
+            "player": r.player_id,
+            "name": r.display_name,
+            "team": r.team_id,
+            "kills": r.kills,
+            "damage": r.damage_dealt,
+        }
+        for pid, r in players.items()
+        if pid in listed
+    ]
+    by_player = {o.player_id: o for o in outcomes if o.player_id and o.code.startswith("player:")}
+    absent = [o for pid, o in by_player.items() if pid not in players]
+
+    def yes_no(value, what: str) -> dict:
+        code = "yes" if value >= p["line"] else "no"
+        winner = next(o for o in outcomes if o.code == code)
+        return _settle([winner], note=f"{value} {what}.", evidence=evidence)
+
+    def shared(winners_ids: list[int], what: str) -> dict:
+        winners = [by_player[pid] for pid in winners_ids if pid in by_player]
+        notes = []
+        if not winners:
+            notes.append(f"The {what} isn't one of the choices: every bet loses.")
+        if len(winners_ids) > 1:
+            notes.append(
+                f"{len(winners_ids)} players tie: winning bets are paid odds / {len(winners_ids)}."
+            )
+        if absent:
+            notes.append("Players who didn't play are refunded.")
+        return _settle(winners, absent, " ".join(notes), evidence, len(winners_ids))
+
+    if market.category in (C.PLAYER_KILLS, C.PLAYER_DAMAGE):
+        row = players.get(p["player"])
+        if row is None:
+            return _void("The player didn't play: everyone is refunded.", evidence)
+        if market.category == C.PLAYER_KILLS:
+            return yes_no(row.kills, "kills")
+        if row.damage_dealt is None:
+            return _void("This match has no damage figures: everyone is refunded.", evidence)
+        return yes_no(row.damage_dealt, "damage")
+
+    if market.category == C.PLAYER_H2H:
+        a, b = listed
+        if a not in players or b not in players:
+            return _void("One of the players didn't play: everyone is refunded.", evidence)
+        if players[a].kills == players[b].kills:
+            return _void("A tie: everyone is refunded.", evidence)
+        winner = a if players[a].kills > players[b].kills else b
+        return _settle([by_player[winner]], evidence=evidence)
+
+    if market.category == C.TOP_FRAGGER:
+        most = max(r.kills for r in players.values())
+        if most == 0:
+            return _void("Nobody got a kill: everyone is refunded.", evidence)
+        evidence["most_kills"] = most
+        return shared([pid for pid, r in players.items() if r.kills == most], "top fragger")
+
+    # FIRST_DEATH: the earliest death in the replay (any cause, zone included).
+    deaths = MatchEvent.objects.filter(
+        match=match, kind=MatchEvent.Kind.DEATH, game_time_s__isnull=False
+    ).exclude(actor_player__isnull=True)
+    first = deaths.order_by("game_time_s").values_list("game_time_s", flat=True).first()
+    if first is None:
+        return _void("The logs have no timed deaths: everyone is refunded.", evidence)
+    dead = list(
+        dict.fromkeys(deaths.filter(game_time_s=first).values_list("actor_player_id", flat=True))
+    )
+    evidence["first_death"] = {"players": dead, "at_s": first}
+    return shared(dead, "first player to die")
 
 
 def _standings(season_id: int, scope: str, results) -> dict[int, StandingRow]:

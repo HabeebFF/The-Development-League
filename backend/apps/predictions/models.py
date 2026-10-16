@@ -157,6 +157,17 @@ class Market(models.Model):
         MOST_BOOYAHS = "MOST_BOOYAHS", "Most Booyahs in the session"
         OVERALL_WINNER = "OVERALL_WINNER", "Overall winner"
         OVERALL_TOP_N = "OVERALL_TOP_N", "Overall top N"
+        TOTAL_KILLS = "TOTAL_KILLS", "Total kills in the match"
+        KILLS_HANDICAP = "KILLS_HANDICAP", "Kills handicap"
+        POINTS_HANDICAP = "POINTS_HANDICAP", "Points handicap"
+        FINISH_BAND = "FINISH_BAND", "Finishing position"
+        FIRST_OUT = "FIRST_OUT", "First team out"
+        FIRST_BLOOD = "FIRST_BLOOD", "First blood"
+        PLAYER_KILLS = "PLAYER_KILLS", "Player kills"
+        TOP_FRAGGER = "TOP_FRAGGER", "Top fragger"
+        PLAYER_H2H = "PLAYER_H2H", "Player head-to-head: more kills"
+        FIRST_DEATH = "FIRST_DEATH", "First player to die"
+        PLAYER_DAMAGE = "PLAYER_DAMAGE", "Player damage"
 
     class Status(models.TextChoices):
         DRAFT = "DRAFT", "Draft"
@@ -200,10 +211,13 @@ class Market(models.Model):
 
 class Outcome(models.Model):
     market = models.ForeignKey(Market, on_delete=models.CASCADE, related_name="outcomes")
-    code = models.CharField(max_length=40, help_text="team:<id>, yes, no")
+    code = models.CharField(max_length=40, help_text="team:<id>, player:<id>, yes, no, band:<n>")
     label = models.CharField(max_length=120)
     team = models.ForeignKey(
         "league.Team", on_delete=models.PROTECT, null=True, blank=True, related_name="+"
+    )
+    player = models.ForeignKey(
+        "league.Player", on_delete=models.PROTECT, null=True, blank=True, related_name="+"
     )
     odds = models.DecimalField(
         max_digits=7,

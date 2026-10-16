@@ -19,8 +19,9 @@ from django.db import transaction
 from django.utils import timezone
 
 from apps.accounts.models import StaffProfile, User
-from apps.league.models import Match, MatchDay, ScoringRule, Season, Stage, Team
+from apps.league.models import Match, MatchDay, Player, ScoringRule, Season, Stage, Team
 from apps.predictions.markets import (
+    HANDICAPS,
     MATCH_MARKETS,
     SEASON_MARKETS,
     SESSION_MARKETS,
@@ -33,7 +34,7 @@ from apps.predictions.markets import (
 from apps.predictions.models import Bet, Fixture, LedgerEntry, Market, Settlement, Wallet
 from apps.predictions.services import check_wallets, initial_coins, wallet_for
 from apps.predictions.settlement import correct, settle, suggest, void
-from apps.results.models import TeamMatchResult
+from apps.results.models import MatchEvent, PlayerMatchResult, TeamMatchResult
 from apps.results.standings import rebuild_season
 
 C, S, B = Market.Category, Market.Status, Bet.Status
@@ -93,6 +94,21 @@ class Command(BaseCommand):
         season = Season.objects.create(name=f"Sim {tag}", slug=f"sim-{tag}", scoring_rule=rule)
         stage = Stage.objects.create(season=season, name="Sim")
         teams = [Team.objects.create(name=f"Sim {tag} T{i + 1}") for i in range(opts["teams"])]
+        base = rng.randint(10**15, 10**16)
+        self.squads = {
+            t.pk: [
+                Player.objects.create(
+                    game_uid=base + n * 4 + k,
+                    current_name_raw=f"{t.name} P{k}",
+                    display_name=f"{t.name} P{k}",
+                    search_name=f"{t.name} p{k}".casefold(),
+                    current_team=t,
+                )  # fmt: skip
+                for k in range(4)
+            ]
+            for n, t in enumerate(teams)
+        }
+        players = [p for squad in self.squads.values() for p in squad]
         staff = User.objects.create_user(email=f"staff-{tag}@{DOMAIN}", password=None)
         StaffProfile.objects.create(user=staff)
         users = [
@@ -118,7 +134,7 @@ class Command(BaseCommand):
                 one = self.fixture(season, date, n, now)
                 days[-1][2].append(one)
                 for kind in sorted(MATCH_MARKETS):
-                    markets.append(self.market(staff, season, one, kind, teams, now))
+                    markets.append(self.market(staff, season, one, kind, teams, now, players))
         for kind in sorted(SEASON_MARKETS):
             markets.append(self.market(staff, season, None, kind, teams, now))
         kinds = Counter(m.category for m in markets)
@@ -198,7 +214,7 @@ class Command(BaseCommand):
             scheduled_at=now + dt.timedelta(hours=1),
         )
 
-    def market(self, staff, season, fixture, kind, teams, now) -> Market:
+    def market(self, staff, season, fixture, kind, teams, now, players=()) -> Market:
         rng = self.rng
         if kind in (C.TOP_N, C.OVERALL_TOP_N):
             params = {"team": rng.choice(teams).pk, "n": rng.choice([3, 5, 10])}
@@ -206,6 +222,20 @@ class Command(BaseCommand):
             params = {"team": rng.choice(teams).pk, "line": rng.randint(3, 12)}
         elif kind in (C.H2H_PLACEMENT, C.H2H_KILLS, C.H2H_POINTS):
             params = {"teams": [t.pk for t in rng.sample(teams, 2)]}
+        elif kind == C.TOTAL_KILLS:
+            params = {"line": rng.randint(len(teams) * 4, len(teams) * 10)}
+        elif kind in HANDICAPS:
+            params = {"teams": [t.pk for t in rng.sample(teams, 2)], "line": rng.randint(1, 8)}
+        elif kind == C.FINISH_BAND:
+            params = {"team": rng.choice(teams).pk}
+        elif kind == C.PLAYER_KILLS:
+            params = {"player": rng.choice(players).pk, "line": rng.randint(1, 5)}
+        elif kind == C.PLAYER_DAMAGE:
+            params = {"player": rng.choice(players).pk, "line": rng.randint(4, 20) * 100}
+        elif kind == C.PLAYER_H2H:
+            params = {"players": [p.pk for p in rng.sample(players, 2)]}
+        elif kind in (C.TOP_FRAGGER, C.FIRST_DEATH):
+            params = {"players": [p.pk for p in rng.sample(players, rng.randint(3, 8))]}
         else:
             params = {"teams": [t.pk for t in rng.sample(teams, rng.randint(3, len(teams)))]}
         odds = {spec["code"]: f"{rng.uniform(1.2, 9):.2f}" for spec in outcome_specs(kind, params)}
@@ -259,13 +289,37 @@ class Command(BaseCommand):
                 self.counts["accepted_bad"] += 1
 
     def results(self, match, teams) -> None:
+        """Team and player results, kill and death times, and damage (missing in one match
+        out of five, as when the replay doesn't cover it)."""
         rng = self.rng
         order = rng.sample(teams, len(teams))
+        has_damage = rng.random() > 0.2
+        deaths = []
         for place, team in enumerate(order, start=1):
+            squad = self.squads[team.pk]
+            kills = [rng.choice([0, 0, 1, 1, 2, 3, 4, 6]) for _ in squad]
             TeamMatchResult.objects.create(
                 match=match, team=team, in_game_name=team.name, placement=place,
-                kills=rng.randint(0, 14), placement_points=0, kill_points=0, total_points=0,
+                kills=sum(kills), placement_points=0, kill_points=0, total_points=0,
             )  # fmt: skip
+            for player, k in zip(squad, kills, strict=True):
+                PlayerMatchResult.objects.create(
+                    match=match, player=player, team=team, raw_name=player.display_name,
+                    display_name=player.display_name, kills=k,
+                    damage_dealt=k * 220 + rng.randint(0, 600) if has_damage else None,
+                )  # fmt: skip
+                # Whole seconds, so two players sometimes die at the same moment.
+                deaths.append((rng.randint(60, 1500), player, team))
+        for at, player, team in deaths:
+            MatchEvent.objects.create(
+                match=match, kind=MatchEvent.Kind.DEATH, source=MatchEvent.Source.REPLAY_INFO,
+                game_time_s=at, actor_player=player, actor_team=team,
+            )  # fmt: skip
+        killer, victim = rng.sample(teams, 2)
+        MatchEvent.objects.create(
+            match=match, kind=MatchEvent.Kind.KILL, source=MatchEvent.Source.REPLAY_INFO,
+            game_time_s=rng.randint(30, 59), actor_team=killer, target_team=victim,
+        )  # fmt: skip
 
     # -- checks ----------------------------------------------------------------------------------
 
