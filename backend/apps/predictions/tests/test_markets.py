@@ -396,7 +396,7 @@ def test_player_cannot_bet_on_own_team(league, staff):
     player = make_user("player@tdl.test")
     Membership.objects.create(user=player, team=teams[1])
     market = booyah(league, staff)
-    with pytest.raises(MarketError, match="your own team"):
+    with pytest.raises(MarketError, match="your team"):
         bet(player, market)
     assert balance(player) == 1000
 

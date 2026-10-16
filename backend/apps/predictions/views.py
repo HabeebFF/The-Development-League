@@ -35,6 +35,7 @@ from common.permissions import IsStaff, IsSuperAdmin, PublicRead
 from . import settlement
 from .markets import (
     MarketError,
+    PlayerRules,
     accepting_bets,
     create_market,
     place_bet,
@@ -306,6 +307,7 @@ def _refused(exc: MarketError) -> Response:
     code = {
         "not_found": status.HTTP_404_NOT_FOUND,
         "not_allowed": status.HTTP_403_FORBIDDEN,
+        "uid_pending": status.HTTP_403_FORBIDDEN,
         "odds_changed": status.HTTP_409_CONFLICT,
         "key_reused": status.HTTP_409_CONFLICT,
         "same_match": status.HTTP_409_CONFLICT,
@@ -345,7 +347,10 @@ class MarketListView(APIView):
             qs = qs.filter(taken__gt=0).order_by("-taken", "closes_at", "pk")
         paginator = DefaultPagination()
         page = paginator.paginate_queryset(qs, request, view=self)
-        return paginator.get_paginated_response([market_data(m, now) for m in page])
+        rules = PlayerRules(request.user)
+        return paginator.get_paginated_response(
+            [{**market_data(m, now), "blocked": rules.reason(m)} for m in page]
+        )
 
 
 class MarketDetailView(APIView):
@@ -353,7 +358,9 @@ class MarketDetailView(APIView):
 
     def get(self, request, pk: int):
         market = get_object_or_404(_markets().exclude(status=S.DRAFT), pk=pk)
-        return Response(market_data(market))
+        return Response(
+            {**market_data(market), "blocked": PlayerRules(request.user).reason(market)}
+        )
 
 
 class PlaceBetSerializer(serializers.Serializer):
@@ -563,6 +570,7 @@ class FixtureSerializer(serializers.ModelSerializer):
             "scheduled_at",
             "match",
             "match_day",
+            "teams",
         ]
         validators = []  # the unique check below gives a readable message
 

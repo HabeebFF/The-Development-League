@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useState } from "react";
 
 import { useAuth } from "@/components/Auth";
+import GoogleSignIn from "@/components/auth/GoogleSignIn";
+import PlaysFields from "@/components/auth/PlaysFields";
 import { api, ApiError } from "@/lib/api";
 
 /** A fan account: no team, no staff access. Only shown while the league has sign-up open. */
@@ -29,7 +31,12 @@ export default function SignupForm() {
     try {
       await api("/auth/signup", {
         method: "POST",
-        body: { email: form.get("email"), password: form.get("password"), display_name: form.get("display_name") },
+        body: {
+          email: form.get("email"),
+          password: form.get("password"),
+          display_name: form.get("display_name"),
+          game_uid: form.get("game_uid") ?? "",
+        },
       });
       // A full load so the whole site knows who is signed in.
       window.location.assign(site.predictions ? "/predict" : "/");
@@ -48,39 +55,43 @@ export default function SignupForm() {
   const err = (k: string) => errors[k] && <span className="mt-1 block text-xs text-bad">{errors[k]}</span>;
 
   return (
-    <form action={submit} className="mt-8 space-y-4">
-      <label className="block text-sm">
-        <span className="text-muted">Name on the leaderboard</span>
-        <input name="display_name" required minLength={2} maxLength={30} autoComplete="nickname" className="input mt-1" />
-        {err("display_name")}
-      </label>
-      <label className="block text-sm">
-        <span className="text-muted">Email</span>
-        <input name="email" type="email" autoComplete="email" required className="input mt-1" />
-        {err("email")}
-      </label>
-      <label className="block text-sm">
-        <span className="text-muted">Password</span>
-        <input name="password" type="password" autoComplete="new-password" required minLength={8} className="input mt-1" />
-        {err("password")}
-      </label>
-      {(errors.detail || errors.non_field_errors) && <p className="text-sm text-bad">{errors.detail || errors.non_field_errors}</p>}
-      <p className="text-xs text-muted">
-        By signing up you agree to our{" "}
-        <Link href="/privacy" className="text-accent hover:underline">
-          Privacy notice
-        </Link>
-        .
-      </p>
-      <button type="submit" disabled={busy} className="btn btn-primary w-full">
-        {busy ? "Creating account..." : "Create account"}
-      </button>
-      <p className="text-sm text-muted">
-        Already have one?{" "}
-        <Link href="/auth/login" className="text-accent hover:underline">
-          Sign in
-        </Link>
-      </p>
-    </form>
+    <>
+      <GoogleSignIn text="signup_with" first />
+      <form action={submit} className="mt-8 space-y-4">
+        <label className="block text-sm">
+          <span className="text-muted">Name on the leaderboard</span>
+          <input name="display_name" required minLength={2} maxLength={30} autoComplete="nickname" className="input mt-1" />
+          {err("display_name")}
+        </label>
+        <label className="block text-sm">
+          <span className="text-muted">Email</span>
+          <input name="email" type="email" autoComplete="email" required className="input mt-1" />
+          {err("email")}
+        </label>
+        <label className="block text-sm">
+          <span className="text-muted">Password</span>
+          <input name="password" type="password" autoComplete="new-password" required minLength={8} className="input mt-1" />
+          {err("password")}
+        </label>
+        <PlaysFields error={errors.game_uid} />
+        {(errors.detail || errors.non_field_errors) && <p className="text-sm text-bad">{errors.detail || errors.non_field_errors}</p>}
+        <p className="text-xs text-muted">
+          By signing up you agree to our{" "}
+          <Link href="/privacy" className="text-accent hover:underline">
+            Privacy notice
+          </Link>
+          .
+        </p>
+        <button type="submit" disabled={busy} className="btn btn-primary w-full">
+          {busy ? "Creating account..." : "Create account"}
+        </button>
+        <p className="text-sm text-muted">
+          Already have one?{" "}
+          <Link href="/auth/login" className="text-accent hover:underline">
+            Sign in
+          </Link>
+        </p>
+      </form>
+    </>
   );
 }

@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 
+import GoogleSignIn from "@/components/auth/GoogleSignIn";
+
 import LoginForm from "./LoginForm";
 import NoAccount from "./NoAccount";
 
@@ -13,6 +15,7 @@ export default async function LoginPage({ searchParams }: PageProps<"/auth/login
     <section className="mx-auto max-w-sm px-4 py-16">
       <h1 className="font-display text-3xl uppercase">Sign in</h1>
       <LoginForm next={target} />
+      <GoogleSignIn next={target} text="signin_with" />
       <NoAccount />
     </section>
   );

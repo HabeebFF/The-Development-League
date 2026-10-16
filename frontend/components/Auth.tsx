@@ -18,8 +18,8 @@ type Auth = {
   site: Site;
   signOut: () => Promise<void>;
 };
-type Site = { public: boolean; signup: boolean; predictions: boolean };
-const NO_SITE: Site = { public: false, signup: false, predictions: false };
+type Site = { public: boolean; signup: boolean; predictions: boolean; google_client_id: string | null };
+const NO_SITE: Site = { public: false, signup: false, predictions: false, google_client_id: null };
 
 const AuthContext = createContext<Auth>({ me: null, status: "loading", publicSite: null, site: NO_SITE, signOut: async () => {} });
 
@@ -43,7 +43,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     api<Partial<Site>>("/site")
       .then((s) => {
         setPublicSite(!!s.public);
-        setSite({ public: !!s.public, signup: !!s.signup, predictions: !!s.predictions });
+        setSite({ public: !!s.public, signup: !!s.signup, predictions: !!s.predictions, google_client_id: s.google_client_id || null });
       })
       .catch(() => setPublicSite(false));
   }, []);
@@ -96,8 +96,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   }, [open, status, publicSite, path, router]);
 
   if (open || status === "in") return <>{children}</>;
-  if (status === "error")
-    return <p className="mx-auto max-w-6xl px-4 py-10 text-bad">Couldn&apos;t reach the server. Try again.</p>;
+  if (status === "error") return <p className="mx-auto max-w-6xl px-4 py-10 text-bad">Couldn&apos;t reach the server. Try again.</p>;
   return (
     <div className="mx-auto max-w-6xl px-4 py-10">
       <SkeletonRows count={6} />
