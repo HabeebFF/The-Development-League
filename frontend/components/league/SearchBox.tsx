@@ -11,7 +11,7 @@ export default function SearchBox({ value, onChange, label = "Search players or 
       </svg>
       <input
         type="search"
-        className="input pl-9 pr-9"
+        className="input pl-9! pr-9! [&::-webkit-search-cancel-button]:appearance-none"
         placeholder={label}
         aria-label={label}
         value={value}
