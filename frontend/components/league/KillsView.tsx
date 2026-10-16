@@ -7,6 +7,7 @@ import { useApi } from "@/lib/useApi";
 
 import KillTable from "./KillTable";
 import Loading from "./Loading";
+import SearchBox from "./SearchBox";
 
 const SCOPES = [
   { key: "session", label: "Session" },
@@ -20,6 +21,7 @@ type Scope = (typeof SCOPES)[number]["key"];
 export default function KillsView() {
   const [scope, setScope] = useState<Scope>("session");
   const [at, setAt] = useState<number | string | null>(null);
+  const [query, setQuery] = useState("");
   const data = useApi<KillList>(killsPath(scope, at));
   const k = data.data;
 
@@ -51,6 +53,10 @@ export default function KillsView() {
         )}
       </div>
 
+      <div className="mt-4">
+        <SearchBox value={query} onChange={setQuery} />
+      </div>
+
       {!k ? (
         <div className="mt-6">
           <Loading error={data.error} count={10} />
@@ -60,7 +66,7 @@ export default function KillsView() {
           {k.matches === 0 ? (
             <p className="text-sm text-muted">No matches were played {scope === "session" ? "yet" : `this ${scope}`}.</p>
           ) : (
-            <KillTable list={k} />
+            <KillTable list={k} query={query} />
           )}
         </div>
       )}

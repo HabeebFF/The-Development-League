@@ -6,15 +6,19 @@ import { useState } from "react";
 import { plural } from "@/lib/league";
 import type { KillList } from "@/lib/kills";
 
+import { matchPlayers } from "./SearchBox";
 import { TeamMark } from "./TeamBadge";
 
 const FIRST = 15; // rows shown before "Show all"
 
 /** Every player's kills, knocks, headshot knocks and damage dealt, best first. */
-export default function KillTable({ list, showMatches = true }: { list: KillList; showMatches?: boolean }) {
+export default function KillTable({ list, showMatches = true, query = "" }: { list: KillList; showMatches?: boolean; query?: string }) {
   const [all, setAll] = useState(false);
   if (!list.players.length) return <p className="text-sm text-muted">No kills to show.</p>;
-  const rows = all ? list.players : list.players.slice(0, FIRST);
+  const found = matchPlayers(list.players, query);
+  if (!found.length) return <p className="text-sm text-muted">No player or team matches &ldquo;{query.trim()}&rdquo; here.</p>;
+  const searching = found.length < list.players.length;
+  const rows = all || searching ? found : found.slice(0, FIRST);
   const cell = "px-2 py-2 text-right tabular-nums";
   const damage = list.players.some((p) => p.damage != null);
   return (
@@ -61,11 +65,12 @@ export default function KillTable({ list, showMatches = true }: { list: KillList
       </div>
       <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-muted">
         <span>
+          {searching && `${plural(found.length, "player")} found · `}
           {plural(list.kills, "kill")} by {plural(list.players.length, "player")}
           {showMatches ? ` in ${list.matches} match${list.matches === 1 ? "" : "es"}` : ""}. Ties go to more knocks, then more headshot
           knocks.
         </span>
-        {list.players.length > FIRST && (
+        {!searching && list.players.length > FIRST && (
           <button className="ml-auto text-accent hover:underline" onClick={() => setAll((a) => !a)}>
             {all ? "Show top 15" : `Show all ${list.players.length}`}
           </button>
