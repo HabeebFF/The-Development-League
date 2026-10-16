@@ -197,8 +197,15 @@ export type Category =
   | "PLAYER_DAMAGE"
   | "SESSION_WINNER"
   | "MOST_BOOYAHS"
+  | "SESSION_KILLS"
+  | "SESSION_H2H"
+  | "SESSION_FRAGGER"
   | "OVERALL_WINNER"
-  | "OVERALL_TOP_N";
+  | "OVERALL_TOP_N"
+  | "SEASON_FRAGGER"
+  | "RANGE_WINNER"
+  | "RANGE_TOP_N"
+  | "RANGE_FRAGGER";
 
 /** What a market is about: one match, a whole session, or the whole season (no fixture). */
 export type Scope = "match" | "session" | "season";
@@ -214,6 +221,8 @@ export type CategorySpec = {
   players: [number, number | null];
   line: Line | null;
   scope: Scope;
+  /** Covers the matches played from one date to another (both included). */
+  dates?: boolean;
 };
 
 const NONE: [number, number | null] = [0, 0];
@@ -274,12 +283,36 @@ export const CATEGORIES: CategorySpec[] = [
   { key: "FIRST_DEATH", label: "First player to die (ties share)", teams: NONE, players: [2, null], line: null, scope: "match" },
   { key: "SESSION_WINNER", label: "Session winner (most points)", teams: [2, null], players: NONE, line: null, scope: "session" },
   { key: "MOST_BOOYAHS", label: "Most Booyahs in the session (ties share)", teams: [2, null], players: NONE, line: null, scope: "session" },
+  {
+    key: "SESSION_KILLS",
+    label: "Team kills in the session (over/under)",
+    teams: [1, 1],
+    players: NONE,
+    line: { min: 1, max: 200, label: "Kills line", start: 40 },
+    scope: "session",
+  },
+  { key: "SESSION_H2H", label: "Session head-to-head: more points (tie refunds)", teams: [2, 2], players: NONE, line: null, scope: "session" },
+  { key: "SESSION_FRAGGER", label: "Session top fragger (ties share)", teams: NONE, players: [2, null], line: null, scope: "session" },
   { key: "OVERALL_WINNER", label: "Overall winner (season table)", teams: [2, null], players: NONE, line: null, scope: "season" },
   { key: "OVERALL_TOP_N", label: "Overall top N (yes/no)", teams: [1, 1], players: NONE, line: null, scope: "season" },
+  { key: "SEASON_FRAGGER", label: "Season top fragger (ties share)", teams: NONE, players: [2, null], line: null, scope: "season" },
+  { key: "RANGE_WINNER", label: "Most points between two dates (ties share)", teams: [2, null], players: NONE, line: null, scope: "season", dates: true },
+  { key: "RANGE_TOP_N", label: "Top N between two dates (yes/no)", teams: [1, 1], players: NONE, line: null, scope: "season", dates: true },
+  { key: "RANGE_FRAGGER", label: "Top fragger between two dates (ties share)", teams: NONE, players: [2, null], line: null, scope: "season", dates: true },
 ];
 
 /** Markets where those level on the result share the win (a dead heat). */
-export const SHARED_WIN = new Set<string>(["SESSION_WINNER", "MOST_BOOYAHS", "OVERALL_WINNER", "TOP_FRAGGER", "FIRST_DEATH"]);
+export const SHARED_WIN = new Set<string>([
+  "SESSION_WINNER",
+  "MOST_BOOYAHS",
+  "OVERALL_WINNER",
+  "TOP_FRAGGER",
+  "FIRST_DEATH",
+  "SESSION_FRAGGER",
+  "SEASON_FRAGGER",
+  "RANGE_WINNER",
+  "RANGE_FRAGGER",
+]);
 
 /** How each kind of market is settled, in one line for players. */
 export const RULES: Partial<Record<Category, string>> = {
@@ -300,6 +333,13 @@ export const RULES: Partial<Record<Category, string>> = {
   TOP_FRAGGER: "The player with the most kills in the match. A listed player who doesn't play is refunded.",
   PLAYER_H2H: "The player with more kills wins. A tie, or either player not playing, is refunded.",
   FIRST_DEATH: "The first player in the match to die, from any cause.",
+  SESSION_KILLS: "The team's kills in every match of the session, added up.",
+  SESSION_H2H: "The team with more points over the session wins. A tie, or either team not playing, is refunded.",
+  SESSION_FRAGGER: "The player with the most kills over the whole session. A listed player who doesn't play is refunded.",
+  SEASON_FRAGGER: "The player with the most kills over the season. A listed player who doesn't play is refunded.",
+  RANGE_WINNER: "A table of only the matches between the two dates, scored like the league table. Settled after the last date.",
+  RANGE_TOP_N: "The team's position in a table of only the matches between the two dates. Settled after the last date.",
+  RANGE_FRAGGER: "The player with the most kills between the two dates. Settled after the last date.",
 };
 
 export function spec(category: Category): CategorySpec {
@@ -318,6 +358,7 @@ export function outcomeCodes(category: Category, teams: Named[], n = 3, line = 1
   switch (category) {
     case "TOP_N":
     case "OVERALL_TOP_N":
+    case "RANGE_TOP_N":
       return [
         { code: "yes", label: `Yes, ${name} top ${n}` },
         { code: "no", label: `No, ${name} outside top ${n}` },
@@ -326,6 +367,11 @@ export function outcomeCodes(category: Category, teams: Named[], n = 3, line = 1
       return [
         { code: "yes", label: `${name}: ${line} or more kills` },
         { code: "no", label: `${name}: ${line - 1} or fewer kills` },
+      ];
+    case "SESSION_KILLS":
+      return [
+        { code: "yes", label: `${name}: over ${half(line)} kills` },
+        { code: "no", label: `${name}: under ${half(line)} kills` },
       ];
     case "TOTAL_KILLS":
       return [
@@ -362,11 +408,34 @@ export function outcomeCodes(category: Category, teams: Named[], n = 3, line = 1
     case "TOP_FRAGGER":
     case "PLAYER_H2H":
     case "FIRST_DEATH":
+    case "SESSION_FRAGGER":
+    case "SEASON_FRAGGER":
+    case "RANGE_FRAGGER":
       return players.map((p) => ({ code: `player:${p.id}`, label: p.name }));
     default:
       return teams.map((t) => ({ code: `team:${t.id}`, label: t.name }));
   }
 }
+
+/** "19 Oct" for "2026-10-19" (the day as written, whatever the time zone). */
+export function shortDate(iso: string): string {
+  const [y, m, d] = iso.split("-").map(Number);
+  if (!y || !m || !d) return iso;
+  return `${d} ${["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][m - 1]}`;
+}
+
+/** Why a from/to date pair doesn't work for a date-range market, or null. */
+export function datesProblem(from: string, to: string): string | null {
+  const day = /^\d{4}-\d{2}-\d{2}$/;
+  if (!day.test(from) || !day.test(to)) return "Pick both dates.";
+  const days = (Date.parse(to) - Date.parse(from)) / 864e5 + 1;
+  if (days < 1) return "The end date is before the start date.";
+  if (days > MAX_RANGE_DAYS) return `At most ${MAX_RANGE_DAYS} days.`;
+  return null;
+}
+
+/** The longest date range a market can cover (the server's MAX_RANGE_DAYS). */
+export const MAX_RANGE_DAYS = 62;
 
 /** A starting title for a new market. */
 export function defaultTitle(
@@ -376,8 +445,10 @@ export function defaultTitle(
   matchNumber: number | null = null,
   line = 10,
   players: { name: string }[] = [],
+  dates: { from: string; to: string } | null = null,
 ): string {
   const where = matchNumber ? ` · Match ${matchNumber}` : "";
+  const span = dates ? ` · ${shortDate(dates.from)} to ${shortDate(dates.to)}` : "";
   const [a, b] = teams.map((t) => t.name);
   const [p, q] = players.map((x) => x.name);
   switch (category) {
@@ -423,6 +494,20 @@ export function defaultTitle(
       return "Overall winner";
     case "OVERALL_TOP_N":
       return `${a ?? "Team"} overall top ${n}`;
+    case "SESSION_KILLS":
+      return `${a ?? "Team"}: over/under ${half(line)} kills in the session`;
+    case "SESSION_H2H":
+      return `${a ?? "?"} v ${b ?? "?"}: more points in the session`;
+    case "SESSION_FRAGGER":
+      return "Session top fragger";
+    case "SEASON_FRAGGER":
+      return "Season top fragger";
+    case "RANGE_WINNER":
+      return `Most points${span}`;
+    case "RANGE_TOP_N":
+      return `${a ?? "Team"} top ${n}${span}`;
+    case "RANGE_FRAGGER":
+      return `Top fragger${span}`;
   }
 }
 

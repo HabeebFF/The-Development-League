@@ -23,6 +23,7 @@ from apps.league.models import Match, MatchDay, Player, ScoringRule, Season, Sta
 from apps.predictions.markets import (
     HANDICAPS,
     MATCH_MARKETS,
+    RANGE_MARKETS,
     SEASON_MARKETS,
     SESSION_MARKETS,
     MarketError,
@@ -122,21 +123,23 @@ class Command(BaseCommand):
         markets: list[Market] = []
         days = []
         for d in range(opts["sessions"]):
-            date = now.date() + dt.timedelta(days=d)
+            # Days already gone, so date-range markets over them can be settled today.
+            date = now.date() - dt.timedelta(days=opts["sessions"] - d)
             day = MatchDay.objects.create(
                 stage=stage, number=d + 1, date=date, title=f"SIM {d} 8PM"
             )
             whole = self.fixture(season, date, None, now)
             days.append((day, whole, []))
             for kind in sorted(SESSION_MARKETS):
-                markets.append(self.market(staff, season, whole, kind, teams, now))
+                markets.append(self.market(staff, season, whole, kind, teams, now, players))
             for n in range(1, opts["matches"] + 1):
                 one = self.fixture(season, date, n, now)
                 days[-1][2].append(one)
                 for kind in sorted(MATCH_MARKETS):
                     markets.append(self.market(staff, season, one, kind, teams, now, players))
+        self.span = (days[0][0].date, days[-1][0].date)
         for kind in sorted(SEASON_MARKETS):
-            markets.append(self.market(staff, season, None, kind, teams, now))
+            markets.append(self.market(staff, season, None, kind, teams, now, players))
         kinds = Counter(m.category for m in markets)
         self.lines.append(
             f"- {len(users)} players, {len(teams)} teams, {len(markets)} markets "
@@ -216,8 +219,26 @@ class Command(BaseCommand):
 
     def market(self, staff, season, fixture, kind, teams, now, players=()) -> Market:
         rng = self.rng
+        if kind in RANGE_MARKETS:
+            start, end = self.span
+            span = {"from": start.isoformat(), "to": end.isoformat()}
         if kind in (C.TOP_N, C.OVERALL_TOP_N):
             params = {"team": rng.choice(teams).pk, "n": rng.choice([3, 5, 10])}
+        elif kind == C.RANGE_TOP_N:
+            params = {"team": rng.choice(teams).pk, "n": rng.choice([3, 5, 10]), **span}
+        elif kind == C.RANGE_WINNER:
+            params = {
+                "teams": [t.pk for t in rng.sample(teams, rng.randint(3, len(teams)))],
+                **span,
+            }
+        elif kind == C.RANGE_FRAGGER:
+            params = {"players": [p.pk for p in rng.sample(players, rng.randint(3, 8))], **span}
+        elif kind in (C.SESSION_FRAGGER, C.SEASON_FRAGGER):
+            params = {"players": [p.pk for p in rng.sample(players, rng.randint(3, 8))]}
+        elif kind == C.SESSION_KILLS:
+            params = {"team": rng.choice(teams).pk, "line": rng.randint(10, 40)}
+        elif kind == C.SESSION_H2H:
+            params = {"teams": [t.pk for t in rng.sample(teams, 2)]}
         elif kind == C.TEAM_KILLS:
             params = {"team": rng.choice(teams).pk, "line": rng.randint(3, 12)}
         elif kind in (C.H2H_PLACEMENT, C.H2H_KILLS, C.H2H_POINTS):

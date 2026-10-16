@@ -90,13 +90,10 @@ test("staff: outcome codes, titles and checks", async () => {
 
 test("staff: market types per fixture and kills lines", async () => {
   const { categoriesFor, lineProblem } = await import("./predictions.ts");
-  assert.deepEqual(
-    categoriesFor("session").map((c) => c.key),
-    ["SESSION_WINNER", "MOST_BOOYAHS"],
-  );
+  assert.ok(categoriesFor("session").every((c) => c.key.startsWith("SESSION_") || c.key === "MOST_BOOYAHS"));
   assert.deepEqual(
     categoriesFor("season").map((c) => c.key),
-    ["OVERALL_WINNER", "OVERALL_TOP_N"],
+    ["OVERALL_WINNER", "OVERALL_TOP_N", "SEASON_FRAGGER", "RANGE_WINNER", "RANGE_TOP_N", "RANGE_FRAGGER"],
   );
   assert.ok(categoriesFor("match").some((c) => c.key === "TEAM_KILLS"));
   assert.equal(lineProblem("10"), null);
@@ -150,4 +147,33 @@ test("staff: phase C codes match the server's", async () => {
   assert.equal(teamsProblem("TOTAL_KILLS", 0), null);
   assert.equal(teamsProblem("TOTAL_KILLS", 1), "This type has no teams.");
   assert.equal(categoriesFor("match").length, 17);
+});
+
+test("staff: session, date-range and season kinds", async () => {
+  const { outcomeCodes, defaultTitle, datesProblem, lineProblem, categoriesFor, SHARED_WIN } = await import("./predictions.ts");
+  const alpha = [{ id: 1, name: "Alpha" }];
+  assert.deepEqual(
+    outcomeCodes("SESSION_KILLS", alpha, 3, 40).map((o) => o.label),
+    ["Alpha: over 39.5 kills", "Alpha: under 39.5 kills"],
+  );
+  assert.deepEqual(
+    outcomeCodes("RANGE_TOP_N", alpha, 5).map((o) => o.code),
+    ["yes", "no"],
+  );
+  assert.deepEqual(
+    outcomeCodes("SEASON_FRAGGER", [], 3, 10, [{ id: 9, name: "Cy" }]).map((o) => o.code),
+    ["player:9"],
+  );
+  assert.equal(lineProblem("201", "SESSION_KILLS"), "A whole number from 1 to 200.");
+  assert.equal(defaultTitle("RANGE_WINNER", [], 3, null, 10, [], { from: "2026-10-19", to: "2026-10-25" }), "Most points · 19 Oct to 25 Oct");
+  assert.equal(datesProblem("", "2026-10-25"), "Pick both dates.");
+  assert.equal(datesProblem("2026-10-25", "2026-10-19"), "The end date is before the start date.");
+  assert.equal(datesProblem("2026-10-01", "2026-12-15"), "At most 62 days.");
+  assert.equal(datesProblem("2026-10-19", "2026-10-19"), null);
+  assert.deepEqual(
+    categoriesFor("session").map((c) => c.key),
+    ["SESSION_WINNER", "MOST_BOOYAHS", "SESSION_KILLS", "SESSION_H2H", "SESSION_FRAGGER"],
+  );
+  assert.ok(categoriesFor("season").some((c) => c.key === "RANGE_FRAGGER" && c.dates));
+  assert.ok(SHARED_WIN.has("RANGE_WINNER") && !SHARED_WIN.has("SESSION_H2H"));
 });
