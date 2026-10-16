@@ -34,5 +34,10 @@ urlpatterns = [
         name="predictions-market",
     ),
     path("predictions/bets", views.BetsView.as_view(), name="predictions-bets"),
+    path(
+        "predictions/leaderboard",
+        views.LeaderboardView.as_view(),
+        name="predictions-leaderboard",
+    ),
     path("predictions/bets/<uuid:pk>", views.BetDetailView.as_view(), name="predictions-bet"),
 ]

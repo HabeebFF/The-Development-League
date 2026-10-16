@@ -10,9 +10,18 @@ import { SkeletonRows } from "./league/Loading";
 
 type Status = "loading" | "in" | "out" | "error";
 /** `publicSite`: league pages are open to visitors without an account (null until known). */
-type Auth = { me: Me | null; status: Status; publicSite: boolean | null; signOut: () => Promise<void> };
+type Auth = {
+  me: Me | null;
+  status: Status;
+  publicSite: boolean | null;
+  /** Switches from the server: open sign-up and predictions (false until known). */
+  site: Site;
+  signOut: () => Promise<void>;
+};
+type Site = { public: boolean; signup: boolean; predictions: boolean };
+const NO_SITE: Site = { public: false, signup: false, predictions: false };
 
-const AuthContext = createContext<Auth>({ me: null, status: "loading", publicSite: null, signOut: async () => {} });
+const AuthContext = createContext<Auth>({ me: null, status: "loading", publicSite: null, site: NO_SITE, signOut: async () => {} });
 
 export function useAuth(): Auth {
   return useContext(AuthContext);
@@ -28,10 +37,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // so arriving from the sign-in form never bounces back to it.
   const [checked, setChecked] = useState<string | null>(null);
   const [publicSite, setPublicSite] = useState<boolean | null>(null);
+  const [site, setSite] = useState<Site>(NO_SITE);
 
   useEffect(() => {
-    api<{ public: boolean }>("/site")
-      .then((site) => setPublicSite(site.public))
+    api<Partial<Site>>("/site")
+      .then((s) => {
+        setPublicSite(!!s.public);
+        setSite({ public: !!s.public, signup: !!s.signup, predictions: !!s.predictions });
+      })
       .catch(() => setPublicSite(false));
   }, []);
 
@@ -68,7 +81,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [router]);
 
   const current: Status = status === "in" || checked === path ? status : "loading";
-  return <AuthContext.Provider value={{ me, status: current, publicSite, signOut }}>{children}</AuthContext.Provider>;
+  return <AuthContext.Provider value={{ me, status: current, publicSite, site, signOut }}>{children}</AuthContext.Provider>;
 }
 
 /** Signed-in members only, except sign-in and invite pages, and the league pages while the site is public. */

@@ -14,6 +14,7 @@ const MAIN = [
   { href: "/ratings", label: "Ratings", icon: "M12 2l2.4 4.9 5.4.8-3.9 3.8.9 5.4L12 14.3l-4.8 2.6.9-5.4-3.9-3.8 5.4-.8zM4 20h16v2H4z", bar: false },
   { href: "/awards", label: "Awards", icon: "M12 2l2.9 6.3 6.9.8-5.1 4.7 1.4 6.8L12 17.3 5.9 20.6l1.4-6.8L2.2 9.1l6.9-.8z" },
   { href: "/protection-points", label: "PP", icon: "M12 2 4 5v6c0 5 3.4 9.4 8 11 4.6-1.6 8-6 8-11V5zm-1 6h2v3h3v2h-3v3h-2v-3H8v-2h3z", bar: false },
+  { href: "/predict", label: "Predict", icon: "M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20m0 3a7 7 0 1 1 0 14 7 7 0 0 1 0-14m-1 2v5.4l4.3 2.6 1-1.7-3.3-2V7z", bar: false, flag: "predictions" as const },
   { href: "/cards", label: "Cards", icon: "M7 2h10l3 3v12l-8 5-8-5V5zm5 5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5m-4 9h8c0-2-1.8-3-4-3s-4 1-4 3" },
   { href: "/teams", label: "Teams", icon: "M12 3 4 6v6c0 4.5 3.4 8.3 8 9 4.6-.7 8-4.5 8-9V6z" },
 ];
@@ -37,7 +38,9 @@ function Icon({ d }: { d: string }) {
 /** The top bar (all links on desktop) and, on phones, a bottom tab bar plus a menu for the rest. */
 export default function SiteNav() {
   const path = usePathname();
-  const { status, publicSite, signOut } = useAuth();
+  const { status, publicSite, site, signOut } = useAuth();
+  // Links behind a switch (e.g. Predict) only show once the server has it on.
+  const main = MAIN.filter((l) => !("flag" in l) || site[l.flag as "predictions"]);
   const signedIn = status === "in";
   // Visitors see the league pages too while the site is public.
   const shown = signedIn || publicSite === true;
@@ -72,7 +75,7 @@ export default function SiteNav() {
             </span>
           </Link>
           <div className={`hidden h-full flex-1 items-center gap-1 ${shown ? "md:flex" : ""}`}>
-            {MAIN.slice(1).map((l) => (
+            {main.slice(1).map((l) => (
               <Link
                 key={l.href}
                 href={l.href}
@@ -125,7 +128,7 @@ export default function SiteNav() {
         <div className="fixed inset-0 z-20 md:hidden" onClick={() => setOpen(false)}>
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
           <div className="page-enter absolute inset-x-0 top-[var(--header-h)] border-b border-line bg-panel p-4" onClick={(e) => e.stopPropagation()}>
-            {[...MAIN, ...more].map((l) => (
+            {[...main, ...more].map((l) => (
               <Link
                 key={l.href}
                 href={l.href}
@@ -162,7 +165,7 @@ export default function SiteNav() {
         aria-label="Main"
       >
         <div className="grid h-[var(--bottom-nav-h)] grid-cols-6">
-          {MAIN.filter((l) => l.bar !== false).map((l) => {
+          {main.filter((l) => l.bar !== false).map((l) => {
             const on = active(path, l.href);
             return (
               <Link

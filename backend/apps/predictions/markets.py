@@ -80,8 +80,8 @@ def outcome_specs(category: str, params: dict) -> list[dict]:
     if category == C.TOP_N:
         team = Team.objects.get(pk=params["team"])
         return [
-            {"code": "yes", "label": f"{team.name} top {params['n']}: yes", "team_id": None},
-            {"code": "no", "label": f"{team.name} top {params['n']}: no", "team_id": None},
+            {"code": "yes", "label": f"Yes, {team.name} top {params['n']}", "team_id": None},
+            {"code": "no", "label": f"No, {team.name} outside top {params['n']}", "team_id": None},
         ]
     teams = Team.objects.in_bulk(params["teams"])
     return [{"code": f"team:{t}", "label": teams[t].name, "team_id": t} for t in params["teams"]]
