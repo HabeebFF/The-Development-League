@@ -6,6 +6,8 @@ import { useAuth } from "@/components/Auth";
 import { api, ApiError } from "@/lib/api";
 import type { Wallet } from "@/lib/predictions";
 
+const BALANCE_EVENT = "predict:balance";
+
 /** "out": not signed in · "staff": staff can't play · "off": predictions are switched off. */
 export type WalletState =
   | { kind: "loading" }
@@ -39,10 +41,17 @@ export function useWallet(): { state: WalletState; reload: () => void; setBalanc
   }, [status, tick]);
 
   const state: WalletState = status === "loading" ? { kind: "loading" } : status !== "in" ? { kind: "out" } : fetched;
+  // A bet placed anywhere (the bet slip, say) updates every balance on the page.
+  useEffect(() => {
+    const changed = (e: Event) => {
+      const balance = (e as CustomEvent<number>).detail;
+      setState((s) => (s.kind === "ok" ? { kind: "ok", wallet: { ...s.wallet, balance } } : s));
+    };
+    window.addEventListener(BALANCE_EVENT, changed);
+    return () => window.removeEventListener(BALANCE_EVENT, changed);
+  }, []);
+
   const reload = useCallback(() => setTick((t) => t + 1), []);
-  const setBalance = useCallback(
-    (balance: number) => setState((s) => (s.kind === "ok" ? { kind: "ok", wallet: { ...s.wallet, balance } } : s)),
-    [],
-  );
+  const setBalance = useCallback((balance: number) => window.dispatchEvent(new CustomEvent(BALANCE_EVENT, { detail: balance })), []);
   return { state, reload, setBalance };
 }

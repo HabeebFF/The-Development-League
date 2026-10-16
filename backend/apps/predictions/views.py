@@ -6,7 +6,19 @@ Balances are only ever read here; the one write (a staff adjustment) goes throug
 
 from django.conf import settings
 from django.db import transaction
-from django.db.models import Count, ExpressionWrapper, F, FloatField, Q, Sum
+from django.db.models import (
+    Count,
+    ExpressionWrapper,
+    F,
+    FloatField,
+    IntegerField,
+    OuterRef,
+    Q,
+    Subquery,
+    Sum,
+    Value,
+)
+from django.db.models.functions import Coalesce
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import mixins, serializers, status, viewsets
@@ -35,11 +47,13 @@ from .models import (
     Fixture,
     LedgerEntry,
     Market,
+    Multiple,
     OddsChange,
     Outcome,
     Settlement,
     Wallet,
 )
+from .multiples import max_picks, max_return, place_multiple
 from .odds import MAX_MATCHES_LEFT, suggest_odds
 from .services import CoinError, Kind, can_play, initial_coins, post_entry, wallet_for
 
@@ -281,6 +295,7 @@ def _refused(exc: MarketError) -> Response:
         "not_allowed": status.HTTP_403_FORBIDDEN,
         "odds_changed": status.HTTP_409_CONFLICT,
         "key_reused": status.HTTP_409_CONFLICT,
+        "same_match": status.HTTP_409_CONFLICT,
     }.get(exc.code, status.HTTP_400_BAD_REQUEST)
     return Response({"detail": str(exc), "code": exc.code, **exc.extra}, status=code)
 
@@ -401,6 +416,116 @@ class BetDetailView(APIView):
 
     def get(self, request, pk):
         return Response(bet_data(get_object_or_404(_bets(), pk=pk, user=request.user)))
+
+
+# -- multiples -----------------------------------------------------------------------------------
+
+
+class PickSerializer(serializers.Serializer):
+    market = serializers.IntegerField()
+    outcome = serializers.IntegerField()
+    expected_odds = serializers.CharField(required=False, max_length=12)
+
+
+class PlaceMultipleSerializer(serializers.Serializer):
+    picks = PickSerializer(many=True)
+    stake = serializers.IntegerField()
+    client_key = serializers.UUIDField()
+
+
+def multiple_data(m: Multiple) -> dict:
+    return {
+        "id": str(m.pk),
+        "stake": m.stake,
+        "odds": str(m.odds),
+        "potential_return": m.potential_return,
+        "potential_profit": m.potential_return - m.stake,
+        "capped": m.potential_return >= max_return(),
+        "payout": m.payout,
+        "status": m.status,
+        "placed_at": m.placed_at,
+        "settled_at": m.settled_at,
+        "picks": [
+            {
+                "market": {
+                    "id": leg.market_id,
+                    "title": leg.market.title,
+                    "status": shown_status(leg.market),
+                    "fixture": _fixture(leg.market.fixture),
+                },
+                "outcome": {"id": leg.outcome_id, "label": leg.outcome.label},
+                "odds_accepted": str(leg.odds_accepted),
+                "status": leg.status,
+                "dead_heat": leg.dead_heat,
+            }
+            for leg in m.legs.all()
+        ],
+    }
+
+
+def _multiples():
+    return Multiple.objects.prefetch_related("legs__market__fixture", "legs__outcome")
+
+
+class MultiplesView(APIView):
+    """GET: my multiples (``?status=pending|won|lost|void``). POST: place one."""
+
+    permission_classes = [PredictionsOn, IsAuthenticated, CanPlay]
+
+    def get(self, request):
+        qs = _multiples().filter(user=request.user)
+        if wanted := request.query_params.get("status"):
+            if wanted.upper() not in Bet.Status.values:
+                raise ValidationError({"status": "Use pending, won, lost or void."})
+            qs = qs.filter(status=wanted.upper())
+        paginator = DefaultPagination()
+        page = paginator.paginate_queryset(qs, request, view=self)
+        return paginator.get_paginated_response(
+            [multiple_data(m) for m in page],
+        )
+
+    def post(self, request):
+        data = PlaceMultipleSerializer(data=request.data)
+        data.is_valid(raise_exception=True)
+        v = data.validated_data
+        try:
+            multiple, created = place_multiple(
+                request.user,
+                picks=[dict(p) for p in v["picks"]],
+                stake=v["stake"],
+                client_key=v["client_key"],
+            )
+        except MarketError as exc:
+            return _refused(exc)
+        multiple = _multiples().get(pk=multiple.pk)
+        balance = Wallet.objects.get(user=request.user).balance
+        return Response(
+            {**multiple_data(multiple), "balance": balance},
+            status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
+        )
+
+
+class MultipleDetailView(APIView):
+    permission_classes = [PredictionsOn, IsAuthenticated, CanPlay]
+
+    def get(self, request, pk):
+        return Response(multiple_data(get_object_or_404(_multiples(), pk=pk, user=request.user)))
+
+
+class RulesView(APIView):
+    """The numbers the bet slip shows: stake limits, picks per multiple, the return cap."""
+
+    permission_classes = [PredictionsOn, PublicRead]
+
+    def get(self, request):
+        return Response(
+            {
+                "min_stake": settings.PREDICTIONS_MIN_STAKE,
+                "max_stake": settings.PREDICTIONS_MAX_STAKE,
+                "max_picks": max_picks(),
+                "max_return": max_return(),
+            }
+        )
 
 
 # -- staff: fixtures and markets -----------------------------------------------------------------
@@ -574,6 +699,10 @@ def staff_market_data(market: Market) -> dict:
         row = totals.get(o["id"], {})
         o["bets"], o["staked"] = row.get("bets", 0), row.get("staked") or 0
     data["bets"] = sum(o["bets"] for o in data["outcomes"])
+    picks = dict(market.legs.values("outcome").annotate(n=Count("pk")).values_list("outcome", "n"))
+    for o in data["outcomes"]:
+        o["picks"] = picks.get(o["id"], 0)
+    data["picks"] = sum(picks.values())
     return data
 
 
@@ -753,7 +882,7 @@ class MarketAdminViewSet(SettlementActions, viewsets.ViewSet):
 
     def destroy(self, request, pk=None):
         market = self.get_market(pk)
-        if market.status != S.DRAFT or market.bets.exists():
+        if market.status != S.DRAFT or market.bets.exists() or market.legs.exists():
             raise ValidationError({"detail": "Only a draft with no bets can be deleted."})
         market.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
@@ -861,6 +990,17 @@ def _name(wallet: Wallet) -> str:
     return wallet.user.display_name or f"Player {wallet.pk}"
 
 
+def _settled(model, status_: str):
+    """How many of a wallet owner's single bets or multiples ended with ``status_``."""
+    rows = (
+        model.objects.filter(user=OuterRef("user"), status=status_)
+        .values("user")
+        .annotate(n=Count("pk"))
+        .values("n")
+    )
+    return Coalesce(Subquery(rows, output_field=IntegerField()), Value(0))
+
+
 class LeaderboardView(APIView):
     """Three separate tables, never mixed:
 
@@ -873,9 +1013,10 @@ class LeaderboardView(APIView):
 
     def get(self, request):
         metric = request.query_params.get("metric", "balance")
-        won = Count("user__bets", filter=Q(user__bets__status=Bet.Status.WON))
-        lost = Count("user__bets", filter=Q(user__bets__status=Bet.Status.LOST))
-        qs = Wallet.objects.select_related("user").annotate(won=won, lost=lost)
+        qs = Wallet.objects.select_related("user").annotate(
+            won=_settled(Bet, Bet.Status.WON) + _settled(Multiple, Bet.Status.WON),
+            lost=_settled(Bet, Bet.Status.LOST) + _settled(Multiple, Bet.Status.LOST),
+        )
         if metric == "balance":
             qs = qs.order_by("-balance", "created_at")
         elif metric == "accuracy":

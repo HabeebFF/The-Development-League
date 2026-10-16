@@ -67,6 +67,9 @@ class LedgerEntry(models.Model):
     settlement = models.ForeignKey(
         "Settlement", on_delete=models.PROTECT, null=True, blank=True, related_name="entries"
     )
+    multiple = models.ForeignKey(
+        "Multiple", on_delete=models.PROTECT, null=True, blank=True, related_name="entries"
+    )
     actor = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.PROTECT,
@@ -361,3 +364,72 @@ class Settlement(models.Model):
 
     def __str__(self) -> str:
         return f"{self.market} v{self.version} {self.kind}"
+
+
+class Multiple(models.Model):
+    """Several picks on different markets in one bet (an accumulator): the odds multiply.
+
+    Any losing pick loses it all; a refunded pick counts as odds 1, so the rest still
+    stand; with every pick refunded the stake comes back. What it pays is capped.
+    """
+
+    Status = Bet.Status
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="multiples"
+    )
+    stake = models.PositiveIntegerField()
+    odds = models.DecimalField(
+        max_digits=30, decimal_places=2, help_text="The picks' odds multiplied, rounded down"
+    )
+    potential_return = models.PositiveIntegerField(
+        help_text="stake x every pick's odds, rounded down and capped"
+    )
+    status = models.CharField(max_length=8, choices=Bet.Status.choices, default=Bet.Status.PENDING)
+    payout = models.PositiveIntegerField(
+        null=True, blank=True, help_text="What the picks settled so far say it is owed"
+    )
+    unrecovered = models.PositiveIntegerField(
+        default=0, help_text="Coins a correction could not take back (balance was too low)"
+    )
+    client_key = models.UUIDField(help_text="One per tap on Confirm, so a resend is not a new bet")
+    placed_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    settled_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-placed_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["user", "client_key"], name="predictions_multiple_once"
+            ),
+            models.CheckConstraint(condition=Q(stake__gt=0), name="predictions_multiple_stake"),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.user} {self.stake} on a {self.legs.count()}-pick multiple"
+
+
+class Leg(models.Model):
+    """One pick of a multiple, with the odds taken and how its market settled."""
+
+    multiple = models.ForeignKey(Multiple, on_delete=models.PROTECT, related_name="legs")
+    market = models.ForeignKey(Market, on_delete=models.PROTECT, related_name="legs")
+    outcome = models.ForeignKey(Outcome, on_delete=models.PROTECT, related_name="legs")
+    odds_accepted = models.DecimalField(max_digits=7, decimal_places=2)
+    status = models.CharField(max_length=8, choices=Bet.Status.choices, default=Bet.Status.PENDING)
+    dead_heat = models.PositiveSmallIntegerField(
+        default=1, help_text="A won pick counts at odds / this number"
+    )
+
+    class Meta:
+        ordering = ["pk"]
+        constraints = [
+            models.UniqueConstraint(fields=["multiple", "market"], name="predictions_leg_market"),
+            models.CheckConstraint(
+                condition=Q(odds_accepted__gte=MIN_ODDS), name="predictions_leg_odds"
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.outcome} at {self.odds_accepted}"
