@@ -7,6 +7,7 @@ import { plural } from "@/lib/league";
 import { matchCount, type RatingBoard, type RatingRow } from "@/lib/ratings";
 
 import RatingBadge from "./RatingBadge";
+import { matchPlayers } from "./SearchBox";
 import { TeamMark } from "./TeamBadge";
 
 const FIRST = 15; // rows shown before "Show all"
@@ -38,12 +39,15 @@ export function StarPlayer({ row, label }: { row: RatingRow; label: string }) {
 }
 
 /** Every player's average rating, best first; tap a player for each match's rating. */
-export default function RatingTable({ board, limit }: { board: RatingBoard; limit?: number }) {
+export default function RatingTable({ board, limit, query = "" }: { board: RatingBoard; limit?: number; query?: string }) {
   const [all, setAll] = useState(false);
   const [open, setOpen] = useState<number | null>(null);
   if (!board.players.length) return <p className="text-sm text-muted">No ratings yet.</p>;
+  const found = matchPlayers(board.players, query);
+  if (!found.length) return <p className="text-sm text-muted">No player or team matches &ldquo;{query.trim()}&rdquo; here.</p>;
+  const searching = found.length < board.players.length;
   const cap = limit ?? FIRST;
-  const rows = all && !limit ? board.players : board.players.slice(0, cap);
+  const rows = (all && !limit) || searching ? found : found.slice(0, cap);
   const cell = "px-2 py-2 text-right tabular-nums";
   return (
     <>
@@ -119,9 +123,10 @@ export default function RatingTable({ board, limit }: { board: RatingBoard; limi
       {!limit && (
         <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-muted">
           <span>
+            {searching && `${plural(found.length, "player")} found · `}
             The average of each player&apos;s match ratings. Tap a player for every match. The top player (★) needs {matchCount(board.need)}.
           </span>
-          {board.players.length > FIRST && (
+          {!searching && board.players.length > FIRST && (
             <button className="ml-auto text-accent hover:underline" onClick={() => setAll((a) => !a)}>
               {all ? "Show top 15" : `Show all ${board.players.length}`}
             </button>

@@ -7,12 +7,14 @@ import { ratingsPath, type DayRatings } from "@/lib/ratings";
 import { useApi } from "@/lib/useApi";
 
 import Loading from "./Loading";
+import SearchBox from "./SearchBox";
 import RatingTable, { StarPlayer } from "./RatingTable";
 
 /** One day's player ratings (both sessions, or one), with arrows to other days. */
 export default function RatingsView({ date = null, session = null }: { date?: string | null; session?: number | null }) {
   const [day, setDay] = useState<string | null>(date);
   const [sess, setSess] = useState<number | null>(session);
+  const [query, setQuery] = useState("");
   const data = useApi<DayRatings>(ratingsPath(day, sess));
   const r = data.data;
 
@@ -63,6 +65,10 @@ export default function RatingsView({ date = null, session = null }: { date?: st
         )}
       </div>
 
+      <div className="mt-4">
+        <SearchBox value={query} onChange={setQuery} />
+      </div>
+
       {!r ? (
         <div className="mt-6">
           <Loading error={data.error} count={10} />
@@ -71,13 +77,13 @@ export default function RatingsView({ date = null, session = null }: { date?: st
         <p className="mt-6 text-sm text-muted">No rated matches {r.date ? "on this day" : "yet"}.</p>
       ) : (
         <div className="mt-6 space-y-6">
-          {r.star != null && (
+          {r.star != null && !query.trim() && (
             <StarPlayer
               row={r.players.find((p) => p.player_id === r.star)!}
               label={r.session ? "Player of the session" : "Player of the Day"}
             />
           )}
-          <RatingTable board={r} />
+          <RatingTable board={r} query={query} />
         </div>
       )}
 
