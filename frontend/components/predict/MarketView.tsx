@@ -27,6 +27,8 @@ import { useNow } from "./PredictHome";
 import { useWallet } from "./useWallet";
 
 const QUICK = [10, 50, 100, 250, 500];
+// Markets where tied teams share the win (a dead heat).
+const SHARED_WIN = new Set(["SESSION_WINNER", "MOST_BOOYAHS", "OVERALL_WINNER"]);
 
 type Placed = Bet & { balance: number };
 
@@ -102,6 +104,9 @@ export default function MarketView({ id }: { id: number }) {
             {new Date(m.closes_at).toLocaleString("en-GB", { weekday: "short", hour: "2-digit", minute: "2-digit", day: "numeric", month: "short" })}
           </p>
           {m.description && <p className="mt-3 whitespace-pre-line text-sm">{m.description}</p>}
+          {SHARED_WIN.has(m.category) && (
+            <p className="mt-2 text-xs text-muted">If teams tie for the win, a winning prediction is paid its return divided by the number of tied teams.</p>
+          )}
 
           <div className="mt-5 grid gap-2 sm:grid-cols-2">
             {m.outcomes.map((o) => {

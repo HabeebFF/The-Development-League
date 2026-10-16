@@ -175,30 +175,54 @@ export function byFixture(markets: Market[]): { key: string; title: string; mark
 
 // -- staff ---------------------------------------------------------------------------------------
 
-export type Category = "BOOYAH" | "TOP_N" | "H2H_PLACEMENT" | "H2H_KILLS" | "H2H_POINTS";
+export type Category =
+  | "BOOYAH"
+  | "TOP_N"
+  | "H2H_PLACEMENT"
+  | "H2H_KILLS"
+  | "H2H_POINTS"
+  | "TEAM_KILLS"
+  | "SESSION_WINNER"
+  | "MOST_BOOYAHS"
+  | "OVERALL_WINNER"
+  | "OVERALL_TOP_N";
 
-export const CATEGORIES: { key: Category; label: string; teams: [number, number | null] }[] = [
-  { key: "BOOYAH", label: "Booyah (match winner)", teams: [2, null] },
-  { key: "TOP_N", label: "Team finishes top N (yes/no)", teams: [1, 1] },
-  { key: "H2H_PLACEMENT", label: "Head-to-head: finishes higher", teams: [2, 2] },
-  { key: "H2H_KILLS", label: "Head-to-head: more kills (tie refunds)", teams: [2, 2] },
-  { key: "H2H_POINTS", label: "Head-to-head: more points (tie refunds)", teams: [2, 2] },
+/** What a market is about: one match, a whole session, or the whole season (no fixture). */
+export type Scope = "match" | "session" | "season";
+
+export const CATEGORIES: { key: Category; label: string; teams: [number, number | null]; scope: Scope }[] = [
+  { key: "BOOYAH", label: "Booyah (match winner)", teams: [2, null], scope: "match" },
+  { key: "TOP_N", label: "Team finishes top N (yes/no)", teams: [1, 1], scope: "match" },
+  { key: "H2H_PLACEMENT", label: "Head-to-head: finishes higher", teams: [2, 2], scope: "match" },
+  { key: "H2H_KILLS", label: "Head-to-head: more kills (tie refunds)", teams: [2, 2], scope: "match" },
+  { key: "H2H_POINTS", label: "Head-to-head: more points (tie refunds)", teams: [2, 2], scope: "match" },
+  { key: "TEAM_KILLS", label: "Team kills (over/under a line)", teams: [1, 1], scope: "match" },
+  { key: "SESSION_WINNER", label: "Session winner (most points)", teams: [2, null], scope: "session" },
+  { key: "MOST_BOOYAHS", label: "Most Booyahs in the session (ties share)", teams: [2, null], scope: "session" },
+  { key: "OVERALL_WINNER", label: "Overall winner (season table)", teams: [2, null], scope: "season" },
+  { key: "OVERALL_TOP_N", label: "Overall top N (yes/no)", teams: [1, 1], scope: "season" },
 ];
 
 /** The outcome codes the server will create, in order, so staff can give odds for each. */
-export function outcomeCodes(category: Category, teams: { id: number; name: string }[], n = 3): { code: string; label: string }[] {
-  if (category === "TOP_N") {
-    const name = teams[0]?.name ?? "Team";
+export function outcomeCodes(category: Category, teams: { id: number; name: string }[], n = 3, line = 10): { code: string; label: string }[] {
+  const name = teams[0]?.name ?? "Team";
+  if (category === "TOP_N" || category === "OVERALL_TOP_N") {
     return [
       { code: "yes", label: `Yes, ${name} top ${n}` },
       { code: "no", label: `No, ${name} outside top ${n}` },
+    ];
+  }
+  if (category === "TEAM_KILLS") {
+    return [
+      { code: "yes", label: `${name}: ${line} or more kills` },
+      { code: "no", label: `${name}: ${line - 1} or fewer kills` },
     ];
   }
   return teams.map((t) => ({ code: `team:${t.id}`, label: t.name }));
 }
 
 /** A starting title for a new market. */
-export function defaultTitle(category: Category, teams: { name: string }[], n = 3, matchNumber: number | null = null): string {
+export function defaultTitle(category: Category, teams: { name: string }[], n = 3, matchNumber: number | null = null, line = 10): string {
   const where = matchNumber ? ` · Match ${matchNumber}` : "";
   const [a, b] = teams.map((t) => t.name);
   switch (category) {
@@ -212,7 +236,27 @@ export function defaultTitle(category: Category, teams: { name: string }[], n = 
       return `${a ?? "?"} v ${b ?? "?"}: more kills${where}`;
     case "H2H_POINTS":
       return `${a ?? "?"} v ${b ?? "?"}: more points${where}`;
+    case "TEAM_KILLS":
+      return `${a ?? "Team"}: ${line}+ kills${where}`;
+    case "SESSION_WINNER":
+      return "Session winner";
+    case "MOST_BOOYAHS":
+      return "Most Booyahs in the session";
+    case "OVERALL_WINNER":
+      return "Overall winner";
+    case "OVERALL_TOP_N":
+      return `${a ?? "Team"} overall top ${n}`;
   }
+}
+
+/** The market types that fit a fixture: one match, a whole session (no match number), or none. */
+export function categoriesFor(scope: Scope) {
+  return CATEGORIES.filter((c) => c.scope === scope);
+}
+
+/** A kills line as staff type it: a whole number from 1 to 60. */
+export function lineProblem(text: string): string | null {
+  return /^\d+$/.test(text.trim()) && Number(text) >= 1 && Number(text) <= 60 ? null : "A whole number from 1 to 60.";
 }
 
 /** Why the team picks don't fit the market type, or null. */

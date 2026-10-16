@@ -68,6 +68,21 @@ test("staff: outcome codes, titles and checks", async () => {
   assert.equal(teamsProblem("BOOYAH", 1), "Pick at least 2 teams.");
   assert.equal(teamsProblem("H2H_KILLS", 3), "Pick exactly 2 teams.");
   assert.equal(teamsProblem("TOP_N", 1), null);
+  assert.deepEqual(outcomeCodes("TEAM_KILLS", teams.slice(0, 1), 3, 10).map((o) => o.label), ["Alpha: 10 or more kills", "Alpha: 9 or fewer kills"]);
+  assert.deepEqual(outcomeCodes("OVERALL_TOP_N", teams.slice(0, 1), 5).map((o) => o.code), ["yes", "no"]);
+  assert.equal(defaultTitle("TEAM_KILLS", teams, 3, 1, 12), "Alpha: 12+ kills · Match 1");
+  assert.equal(teamsProblem("SESSION_WINNER", 1), "Pick at least 2 teams.");
   for (const bad of ["0", "1.00", "-2", "2.555", "abc", "1000.01", ""]) assert.ok(oddsProblem(bad), bad);
   for (const good of ["1.01", "2.5", "1000", "15.00"]) assert.equal(oddsProblem(good), null, good);
+});
+
+test("staff: market types per fixture and kills lines", async () => {
+  const { categoriesFor, lineProblem } = await import("./predictions.ts");
+  assert.deepEqual(categoriesFor("session").map((c) => c.key), ["SESSION_WINNER", "MOST_BOOYAHS"]);
+  assert.deepEqual(categoriesFor("season").map((c) => c.key), ["OVERALL_WINNER", "OVERALL_TOP_N"]);
+  assert.ok(categoriesFor("match").some((c) => c.key === "TEAM_KILLS"));
+  assert.equal(lineProblem("10"), null);
+  assert.equal(lineProblem("0"), "A whole number from 1 to 60.");
+  assert.equal(lineProblem("61"), "A whole number from 1 to 60.");
+  assert.equal(lineProblem("9.5"), "A whole number from 1 to 60.");
 });

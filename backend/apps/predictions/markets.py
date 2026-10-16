@@ -29,6 +29,13 @@ TRANSITIONS: dict[str, set[str]] = {
 }
 EDITABLE_ODDS = {S.DRAFT, S.OPEN, S.SUSPENDED}
 H2H = {C.H2H_PLACEMENT, C.H2H_KILLS, C.H2H_POINTS}
+# What a market's fixture must be: one match, a whole session, or none (season-long).
+MATCH_MARKETS = {C.BOOYAH, C.TOP_N, C.TEAM_KILLS, *H2H}
+SESSION_MARKETS = {C.SESSION_WINNER, C.MOST_BOOYAHS}
+SEASON_MARKETS = {C.OVERALL_WINNER, C.OVERALL_TOP_N}
+# Markets with one choice per team, where teams level on the result share the win.
+DEAD_HEAT = {C.SESSION_WINNER, C.MOST_BOOYAHS, C.OVERALL_WINNER}
+MAX_KILLS_LINE = 60
 
 
 class MarketError(Exception):
@@ -72,16 +79,49 @@ def clean_params(category: str, params: dict) -> dict:
         return {"team": team, "n": n}
     if category in H2H:
         return {"teams": team_ids(params.get("teams"), at_least=2, exactly=2)}
+    if category == C.TEAM_KILLS:
+        line = params.get("line")
+        if not isinstance(line, int) or isinstance(line, bool) or not 1 <= line <= MAX_KILLS_LINE:
+            raise MarketError(f"The kills line must be a whole number from 1 to {MAX_KILLS_LINE}.")
+        team = team_ids([params.get("team")] if params.get("team") else [], 1, 1)[0]
+        return {"team": team, "line": line}
+    if category in (C.SESSION_WINNER, C.MOST_BOOYAHS, C.OVERALL_WINNER):
+        return {"teams": team_ids(params.get("teams"), at_least=2)}
+    if category == C.OVERALL_TOP_N:
+        n = params.get("n")
+        if n not in (3, 5, 10):
+            raise MarketError("N must be 3, 5 or 10.")
+        team = team_ids([params.get("team")] if params.get("team") else [], 1, 1)[0]
+        return {"team": team, "n": n}
     raise MarketError("Unknown market category.")
+
+
+def check_fixture(category: str, fixture) -> None:
+    """A match market needs a one-match fixture, a session market a whole-session fixture,
+    and a season market no fixture."""
+    if category in SEASON_MARKETS:
+        if fixture is not None:
+            raise MarketError("Overall markets cover the whole season: leave the fixture empty.")
+        return
+    if category in SESSION_MARKETS and (fixture is None or fixture.match_number is not None):
+        raise MarketError("Session markets need a whole-session fixture (no match number).")
+    if category == C.TEAM_KILLS and (fixture is None or fixture.match_number is None):
+        raise MarketError("A team kills market needs a fixture for one match.")
 
 
 def outcome_specs(category: str, params: dict) -> list[dict]:
     """The outcomes a market has: ``[{code, label, team_id}]``, in display order."""
-    if category == C.TOP_N:
+    if category in (C.TOP_N, C.OVERALL_TOP_N):
         team = Team.objects.get(pk=params["team"])
         return [
             {"code": "yes", "label": f"Yes, {team.name} top {params['n']}", "team_id": None},
             {"code": "no", "label": f"No, {team.name} outside top {params['n']}", "team_id": None},
+        ]
+    if category == C.TEAM_KILLS:
+        team, line = Team.objects.get(pk=params["team"]), params["line"]
+        return [
+            {"code": "yes", "label": f"{team.name}: {line} or more kills", "team_id": None},
+            {"code": "no", "label": f"{team.name}: {line - 1} or fewer kills", "team_id": None},
         ]
     teams = Team.objects.in_bulk(params["teams"])
     return [{"code": f"team:{t}", "label": teams[t].name, "team_id": t} for t in params["teams"]]
@@ -109,9 +149,18 @@ def potential_return(stake: int, odds: Decimal) -> int:
     return int((Decimal(stake) * odds).to_integral_value(rounding=ROUND_FLOOR))
 
 
+def dead_heat_return(stake: int, odds: Decimal, tied: int) -> int:
+    """What a winning bet pays when ``tied`` teams share the win: stake x odds / tied,
+    rounded down. With no tie it is the normal return."""
+    if tied <= 1:
+        return potential_return(stake, odds)
+    return int((Decimal(stake) * odds / tied).to_integral_value(rounding=ROUND_FLOOR))
+
+
 @transaction.atomic
 def create_market(*, actor, category: str, odds: dict, **fields) -> Market:
     params = clean_params(category, fields.pop("params", {}))
+    check_fixture(category, fields.get("fixture"))
     specs = outcome_specs(category, params)
     codes = {s["code"] for s in specs}
     if set(odds or {}) != codes:
