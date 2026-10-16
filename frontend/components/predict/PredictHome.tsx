@@ -12,17 +12,30 @@ import MarketCard from "./MarketCard";
 import PredictNav, { NOTE, NotOpen } from "./PredictNav";
 import { useWallet } from "./useWallet";
 
-/** Open markets by match, then the latest results. */
+/** The most-predicted open markets, then every open market by match, then the latest results. */
 export default function PredictHome() {
   const { state } = useWallet();
   const open = useApi<Paged<Market>>("/predictions/markets?status=open&page_size=100");
   const settled = useApi<Paged<Market>>("/predictions/markets?status=settled&page_size=6");
+  const popular = useApi<Paged<Market>>("/predictions/markets?status=open&sort=popular&page_size=4");
   const now = useNow();
 
   if (open.error === "Not found.") return <NotOpen />;
   return (
     <>
       <PredictNav wallet={state} />
+      {popular.data && popular.data.results.length > 0 && (
+        <section className="mt-8">
+          <h2 className="section-title">Popular now</h2>
+          <p className="mt-1 text-sm text-muted">The open markets with the most predictions.</p>
+          <div className="mt-3 grid gap-3 md:grid-cols-2">
+            {popular.data.results.map((m) => (
+              <MarketCard key={m.id} market={m} now={now} />
+            ))}
+          </div>
+        </section>
+      )}
+
       <section className="mt-8">
         <h2 className="section-title">Open markets</h2>
         {!open.data ? (

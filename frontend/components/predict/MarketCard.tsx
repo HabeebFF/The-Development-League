@@ -3,14 +3,16 @@
 import Link from "next/link";
 
 import { TeamMark } from "@/components/league/TeamBadge";
-import { closesIn, MARKET_STATUS, toPick, type Market } from "@/lib/predictions";
+import { closesIn, MARKET_STATUS, showOdds, toPick, type Market } from "@/lib/predictions";
 
+import { useOddsFormat } from "./oddsFormat";
 import { useSlip } from "./slip";
 
 /** One market in a list: its choices with odds (tap one to add it to the bet slip), and
  * when it closes. */
 export default function MarketCard({ market, now }: { market: Market; now: number }) {
   const slip = useSlip();
+  const [format] = useOddsFormat();
   return (
     <div className="card card-hover p-4">
       <Link href={`/predict/markets/${market.id}`} className="flex items-start gap-3">
@@ -40,11 +42,16 @@ export default function MarketCard({ market, now }: { market: Market; now: numbe
               {o.team && <TeamMark team={o.team} />}
               <span className="min-w-0 flex-1 truncate">{o.label}</span>
               {market.winners.includes(o.id) && <span className="chip text-ok">Won</span>}
-              <span className="font-display text-lg text-accent">{o.odds}</span>
+              <span className="font-display text-lg text-accent">{showOdds(o.odds, format)}</span>
             </button>
           );
         })}
       </div>
+      {market.predictions > 0 && (
+        <p className="mt-2 text-xs text-muted">
+          {market.predictions} prediction{market.predictions === 1 ? "" : "s"}
+        </p>
+      )}
       {market.outcomes.length > 6 && (
         <Link href={`/predict/markets/${market.id}`} className="mt-2 block text-xs text-muted hover:text-accent">
           +{market.outcomes.length - 6} more choices
