@@ -40,6 +40,7 @@ from .models import (
     Settlement,
     Wallet,
 )
+from .odds import MAX_MATCHES_LEFT, suggest_odds
 from .services import CoinError, Kind, can_play, initial_coins, post_entry, wallet_for
 
 
@@ -524,6 +525,22 @@ class MarketCreateSerializer(serializers.Serializer):
         return attrs
 
 
+class SuggestOddsSerializer(serializers.Serializer):
+    category = serializers.ChoiceField(choices=Market.Category.choices)
+    season = serializers.PrimaryKeyRelatedField(queryset=Season.objects.all())
+    fixture = serializers.PrimaryKeyRelatedField(
+        queryset=Fixture.objects.all(), required=False, allow_null=True
+    )
+    params = serializers.DictField()
+    matches_left = serializers.IntegerField(required=False, min_value=1, max_value=MAX_MATCHES_LEFT)
+
+    def validate(self, attrs):
+        fixture = attrs.get("fixture")
+        if fixture and fixture.season_id != attrs["season"].pk:
+            raise ValidationError({"fixture": "That fixture is in another season."})
+        return attrs
+
+
 class MarketUpdateSerializer(serializers.Serializer):
     title = serializers.CharField(max_length=140, required=False)
     description = serializers.CharField(required=False, allow_blank=True)
@@ -699,6 +716,16 @@ class MarketAdminViewSet(SettlementActions, viewsets.ViewSet):
         return Response(
             staff_market_data(self.get_market(market.pk)), status=status.HTTP_201_CREATED
         )
+
+    @action(detail=False, methods=["post"], url_path="suggest-odds")
+    def suggest_odds(self, request):
+        """Odds worked out from past results, to pre-fill the new market form."""
+        data = SuggestOddsSerializer(data=request.data)
+        data.is_valid(raise_exception=True)
+        try:
+            return Response(suggest_odds(**data.validated_data))
+        except MarketError as exc:
+            return _refused(exc)
 
     def partial_update(self, request, pk=None):
         data = MarketUpdateSerializer(data=request.data)
