@@ -28,7 +28,8 @@ export default function TeamOfMonth() {
   if (!m.month)
     return (
       <p className="text-muted">
-        No cards yet. They come out every Saturday at 11am for the week before.
+        No cards yet. They come out every Saturday at midnight for the week
+        before.
       </p>
     );
   return (

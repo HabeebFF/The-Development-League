@@ -36,14 +36,12 @@ def refresh_ratings_task(season_id: int | None = None, force: bool = False) -> i
 
 @shared_task
 def weekly_cards_task() -> int:
-    """Saturday 11:00 Lagos: player cards for the week that just ended (Saturday to Friday)."""
-    from datetime import timedelta
-
+    """Midnight Lagos (Friday 23:00 UTC): player cards for the week that just ended."""
     from django.utils import timezone
 
     from .cards import build_week
 
-    return build_week(timezone.now().date() - timedelta(days=1))
+    return build_week(timezone.now().date())  # still the week's Friday in UTC
 
 
 @shared_task

@@ -103,10 +103,11 @@ DEFAULT_WEIGHTS = {
 }
 
 
-# Cards come out every Saturday at 11:00 in Lagos (10:00 UTC), for the week that ended the
-# day before: a card week runs Saturday to Friday, so it takes in Friday night's scrims.
+# Cards come out at midnight in Lagos as Friday turns into Saturday (23:00 UTC Friday),
+# for the week that ends then: a card week runs Saturday to Friday, so it takes in Friday
+# night's scrims.
 RELEASE_WEEKDAY = 5  # Saturday
-RELEASE_UTC = time(10, 0)
+RELEASE_UTC = time(23, 0)  # on the Friday that ends the week
 
 
 def card_week(day: date) -> date:
@@ -127,7 +128,7 @@ def month_opens(end: date) -> datetime:
 
 def release_of(week: date) -> datetime:
     """When the cards of the week starting ``week`` come out: the Saturday after it."""
-    return datetime.combine(week + timedelta(days=7), RELEASE_UTC, tzinfo=UTC)
+    return datetime.combine(week + timedelta(days=6), RELEASE_UTC, tzinfo=UTC)
 
 
 def tier(overall: int) -> str:

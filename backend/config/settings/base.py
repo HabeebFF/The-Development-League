@@ -225,8 +225,8 @@ CELERY_BEAT_SCHEDULE = {
     # Monday 04:45, after the nightly reviews, so trades and time alive are in.
     "player-cards-weekly": {
         "task": "apps.results.tasks.weekly_cards_task",
-        # Saturday 11:00 in Lagos: the week that ended Friday night.
-        "schedule": crontab(minute=0, hour=10, day_of_week="sat"),
+        # Midnight in Lagos as Friday ends (23:00 UTC Friday): the week that just ended.
+        "schedule": crontab(minute=0, hour=23, day_of_week="fri"),
     },
     "analytics-purge-old-views": {
         "task": "apps.analytics.tasks.purge_old_views_task",
