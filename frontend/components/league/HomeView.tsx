@@ -5,11 +5,16 @@ import Link from "next/link";
 import type { MatchDay, Paged } from "@/lib/api";
 import { currentSeason, dayName, mapName, playedNewestFirst, rows, shortDate, type Season, type Standings, type StandingRow } from "@/lib/league";
 import { periodLabel, type Awards } from "@/lib/awards";
+import type { KillList } from "@/lib/kills";
+import { GROUPS, PLAYER_PAGES, TEAM_PAGES } from "@/lib/nav";
+import type { DayRatings } from "@/lib/ratings";
 import { useApi } from "@/lib/useApi";
 
 import { AwardCard } from "./AwardsView";
+import ExploreGrid from "./ExploreGrid";
 import { Skeleton, SkeletonRows } from "./Loading";
 import MatchDayCard from "./MatchDayCard";
+import RatingBadge from "./RatingBadge";
 import { RankBadge } from "./StandingsTable";
 import { TeamMark } from "./TeamBadge";
 
@@ -76,15 +81,16 @@ export default function HomeView() {
         <div className="pointer-events-none absolute -right-6 -bottom-10 font-display text-[11rem] leading-none text-white/[0.03] select-none sm:text-[18rem]">
           TDL
         </div>
-        <div className="relative mx-auto max-w-6xl px-4 pt-12 pb-12 sm:pt-24 sm:pb-20">
+        <div className="relative mx-auto max-w-6xl px-4 pt-10 pb-10 sm:pt-20 sm:pb-16">
           <p className="eyebrow">Free Fire esports{season ? ` · ${season.name}` : ""}</p>
           <h1 className="mt-3 font-display text-6xl leading-[0.9] font-extrabold uppercase sm:text-8xl">
             The Development
             <br />
             <span className="bg-gradient-to-r from-accent to-accent-2 bg-clip-text text-transparent">League</span>
           </h1>
-          <p className="mt-5 max-w-lg text-muted sm:text-lg">
-            Every Booyah, every kill, every rotation. Follow the standings, results and teams of the league.
+          <p className="mt-5 max-w-xl text-muted sm:text-lg">
+            A Free Fire scrim league with 8PM and 10PM sessions. See the table, every result, each player&apos;s kills and rating, and watch
+            every match again as a 2D replay.
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
             <Link href={latest ? `/results/${latest.id}` : "/results"} className="btn btn-primary px-6 py-3 text-base">
@@ -115,6 +121,12 @@ export default function HomeView() {
         {seasons.error && <p className="text-bad">{seasons.error}</p>}
         {seasons.data && !season && <p className="text-muted">The first season hasn&apos;t started yet.</p>}
         {!seasons.data && !seasons.error && <SkeletonRows count={5} className="h-16" />}
+
+        <section>
+          <SectionHead title="What's on the site" />
+          <p className="mt-1 text-sm text-muted">Tap any of these. The menu has the same pages.</p>
+          <ExploreGrid links={EXPLORE} className="mt-4" />
+        </section>
 
         {season && (
           <div className="grid gap-10 lg:grid-cols-[3fr_2fr] [&>*]:min-w-0">
@@ -153,6 +165,8 @@ export default function HomeView() {
             </section>
           </div>
         )}
+
+        {season && <Stars />}
 
         {season && <WeekAwards />}
 
@@ -204,6 +218,50 @@ export default function HomeView() {
         )}
       </div>
     </>
+  );
+}
+
+// Every page, in the order a new visitor needs them.
+const EXPLORE = [GROUPS[0], GROUPS[1], ...PLAYER_PAGES, { ...TEAM_PAGES[0], label: "Teams" }, TEAM_PAGES[1]];
+
+/** The latest session's top fragger and the latest day's best-rated player. */
+function Stars() {
+  const kills = useApi<KillList>("/kills?session=latest");
+  const ratings = useApi<DayRatings>("/ratings");
+  const top = kills.data?.players[0];
+  const star = ratings.data?.players.find((p) => p.player_id === ratings.data?.star);
+  if (!top && !star) return null;
+  return (
+    <section>
+      <SectionHead title="Latest stars" />
+      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+        {top && top.kills > 0 && (
+          <Link href="/kills" className="card card-hover flex items-center gap-4 p-4">
+            {top.team && <TeamMark team={top.team} size="md" />}
+            <span className="min-w-0 flex-1">
+              <span className="eyebrow block text-accent-2">Top fragger</span>
+              <span className="block truncate font-display text-2xl uppercase">{top.player}</span>
+              <span className="block truncate text-xs text-muted">{[top.team?.name, kills.data?.session?.title].filter(Boolean).join(" · ")}</span>
+            </span>
+            <span className="text-right">
+              <span className="block font-display text-4xl leading-none text-white">{top.kills}</span>
+              <span className="text-[10px] font-bold tracking-widest text-muted uppercase">kills</span>
+            </span>
+          </Link>
+        )}
+        {star && (
+          <Link href="/ratings" className="card card-hover flex items-center gap-4 p-4">
+            {star.team && <TeamMark team={star.team} size="md" />}
+            <span className="min-w-0 flex-1">
+              <span className="eyebrow block text-accent-2">Player of the Day</span>
+              <span className="block truncate font-display text-2xl uppercase">{star.player}</span>
+              <span className="block truncate text-xs text-muted">{[star.team?.name, ratings.data?.date && shortDate(ratings.data.date)].filter(Boolean).join(" · ")}</span>
+            </span>
+            <RatingBadge rating={star.rating} band={star.band} size="lg" />
+          </Link>
+        )}
+      </div>
+    </section>
   );
 }
 

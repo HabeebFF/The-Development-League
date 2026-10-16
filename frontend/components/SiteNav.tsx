@@ -4,43 +4,29 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 
+import { GROUPS, HOME, MENU_ICON, groupActive, isActive as active, type NavGroup } from "@/lib/nav";
+
 import { useAuth } from "./Auth";
 
-const MAIN = [
-  { href: "/", label: "Home", icon: "M3 11 12 4l9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z" },
-  { href: "/standings", label: "Standings", icon: "M4 20V10h4v10zm6 0V4h4v16zm6 0v-7h4v7z" },
-  { href: "/results", label: "Results", icon: "M7 4h10v3a5 5 0 0 1-10 0zM5 5H3v2a4 4 0 0 0 4 4M19 5h2v2a4 4 0 0 1-4 4M10 14h4v3h3v3H7v-3h3z" },
-  { href: "/kills", label: "Kills", icon: "M12 2a1 1 0 0 1 1 1v1.06A8 8 0 0 1 19.94 11H21a1 1 0 1 1 0 2h-1.06A8 8 0 0 1 13 19.94V21a1 1 0 1 1-2 0v-1.06A8 8 0 0 1 4.06 13H3a1 1 0 1 1 0-2h1.06A8 8 0 0 1 11 4.06V3a1 1 0 0 1 1-1m0 4a6 6 0 1 0 0 12 6 6 0 0 0 0-12m0 3a3 3 0 1 1 0 6 3 3 0 0 1 0-6", bar: false },
-  { href: "/ratings", label: "Ratings", icon: "M12 2l2.4 4.9 5.4.8-3.9 3.8.9 5.4L12 14.3l-4.8 2.6.9-5.4-3.9-3.8 5.4-.8zM4 20h16v2H4z", bar: false },
-  { href: "/awards", label: "Awards", icon: "M12 2l2.9 6.3 6.9.8-5.1 4.7 1.4 6.8L12 17.3 5.9 20.6l1.4-6.8L2.2 9.1l6.9-.8z" },
-  { href: "/protection-points", label: "PP", icon: "M12 2 4 5v6c0 5 3.4 9.4 8 11 4.6-1.6 8-6 8-11V5zm-1 6h2v3h3v2h-3v3h-2v-3H8v-2h3z", bar: false },
-  { href: "/predict", label: "Predict", icon: "M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20m0 3a7 7 0 1 1 0 14 7 7 0 0 1 0-14m-1 2v5.4l4.3 2.6 1-1.7-3.3-2V7z", bar: false, flag: "predictions" as const },
-  { href: "/cards", label: "Cards", icon: "M7 2h10l3 3v12l-8 5-8-5V5zm5 5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5m-4 9h8c0-2-1.8-3-4-3s-4 1-4 3" },
-  { href: "/teams", label: "Teams", icon: "M12 3 4 6v6c0 4.5 3.4 8.3 8 9 4.6-.7 8-4.5 8-9V6z" },
-];
 const MORE = [
   { href: "/team", label: "My team" },
   { href: "/staff", label: "Staff" },
 ];
 
-function active(path: string, href: string) {
-  return href === "/" ? path === "/" : path === href || path.startsWith(`${href}/`);
-}
-
-function Icon({ d }: { d: string }) {
+function Icon({ d, className = "h-5 w-5" }: { d: string; className?: string }) {
   return (
-    <svg viewBox="0 0 24 24" className="h-5 w-5" fill="currentColor" aria-hidden>
+    <svg viewBox="0 0 24 24" className={className} fill="currentColor" aria-hidden>
       <path d={d} />
     </svg>
   );
 }
 
-/** The top bar (all links on desktop) and, on phones, a bottom tab bar plus a menu for the rest. */
+/** The top bar (grouped links on desktop) and, on phones, a bottom tab bar whose Menu opens every page with a line on each. */
 export default function SiteNav() {
   const path = usePathname();
   const { status, publicSite, site, signOut } = useAuth();
   // Links behind a switch (e.g. Predict) only show once the server has it on.
-  const main = MAIN.filter((l) => !("flag" in l) || site[l.flag as "predictions"]);
+  const groups = GROUPS.filter((g) => !g.flag || site[g.flag]);
   const signedIn = status === "in";
   // Visitors see the league pages too while the site is public.
   const shown = signedIn || publicSite === true;
@@ -75,17 +61,8 @@ export default function SiteNav() {
             </span>
           </Link>
           <div className={`hidden h-full flex-1 items-center gap-1 ${shown ? "md:flex" : ""}`}>
-            {main.slice(1).map((l) => (
-              <Link
-                key={l.href}
-                href={l.href}
-                className={`relative flex h-full items-center px-3 text-sm font-semibold tracking-wide uppercase transition-colors ${
-                  active(path, l.href) ? "text-white" : "text-muted hover:text-white"
-                }`}
-              >
-                {l.label}
-                {active(path, l.href) && <span className="absolute inset-x-3 bottom-0 h-0.5 bg-accent shadow-[0_0_10px_rgb(255_90_31)]" />}
-              </Link>
+            {groups.map((g) => (
+              <TopLink key={g.href} group={g} path={path} />
             ))}
             <span className="flex-1" />
             {more.map((l) => (
@@ -104,85 +81,150 @@ export default function SiteNav() {
             ) : (
               <Link
                 href={`/auth/login?next=${encodeURIComponent(path)}`}
-                className="px-3 text-sm font-medium text-muted transition-colors hover:text-white"
+                className="btn btn-primary ml-2 px-4 py-1.5 text-sm"
               >
                 Sign in
               </Link>
             )}
           </div>
-          <button
-            type="button"
-            className={`ml-auto h-10 w-10 items-center justify-center text-muted hover:text-white md:hidden ${shown ? "flex" : "hidden"}`}
-            aria-label={open ? "Close menu" : "Open menu"}
-            aria-expanded={open}
-            onClick={() => setOpen((o) => !o)}
-          >
-            <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
-              {open ? <path d="M6 6l12 12M18 6 6 18" /> : <path d="M4 7h16M4 12h16M4 17h10" />}
-            </svg>
-          </button>
         </nav>
       </header>
 
       {open && shown && (
-        <div className="fixed inset-0 z-20 md:hidden" onClick={() => setOpen(false)}>
+        <div className="fixed inset-0 z-40 md:hidden" onClick={() => setOpen(false)}>
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
-          <div className="page-enter absolute inset-x-0 top-[var(--header-h)] border-b border-line bg-panel p-4" onClick={(e) => e.stopPropagation()}>
-            {[...main, ...more].map((l) => (
-              <Link
-                key={l.href}
-                href={l.href}
-                className={`flex items-center justify-between border-b border-line py-3.5 font-display text-2xl uppercase last:border-0 ${
-                  active(path, l.href) ? "text-accent" : ""
-                }`}
-              >
-                {l.label}
-                <span className="text-muted">&rsaquo;</span>
-              </Link>
-            ))}
-            {signedIn ? (
-              <button
-                type="button"
-                onClick={signOut}
-                className="flex w-full items-center justify-between pt-3.5 font-display text-2xl text-muted uppercase"
-              >
-                Sign out
+          <div
+            className="page-enter absolute inset-x-0 bottom-0 max-h-[85vh] overflow-y-auto border-t border-line bg-panel px-4 pt-4 pb-[calc(var(--bottom-nav-h)+env(safe-area-inset-bottom)+1rem)]"
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-label="Menu"
+          >
+            <div className="flex items-center justify-between">
+              <p className="eyebrow">Menu</p>
+              <button type="button" className="px-2 text-2xl leading-none text-muted" onClick={() => setOpen(false)} aria-label="Close menu">
+                &times;
               </button>
-            ) : (
-              <Link
-                href={`/auth/login?next=${encodeURIComponent(path)}`}
-                className="flex w-full items-center justify-between pt-3.5 font-display text-2xl text-muted uppercase"
-              >
-                Sign in
-              </Link>
-            )}
+            </div>
+            {groups.map((g) => (
+              <div key={g.href} className="mt-4">
+                {g.items ? (
+                  <>
+                    <p className="mb-1 text-[11px] font-bold tracking-widest text-muted uppercase">{g.label}</p>
+                    {g.items.map((l) => (
+                      <MenuRow key={l.href} link={l} on={active(path, l.href)} />
+                    ))}
+                  </>
+                ) : (
+                  <MenuRow link={g} on={active(path, g.href)} />
+                )}
+              </div>
+            ))}
+            <div className="mt-5 flex flex-wrap gap-2 border-t border-line pt-4">
+              {more.map((l) => (
+                <Link key={l.href} href={l.href} className="btn px-4 py-2 text-sm">
+                  {l.label}
+                </Link>
+              ))}
+              {signedIn ? (
+                <button type="button" onClick={signOut} className="btn px-4 py-2 text-sm">
+                  Sign out
+                </button>
+              ) : (
+                <Link href={`/auth/login?next=${encodeURIComponent(path)}`} className="btn btn-primary px-4 py-2 text-sm">
+                  Sign in
+                </Link>
+              )}
+            </div>
           </div>
         </div>
       )}
 
       <nav
-        className={`fixed inset-x-0 bottom-0 z-30 ${shown ? "" : "hidden"} border-t border-line bg-bg/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-md md:hidden`}
+        className={`fixed inset-x-0 bottom-0 z-50 ${shown ? "" : "hidden"} border-t border-line bg-bg/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-md md:hidden`}
         aria-label="Main"
       >
-        <div className="grid h-[var(--bottom-nav-h)] grid-cols-6">
-          {main.filter((l) => l.bar !== false).map((l) => {
-            const on = active(path, l.href);
+        <div className="grid h-[var(--bottom-nav-h)] grid-cols-5">
+          {[HOME, ...GROUPS.slice(0, 3)].map((l) => {
+            const on = !open && groupActive(path, l);
             return (
-              <Link
-                key={l.href}
-                href={l.href}
-                className={`relative flex flex-col items-center justify-center gap-0.5 text-[10px] font-semibold tracking-wide uppercase transition-colors ${
-                  on ? "text-accent" : "text-muted"
-                }`}
-              >
-                {on && <span className="absolute inset-x-4 top-0 h-0.5 bg-accent shadow-[0_0_10px_rgb(255_90_31)]" />}
+              <Link key={l.href} href={l.href} className={`${TAB} ${on ? "text-accent" : "text-muted"}`} onClick={() => setOpen(false)}>
+                {on && <span className={TAB_ON} />}
                 <Icon d={l.icon} />
                 {l.label}
               </Link>
             );
           })}
+          <button type="button" className={`${TAB} ${open ? "text-accent" : "text-muted"}`} onClick={() => setOpen((o) => !o)} aria-expanded={open}>
+            {open && <span className={TAB_ON} />}
+            <Icon d={MENU_ICON} />
+            Menu
+          </button>
         </div>
       </nav>
     </>
+  );
+}
+
+const TAB = "relative flex flex-col items-center justify-center gap-0.5 text-[10px] font-semibold tracking-wide uppercase transition-colors";
+const TAB_ON = "absolute inset-x-4 top-0 h-0.5 bg-accent shadow-[0_0_10px_rgb(255_90_31)]";
+
+/** A top-bar link; a group opens a panel of its pages, each with a line on what it is. */
+function TopLink({ group: g, path }: { group: NavGroup; path: string }) {
+  const on = groupActive(path, g);
+  const cls = `relative flex h-full items-center gap-1 px-3 text-sm font-semibold tracking-wide uppercase transition-colors ${
+    on ? "text-white" : "text-muted hover:text-white"
+  }`;
+  const bar = on && <span className="absolute inset-x-3 bottom-0 h-0.5 bg-accent shadow-[0_0_10px_rgb(255_90_31)]" />;
+  if (!g.items) {
+    return (
+      <Link href={g.href} className={cls}>
+        {g.label}
+        {bar}
+      </Link>
+    );
+  }
+  return (
+    <div className="group relative h-full">
+      <Link href={g.href} className={cls} aria-haspopup="true">
+        {g.label}
+        <svg viewBox="0 0 20 20" className="h-3.5 w-3.5 transition-transform group-hover:rotate-180" fill="currentColor" aria-hidden>
+          <path d="M5.5 7.5 10 12l4.5-4.5z" />
+        </svg>
+        {bar}
+      </Link>
+      <div className="invisible absolute top-full left-0 w-80 pt-1 opacity-0 transition group-focus-within:visible group-focus-within:opacity-100 group-hover:visible group-hover:opacity-100">
+        <div className="border border-line bg-panel p-2 shadow-[0_18px_40px_-12px_rgb(0_0_0/0.8)]">
+          {g.items.map((l) => (
+            <Link
+              key={l.href}
+              href={l.href}
+              className={`flex items-start gap-3 px-3 py-2.5 transition-colors hover:bg-panel-2 ${active(path, l.href) ? "text-accent" : ""}`}
+            >
+              <Icon d={l.icon} className="mt-0.5 h-5 w-5 shrink-0 text-accent" />
+              <span>
+                <span className="block text-sm font-semibold">{l.label}</span>
+                <span className="block text-xs text-muted">{l.blurb}</span>
+              </span>
+            </Link>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** A row in the phone menu: icon, name and what the page is for. */
+function MenuRow({ link: l, on }: { link: { href: string; label: string; blurb: string; icon: string }; on: boolean }) {
+  return (
+    <Link href={l.href} className={`flex items-center gap-3 border-b border-line/60 py-3 last:border-0 ${on ? "text-accent" : ""}`}>
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center bg-panel-2 text-accent">
+        <Icon d={l.icon} />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block font-display text-xl leading-tight uppercase">{l.label}</span>
+        <span className="block truncate text-xs text-muted">{l.blurb}</span>
+      </span>
+      <span className="text-muted">&rsaquo;</span>
+    </Link>
   );
 }
