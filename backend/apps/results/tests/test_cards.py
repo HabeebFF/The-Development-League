@@ -411,11 +411,11 @@ def test_team_of_the_month_stays_locked_until_the_month_is_over(league, monkeypa
     assert all(s["card"] is None and s["detail"] == "" for s in data["slots"])
 
 
-def test_card_weeks_run_saturday_to_friday_and_come_out_saturday_morning():
+def test_card_weeks_run_saturday_to_friday_and_come_out_at_midnight():
     assert cards.card_week(dt.date(2026, 10, 9)) == dt.date(2026, 10, 3)  # Friday
     assert cards.card_week(dt.date(2026, 10, 10)) == dt.date(2026, 10, 10)  # Saturday
     out = cards.release_of(dt.date(2026, 10, 3))
-    assert out == dt.datetime(2026, 10, 10, 10, tzinfo=dt.UTC)  # 11:00 in Lagos
+    assert out == dt.datetime(2026, 10, 9, 23, tzinfo=dt.UTC)  # midnight in Lagos
 
 
 def test_unreleased_weeks_wait_for_saturday(league):

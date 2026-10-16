@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 
 import { countdown, nextRelease } from "@/lib/cards";
 
-/** A ticking countdown to Saturday 11am, when the new cards come out. */
+/** A ticking countdown to midnight on Friday night (Lagos), when the new cards come out. */
 export default function CardCountdown() {
   const [now, setNow] = useState<Date | null>(null);
   useEffect(() => {
@@ -35,7 +35,8 @@ export default function CardCountdown() {
           {justOut ? "New cards are out" : "Next cards drop"}
         </p>
         <p className="mt-1 text-sm text-muted">
-          Every Saturday at 11am (Lagos time), for the week that ended Friday.{" "}
+          Every Saturday at midnight (Lagos time), as soon as the week ends on
+          Friday night.{" "}
           {/* Lagos is UTC+1 all year: only show the viewer's own time when it differs. */}
           {to.getTimezoneOffset() !== -60 && (
             <span className="whitespace-nowrap">

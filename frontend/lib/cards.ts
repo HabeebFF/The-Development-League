@@ -1,4 +1,4 @@
-// FUT style player cards (``/cards``), out every Saturday at 11am (Lagos) for the Saturday to Friday week before.
+// FUT style player cards (``/cards``), out every Saturday at midnight (Lagos) for the Saturday to Friday week before.
 
 import type { TeamRef } from "./api";
 
@@ -275,8 +275,8 @@ export function saveFlipped(ids: Set<string>): void {
   }
 }
 
-/** Cards come out every Saturday at 11:00 in Lagos, which is 10:00 UTC. */
-export const RELEASE_UTC = { weekday: 6, hour: 10 };
+/** Cards come out at midnight in Lagos as Friday ends, which is Friday 23:00 UTC. */
+export const RELEASE_UTC = { weekday: 5, hour: 23 };
 
 /** When the next cards come out, after ``now``. */
 export function nextRelease(now: Date): Date {

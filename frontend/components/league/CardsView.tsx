@@ -128,7 +128,7 @@ function WeekCards({ team }: { team?: string }) {
         </div>
       ) : !data.data.week ? (
         <p className="mt-6 text-muted">
-          No cards yet. They come out every Saturday at 11am for the week
+          No cards yet. They come out every Saturday at midnight for the week
           before.
         </p>
       ) : (
