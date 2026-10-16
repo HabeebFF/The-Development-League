@@ -38,6 +38,8 @@ export type Market = {
   /** Predictions on it so far: single bets and multiple picks. */
   predictions: number;
   outcomes: Outcome[];
+  /** Why the signed-in person can't predict on it (their team plays in it, say), else null. */
+  blocked?: string | null;
 };
 
 export type Bet = {

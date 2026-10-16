@@ -127,6 +127,12 @@ class Fixture(models.Model):
     match_day = models.ForeignKey(
         "league.MatchDay", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
     )
+    teams = models.ManyToManyField(
+        "league.Team",
+        blank=True,
+        related_name="+",
+        help_text="Teams in the lobby. Empty: the session's teams, else every league team",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

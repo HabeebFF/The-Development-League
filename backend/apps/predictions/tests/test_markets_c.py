@@ -253,7 +253,7 @@ def test_new_match_markets_need_a_one_match_fixture(game, staff):
 def test_players_cant_bet_on_a_market_about_a_team_mate(game, staff, fans):
     m = market(game, staff, C.PLAYER_KILLS, player="Ace", line=4)
     Membership.objects.create(user=fans[0], team=game["teams"]["Alpha"])
-    with pytest.raises(MarketError, match="your own team") as err:
+    with pytest.raises(MarketError, match="your team") as err:
         bet(fans[0], m, outcome(m, "yes", game))
     assert err.value.code == "not_allowed"
     assert bet(fans[1], m, outcome(m, "yes", game)).stake == 100

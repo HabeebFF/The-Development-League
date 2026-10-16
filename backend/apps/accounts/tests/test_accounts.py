@@ -399,3 +399,163 @@ def test_every_api_view_declares_permission_classes():
 
     walk(get_resolver().url_patterns)
     assert missing == []
+
+
+# -- "Do you play in the league?" and Continue with Google ---------------------------------------
+
+
+@pytest.fixture
+def open_signup(settings):
+    settings.PUBLIC_SIGNUP = True
+    settings.REST_FRAMEWORK = {
+        **settings.REST_FRAMEWORK,
+        "DEFAULT_THROTTLE_RATES": {
+            **settings.REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"],
+            "login": None,
+            "signup": None,
+        },
+    }
+
+
+def test_signup_with_a_game_uid_asks_staff_to_confirm_it(open_signup):
+    client, csrf = csrf_client()
+    body = {"email": "p1@tdl.test", "password": PASSWORD, "display_name": "Viper"}
+    bad = client.post(
+        "/api/v1/auth/signup", {**body, "game_uid": "12ab"}, format="json", HTTP_X_CSRFTOKEN=csrf
+    )
+    assert bad.status_code == 400 and "game_uid" in bad.json()
+    ok = client.post(
+        "/api/v1/auth/signup", {**body, "game_uid": " 5550001 "}, format="json",
+        HTTP_X_CSRFTOKEN=csrf,
+    )  # fmt: skip
+    assert ok.status_code == 201, ok.content
+    claim = PlayerClaim.objects.get(user__email="p1@tdl.test")
+    assert (claim.game_uid, claim.status) == (5550001, PlayerClaim.Status.PENDING)
+    assert client.get("/api/v1/me").json()["pending_uid_claim"]
+
+
+def test_signup_refuses_a_uid_someone_already_has(open_signup):
+    owner = make_user("owner@tdl.test")
+    Player.objects.create(
+        game_uid=42, current_name_raw="X", display_name="X", search_name="x", user=owner
+    )
+    client, csrf = csrf_client()
+    res = client.post(
+        "/api/v1/auth/signup",
+        {"email": "p2@tdl.test", "password": PASSWORD, "display_name": "Copy", "game_uid": "42"},
+        format="json", HTTP_X_CSRFTOKEN=csrf,
+    )  # fmt: skip
+    assert res.status_code == 400 and "already linked" in res.json()["game_uid"][0]
+
+
+@pytest.fixture
+def google_ok(settings, monkeypatch):
+    """Google's answer for a good token; tests change it to see refusals."""
+    from django.core.cache import cache
+
+    from apps.accounts import google
+
+    cache.clear()  # sign-in attempts from earlier tests count towards the login limit
+
+    settings.GOOGLE_CLIENT_ID = "cid.apps.googleusercontent.com"
+    info = {
+        "aud": "cid.apps.googleusercontent.com",
+        "iss": "https://accounts.google.com",
+        "email": "Gamer@Gmail.com",
+        "email_verified": "true",
+        "name": "Gamer Person",
+        "sub": "1234",
+    }
+    seen = []
+
+    def fake(credential):
+        seen.append(credential)
+        return dict(info)
+
+    monkeypatch.setattr(google, "fetch_tokeninfo", fake)
+    return info
+
+
+def _google(client, csrf, **body):
+    return client.post(
+        "/api/v1/auth/google", {"credential": "x" * 40, **body}, format="json",
+        HTTP_X_CSRFTOKEN=csrf,
+    )  # fmt: skip
+
+
+def test_google_is_hidden_until_a_client_id_is_set(settings):
+    settings.GOOGLE_CLIENT_ID = ""
+    client, csrf = csrf_client()
+    assert _google(client, csrf).status_code == 404
+    assert client.get("/api/v1/site").json()["google_client_id"] is None
+
+
+def test_google_signs_in_an_existing_account(google_ok):
+    user = make_user("gamer@gmail.com")
+    client, csrf = csrf_client()
+    assert client.get("/api/v1/site").json()["google_client_id"] == google_ok["aud"]
+    res = _google(client, csrf)
+    assert res.status_code == 200, res.content
+    assert res.cookies["tdl_access"]["httponly"]
+    assert client.get("/api/v1/me").json()["id"] == user.pk
+
+
+def test_google_needs_csrf(google_ok):
+    make_user("gamer@gmail.com")
+    client, _ = csrf_client()
+    assert client.post("/api/v1/auth/google", {"credential": "x" * 40}).status_code == 403
+
+
+def test_google_sign_up_asks_for_a_name_then_makes_the_account(google_ok, open_signup):
+    team = Team.objects.create(name="Wolves")
+    Invite.objects.create(team=team, email="gamer@gmail.com")
+    client, csrf = csrf_client()
+    first = _google(client, csrf)
+    assert first.status_code == 200
+    assert first.json() == {
+        "code": "needs_profile",
+        "email": "gamer@gmail.com",
+        "name": "Gamer Person",
+    }
+    assert not User.objects.filter(email="gamer@gmail.com").exists()
+
+    res = _google(client, csrf, display_name="Gamer", game_uid="777")
+    assert res.status_code == 201, res.content
+    user = User.objects.get(email="gamer@gmail.com")
+    assert not user.has_usable_password()
+    assert PlayerClaim.objects.get(user=user).game_uid == 777
+    # Google checked the email, so the team's invite to it is accepted.
+    assert Membership.objects.filter(user=user, team=team, is_active=True).exists()
+    assert Invite.objects.get(team=team).accepted_at is not None
+
+
+def test_google_without_public_signup_only_signs_in(google_ok, settings):
+    settings.PUBLIC_SIGNUP = False
+    client, csrf = csrf_client()
+    res = _google(client, csrf, display_name="Gamer")
+    assert res.status_code == 400 and res.json()["code"] == "no_account"
+    assert not User.objects.filter(email="gamer@gmail.com").exists()
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        {"aud": "someone-else.apps.googleusercontent.com"},
+        {"iss": "https://evil.example"},
+        {"email_verified": "false"},
+        {"email": ""},
+    ],
+)
+def test_google_refuses_tokens_that_are_not_for_us(google_ok, open_signup, change):
+    google_ok.update(change)
+    make_user("gamer@gmail.com")
+    client, csrf = csrf_client()
+    res = _google(client, csrf)
+    assert res.status_code == 400
+    assert "tdl_access" not in res.cookies
+
+
+def test_google_refuses_switched_off_accounts(google_ok):
+    make_user("gamer@gmail.com", is_active=False)
+    client, csrf = csrf_client()
+    assert _google(client, csrf).status_code == 403

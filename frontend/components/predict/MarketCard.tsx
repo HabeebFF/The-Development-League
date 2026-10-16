@@ -27,7 +27,7 @@ export default function MarketCard({ market, now }: { market: Market; now: numbe
       <div className="mt-3 grid grid-cols-2 gap-1.5 sm:grid-cols-3">
         {market.outcomes.slice(0, 6).map((o) => {
           const on = slip.has(o.id);
-          const can = market.accepting && o.is_active;
+          const can = market.accepting && o.is_active && !market.blocked;
           return (
             <button
               key={o.id}
@@ -47,6 +47,7 @@ export default function MarketCard({ market, now }: { market: Market; now: numbe
           );
         })}
       </div>
+      {market.blocked && market.accepting && <p className="mt-2 text-xs text-muted">{market.blocked}</p>}
       {market.predictions > 0 && (
         <p className="mt-2 text-xs text-muted">
           {market.predictions} prediction{market.predictions === 1 ? "" : "s"}

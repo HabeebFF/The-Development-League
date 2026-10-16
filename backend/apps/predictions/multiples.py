@@ -29,11 +29,10 @@ from django.utils import timezone
 
 from .markets import (
     MarketError,
+    PlayerRules,
     accepting_bets,
     clean_odds,
     clean_stake,
-    market_team_ids,
-    own_team_ids,
 )
 from .models import Bet, LedgerEntry, Leg, Market, Multiple, Outcome, Settlement, Wallet
 from .services import CoinError, can_play, post_entry, wallet_for
@@ -130,7 +129,7 @@ def place_multiple(user, *, picks, stake, client_key: uuid.UUID) -> tuple[Multip
         return same(existing)
 
     wallet = wallet_for(user)
-    mine = own_team_ids(user)
+    rules = PlayerRules(user)
     try:
         with transaction.atomic():
             # Locked in id order, so two requests can't wait on each other.
@@ -160,12 +159,7 @@ def place_multiple(user, *, picks, stake, client_key: uuid.UUID) -> tuple[Multip
                     raise MarketError(
                         f"{outcome.label} is no longer available.", "outcome", market=market.pk
                     )
-                if market_team_ids(market) & mine:
-                    raise MarketError(
-                        f"You can't predict on {market.title}: it's about your own team.",
-                        "not_allowed",
-                        market=market.pk,
-                    )
+                rules.check(market)
                 if (
                     p["expected_odds"] is not None
                     and clean_odds(p["expected_odds"]) != outcome.odds

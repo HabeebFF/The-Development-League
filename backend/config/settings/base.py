@@ -138,6 +138,9 @@ FILE_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024
 PUBLIC_SITE = env_bool("PUBLIC_SITE", True)
 # Anyone can make an account at /auth/signup (otherwise accounts come from staff and invites).
 PUBLIC_SIGNUP = env_bool("PUBLIC_SIGNUP", False)
+# "Continue with Google": the OAuth client ID from Google Cloud (it is public, not a secret).
+# Empty hides the Google button.
+GOOGLE_CLIENT_ID = env("GOOGLE_CLIENT_ID", "") or ""
 # Virtual-coin predictions: play money only, no buying or cashing out. Off until switched on.
 PREDICTIONS_ENABLED = env_bool("PREDICTIONS_ENABLED", False)
 PREDICTIONS_INITIAL_COINS = int(env("PREDICTIONS_INITIAL_COINS", "1000"))

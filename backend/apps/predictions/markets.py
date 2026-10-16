@@ -12,7 +12,7 @@ from django.utils import timezone
 
 from apps.league.models import Player, Team
 
-from .models import MAX_ODDS, MIN_ODDS, Bet, Market, MarketEvent, OddsChange, Outcome
+from .models import MAX_ODDS, MIN_ODDS, Bet, Fixture, Market, MarketEvent, OddsChange, Outcome
 from .services import CoinError, Kind, can_play, post_entry, wallet_for
 
 C = Market.Category
@@ -435,6 +435,81 @@ def own_team_ids(user) -> set[int]:
     return ids
 
 
+def lobby_team_ids(fixture: Fixture) -> set[int]:
+    """Teams playing a fixture: the teams staff set on it, else the ones set on its whole
+    session, else every league team (scrim lobbies usually have them all)."""
+    ids = set(fixture.teams.values_list("pk", flat=True))
+    if not ids and fixture.match_number is not None:
+        session = Fixture.objects.filter(
+            season_id=fixture.season_id,
+            date=fixture.date,
+            session=fixture.session,
+            match_number__isnull=True,
+        ).first()
+        if session is not None:
+            ids = set(session.teams.values_list("pk", flat=True))
+    if not ids:
+        ids = set(Team.objects.filter(is_league_member=True).values_list("pk", flat=True))
+    return ids
+
+
+def market_player_ids(market: Market) -> set[int]:
+    """Players a market is about: those it lists, and those that are one of its choices."""
+    p = market.params or {}
+    ids = {int(x) for x in p.get("players") or []} | (
+        {int(p["player"])} if p.get("player") else set()
+    )
+    return ids | set(
+        market.outcomes.filter(player__isnull=False).values_list("player_id", flat=True)
+    )
+
+
+class PlayerRules:
+    """What keeps a league player out of a market, worked out once per user.
+
+    A player (or team member) can't predict on any match or session their team plays in,
+    nor on any other market that lists them, their team or a team-mate. Someone whose game
+    UID is still waiting for staff can't predict at all, since we don't know their team yet.
+    """
+
+    def __init__(self, user):
+        self.teams = own_team_ids(user) if user and user.is_authenticated else set()
+        player = getattr(user, "player", None) if user and user.is_authenticated else None
+        self.player = player.pk if player is not None else None
+        self.uid_pending = bool(
+            user and user.is_authenticated and user.player_claims.filter(status="PENDING").exists()
+        )
+        self._lobbies: dict[int, set[int]] = {}
+
+    def reason(self, market: Market) -> str | None:
+        """Why this user can't predict on ``market``, or None when they can."""
+        if self.uid_pending:
+            return "You can predict once staff confirm your game UID."
+        if not self.teams and self.player is None:
+            return None
+        if market.fixture_id and self.teams:
+            if market.fixture_id not in self._lobbies:
+                self._lobbies[market.fixture_id] = lobby_team_ids(market.fixture)
+            if self._lobbies[market.fixture_id] & self.teams:
+                return f"You can't predict on {market.title}: your team plays in it."
+        if self.player is not None and self.player in market_player_ids(market):
+            return f"You can't predict on {market.title}: it's about you."
+        listed = market_team_ids(market) | {
+            t
+            for row in market.outcomes.values_list("team_id", "player__current_team_id")
+            for t in row
+            if t is not None
+        }
+        if listed & self.teams:
+            return f"You can't predict on {market.title}: it's about your team."
+        return None
+
+    def check(self, market: Market) -> None:
+        if why := self.reason(market):
+            code = "uid_pending" if self.uid_pending else "not_allowed"
+            raise MarketError(why, code, market=market.pk)
+
+
 # -- placing a bet -------------------------------------------------------------------------------
 
 
@@ -481,10 +556,7 @@ def place_bet(
                 raise MarketError("This market isn't taking predictions now.", "closed")
             if not outcome.is_active:
                 raise MarketError("That choice is no longer available.", "outcome")
-            if market_team_ids(market) & own_team_ids(user):
-                raise MarketError(
-                    "You can't predict on a market about your own team.", "not_allowed"
-                )
+            PlayerRules(user).check(market)
             if expected_odds is not None and clean_odds(expected_odds) != outcome.odds:
                 raise MarketError(
                     f"The odds changed to {outcome.odds}. Check and confirm again.",

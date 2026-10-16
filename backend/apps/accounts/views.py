@@ -27,9 +27,10 @@ from apps.league.models import Player, Team
 from common.authentication import enforce_csrf
 from common.permissions import IsStaff, IsSuperAdmin, IsTeamManagerOrStaff, IsTeamMemberOrStaff
 
-from . import emails
+from . import emails, google
 from .models import Invite, Membership, PlayerClaim, StaffProfile, User
 from .serializers import (
+    GoogleSignupSerializer,
     InviteAcceptSerializer,
     InvitePublicSerializer,
     InviteSerializer,
@@ -104,6 +105,7 @@ class SiteView(APIView):
                 "public": settings.PUBLIC_SITE,
                 "signup": settings.PUBLIC_SIGNUP,
                 "predictions": settings.PREDICTIONS_ENABLED,
+                "google_client_id": settings.GOOGLE_CLIENT_ID or None,
             }
         )
 
@@ -163,6 +165,8 @@ class SignupView(APIView):
                 user = User.objects.create_user(
                     email=v["email"], password=v["password"], display_name=v["display_name"]
                 )
+                if v.get("game_uid"):
+                    PlayerClaim.objects.create(user=user, game_uid=v["game_uid"])
         except IntegrityError as exc:  # the same email sent twice at once
             raise ValidationError(
                 {"email": ["An account with this email already exists."]}
@@ -170,6 +174,83 @@ class SignupView(APIView):
         user.last_login = timezone.now()
         user.save(update_fields=["last_login"])
         return signed_in(user, request, status.HTTP_201_CREATED)
+
+
+class GoogleView(APIView):
+    """Continue with Google: signs in the account with that email, or makes one.
+
+    A new account needs ``PUBLIC_SIGNUP`` and a display name; without a name the answer is
+    ``needs_profile`` with Google's name as a suggestion, and the site asks for the rest
+    (name, and the game UID if they play in the league). Google has checked the email
+    belongs to them, so open team invites for it are accepted straight away.
+    """
+
+    permission_classes = [AllowAny]
+    authentication_classes: list = []
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "login"
+
+    def post(self, request):
+        if not settings.GOOGLE_CLIENT_ID:
+            raise NotFound()
+        enforce_csrf(request)
+        try:
+            who = google.verify(request.data.get("credential"))
+        except google.GoogleError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+        user = User.objects.filter(email__iexact=who["email"]).first()
+        code = status.HTTP_200_OK
+        if user is not None and not user.is_active:
+            return Response({"detail": "This account is switched off."}, status=403)
+        if user is None:
+            if not settings.PUBLIC_SIGNUP:
+                return Response(
+                    {"detail": "There's no account for this Google email.", "code": "no_account"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            if not request.data.get("display_name"):
+                return Response(
+                    {"code": "needs_profile", "email": who["email"], "name": who["name"][:30]}
+                )
+            data = GoogleSignupSerializer(data=request.data)
+            data.is_valid(raise_exception=True)
+            v = data.validated_data
+            try:
+                with transaction.atomic():
+                    user = User.objects.create_user(
+                        email=who["email"], password=None, display_name=v["display_name"]
+                    )
+                    if v.get("game_uid"):
+                        PlayerClaim.objects.create(user=user, game_uid=v["game_uid"])
+            except IntegrityError as exc:  # the same sign-up sent twice at once
+                raise ValidationError(
+                    {"email": ["An account with this email already exists."]}
+                ) from exc
+            code = status.HTTP_201_CREATED
+        accept_open_invites(user)
+        user.last_login = timezone.now()
+        user.save(update_fields=["last_login"])
+        return signed_in(user, request, code)
+
+
+def accept_open_invites(user: User) -> None:
+    """Join the teams that invited this (checked) email address."""
+    for invite in Invite.objects.filter(email__iexact=user.email):
+        if not invite.is_open:
+            continue
+        with transaction.atomic():
+            invite = Invite.objects.select_for_update().get(pk=invite.pk)
+            if not invite.is_open:
+                continue
+            membership, _ = Membership.objects.get_or_create(
+                user=user, team=invite.team, defaults={"role": invite.role}
+            )
+            if not membership.is_active or membership.role != invite.role:
+                membership.is_active, membership.role = True, invite.role
+                membership.save(update_fields=["is_active", "role"])
+            invite.accepted_at = timezone.now()
+            invite.save(update_fields=["accepted_at"])
 
 
 class RefreshView(APIView):

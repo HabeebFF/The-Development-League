@@ -22,7 +22,7 @@ export default function MarketView({ id }: { id: number }) {
   if (market.error === "Not found.") return <NotOpen />;
   if (!market.data) return <Loading error={market.error} count={4} />;
   const m = market.data;
-  const canPick = m.accepting && new Date(m.closes_at).getTime() > now;
+  const canPick = m.accepting && !m.blocked && new Date(m.closes_at).getTime() > now;
 
   return (
     <>
@@ -43,6 +43,7 @@ export default function MarketView({ id }: { id: number }) {
             <p className="mt-2 text-xs text-muted">If several tie for the win, a winning prediction is paid its return divided by the number tied.</p>
           )}
 
+          {m.blocked && m.accepting && <p className="mt-4 border border-line bg-panel-2 p-3 text-sm">{m.blocked}</p>}
           <div className="mt-5 grid gap-2 sm:grid-cols-2">
             {m.outcomes.map((o) => {
               const on = slip.has(o.id);

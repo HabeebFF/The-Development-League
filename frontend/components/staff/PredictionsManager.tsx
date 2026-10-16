@@ -41,6 +41,8 @@ type StaffFixture = Fixture & {
   season: number;
   display_title: string;
   match_day: number | null;
+  /** Teams in the lobby; league players in them can't predict on it. Empty: see Lobby. */
+  teams: number[];
 };
 type StaffOutcome = Market["outcomes"][number] & {
   bets: number;
@@ -336,6 +338,7 @@ function FixturePanel({ fixture, seasonId, teams, onChanged }: { fixture: StaffF
                 : "not linked to a match yet"}
           </p>
           {fixture.match_number === null ? <LinkDay fixture={fixture} onLinked={onChanged} /> : <LinkMatch fixture={fixture} onLinked={onChanged} />}
+          <Lobby fixture={fixture} teams={teams} onSaved={onChanged} />
         </div>
       ) : (
         <div>
@@ -350,6 +353,70 @@ function FixturePanel({ fixture, seasonId, teams, onChanged }: { fixture: StaffF
         <MarketPanel key={m.id} market={m} onChanged={load} />
       ))}
     </section>
+  );
+}
+
+/** Which teams play this fixture. League players can't predict on a match or session their
+ * team plays in, so this decides who is kept out. */
+function Lobby({ fixture, teams, onSaved }: { fixture: StaffFixture; teams: TeamRef[]; onSaved: () => void }) {
+  const [picked, setPicked] = useState<number[]>(fixture.teams ?? []);
+  const [open, setOpen] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
+  const saved = fixture.teams ?? [];
+  const names = saved.map((id) => teams.find((t) => t.id === id)?.name ?? `#${id}`);
+
+  async function save() {
+    setNote(null);
+    try {
+      await api(`/admin/predictions/fixtures/${fixture.id}`, { method: "PATCH", body: { teams: picked } });
+      setNote("Saved.");
+      setOpen(false);
+      onSaved();
+    } catch (e) {
+      setNote(message(e));
+    }
+  }
+
+  return (
+    <div className="mt-3 text-sm">
+      <p className="text-muted">
+        Lobby:{" "}
+        {saved.length
+          ? `${saved.length} team${saved.length === 1 ? "" : "s"} (${names.join(", ")})`
+          : fixture.match_number === null
+            ? "not set, so every league team counts as playing"
+            : "not set, so the session's lobby is used (or every league team)"}
+        . Players and members of these teams can&apos;t predict on it.{" "}
+        <button type="button" className="text-accent hover:underline" onClick={() => setOpen(!open)}>
+          {open ? "Close" : "Change"}
+        </button>
+        {note && <span className={`ml-2 ${note === "Saved." ? "text-ok" : "text-bad"}`}>{note}</span>}
+      </p>
+      {open && (
+        <div className="mt-2 flex flex-wrap gap-1">
+          {teams.map((t) => {
+            const on = picked.includes(t.id);
+            return (
+              <button
+                key={t.id}
+                type="button"
+                aria-pressed={on}
+                className={`btn px-2 py-1 text-xs ${on ? "btn-primary" : "text-muted"}`}
+                onClick={() => setPicked(on ? picked.filter((x) => x !== t.id) : [...picked, t.id])}
+              >
+                {t.name}
+              </button>
+            );
+          })}
+          <button type="button" className="btn px-2 py-1 text-xs" onClick={() => setPicked([])}>
+            Clear
+          </button>
+          <button type="button" className="btn btn-primary px-3 py-1 text-xs" onClick={save}>
+            Save lobby
+          </button>
+        </div>
+      )}
+    </div>
   );
 }
 

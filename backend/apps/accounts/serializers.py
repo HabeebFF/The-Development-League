@@ -86,12 +86,17 @@ class SignupSerializer(serializers.Serializer):
     email = serializers.EmailField()
     password = serializers.CharField(trim_whitespace=False)
     display_name = serializers.CharField(min_length=2, max_length=30)
+    # "Do you play in the league?" Players give their game UID; staff confirm it.
+    game_uid = serializers.CharField(max_length=20, required=False, allow_blank=True)
 
     def validate_email(self, value: str) -> str:
         email = value.strip().lower()
         if User.objects.filter(email__iexact=email).exists():
             raise serializers.ValidationError("An account with this email already exists.")
         return email
+
+    def validate_game_uid(self, value: str) -> int | None:
+        return clean_new_uid(value)
 
     def validate_display_name(self, value: str) -> str:
         name = " ".join(value.split())
@@ -104,6 +109,16 @@ class SignupSerializer(serializers.Serializer):
             attrs["password"], User(email=attrs["email"], display_name=attrs["display_name"])
         )
         return attrs
+
+
+class GoogleSignupSerializer(serializers.Serializer):
+    """The rest of a Google sign-up: Google gives the email, there's no password."""
+
+    display_name = serializers.CharField(min_length=2, max_length=30)
+    game_uid = serializers.CharField(max_length=20, required=False, allow_blank=True)
+
+    validate_display_name = SignupSerializer.validate_display_name
+    validate_game_uid = SignupSerializer.validate_game_uid
 
 
 class PasswordResetSerializer(serializers.Serializer):
@@ -196,6 +211,19 @@ class MemberSerializer(serializers.ModelSerializer):
         if value == Membership.Role.MANAGER and not user.is_league_staff:
             raise serializers.ValidationError("Only league staff can make someone a manager.")
         return value
+
+
+def clean_new_uid(value: str) -> int | None:
+    """A game UID given at sign-up: digits, and not already someone else's."""
+    value = (value or "").strip()
+    if not value:
+        return None
+    if not value.isdigit():
+        raise serializers.ValidationError("A game UID is digits only.")
+    uid = int(value)
+    if Player.objects.filter(game_uid=uid, user__isnull=False).exists():
+        raise serializers.ValidationError("This UID is already linked to another account.")
+    return uid
 
 
 class LinkUidSerializer(serializers.Serializer):

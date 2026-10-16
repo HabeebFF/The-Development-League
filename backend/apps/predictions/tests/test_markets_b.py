@@ -422,7 +422,7 @@ def test_player_cannot_bet_on_own_team_in_session_market(session, staff):
     fan = make_user("bravo-player@tdl.test")
     Membership.objects.create(user=fan, team=session["teams"]["Bravo"])
     m = market(session, staff, C.SESSION_WINNER)
-    with pytest.raises(MarketError, match="your own team"):
+    with pytest.raises(MarketError, match="your team"):
         bet(fan, m, pick(m, "Alpha", session))
 
 
