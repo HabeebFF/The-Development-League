@@ -14,6 +14,7 @@ import { AwardCard } from "./AwardsView";
 import ExploreGrid from "./ExploreGrid";
 import { Skeleton, SkeletonRows } from "./Loading";
 import MatchDayCard from "./MatchDayCard";
+import WeekStars from "./WeekStars";
 import RatingBadge from "./RatingBadge";
 import { RankBadge } from "./StandingsTable";
 import { TeamMark } from "./TeamBadge";
@@ -81,14 +82,14 @@ export default function HomeView() {
         <div className="pointer-events-none absolute -right-6 -bottom-10 font-display text-[11rem] leading-none text-white/[0.03] select-none sm:text-[18rem]">
           TDL
         </div>
-        <div className="relative mx-auto max-w-6xl px-4 pt-10 pb-10 sm:pt-20 sm:pb-16">
+        <div className="relative mx-auto max-w-6xl px-4 pt-10 pb-10 sm:pt-16 sm:pb-14">
           <p className="eyebrow">Free Fire esports{season ? ` · ${season.name}` : ""}</p>
-          <h1 className="mt-3 font-display text-6xl leading-[0.9] font-extrabold uppercase sm:text-8xl">
+          <h1 className="mt-3 font-display text-5xl leading-[0.9] font-extrabold uppercase sm:text-8xl">
             The Development
             <br />
             <span className="bg-gradient-to-r from-accent to-accent-2 bg-clip-text text-transparent">League</span>
           </h1>
-          <p className="mt-5 max-w-xl text-muted sm:text-lg">
+          <p className="mt-4 max-w-xl text-muted sm:mt-5 sm:text-lg">
             A Free Fire scrim league with 8PM and 10PM sessions. See the table, every result, each player&apos;s kills and rating, and watch
             every match again as a 2D replay.
           </p>
@@ -101,7 +102,7 @@ export default function HomeView() {
             </Link>
           </div>
           {latest && (
-            <dl className="mt-10 flex gap-8 sm:gap-12">
+            <dl className="mt-10 hidden gap-8 sm:flex sm:gap-12">
               {[
                 ["Latest", dayName(latest)],
                 ["Matches", String(matchesPlayed)],
@@ -114,6 +115,7 @@ export default function HomeView() {
               ))}
             </dl>
           )}
+          <WeekStars />
         </div>
       </section>
 
