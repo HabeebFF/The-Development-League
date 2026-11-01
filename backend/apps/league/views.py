@@ -14,7 +14,7 @@ from rest_framework.views import APIView
 
 from apps.results.models import StandingRow
 from apps.results.standings import schedule_rebuild
-from common.permissions import IsStaff, IsSuperAdmin, PublicRead
+from common.permissions import IsStaff, IsSuperAdmin, IsTeamMemberOrStaff, PublicRead
 
 from .merge import MergeError, merge_players, merge_teams
 from .models import (
@@ -688,6 +688,108 @@ class CardsView(APIView):
                 "previous": older[0] if older else None,
                 "next": newer[-1] if newer else None,
                 "cards": [_card(c, request) for c in cards],
+            }
+        )
+
+
+def _day_card(card, weekly) -> dict:
+    """A daily card, shaped like a weekly one (so the same card can draw it), plus the day's
+    own numbers. ``overall_change`` is the gap to the player's weekly overall."""
+    from apps.results.cards import ROLE_LABELS, STATS, tier
+    from apps.results.ratings import band
+
+    player, team = card.player, card.team
+    return {
+        "player_id": player.pk,
+        "name": player.display_name,
+        "photo": _media(player.photo_cutout) or _media(player.photo),
+        "cutout": bool(player.photo_cutout),
+        "team": (
+            {
+                "id": team.pk,
+                "name": team.name,
+                "tag": team.tag,
+                "slug": team.slug,
+                "logo": _media(team.logo),
+                "primary_color": team.primary_color,
+            }
+            if team
+            else None
+        ),
+        "week": card.day,
+        "day": card.day,
+        "role": card.role,
+        "role_label": ROLE_LABELS.get(card.role, card.role),
+        "role_suggested": False,
+        "suggested_role": card.role,
+        "overall": card.overall,
+        "weekly_overall": weekly.overall if weekly else None,
+        "weekly_week": weekly.week if weekly else None,
+        "overall_change": (
+            card.overall - weekly.overall if weekly and card.overall is not None else None
+        ),
+        "tier": tier(card.overall) if card.overall is not None else None,
+        "totw": [],
+        "special": "",
+        "stats": [{**s, "label": STATS.get(s["key"], s["key"])} for s in card.stats],
+        "matches": card.matches,
+        "week_matches": card.matches,
+        "stale": False,
+        "kills": card.kills,
+        "knocks": card.knocks,
+        "damage": card.damage,
+        "rating": card.rating,
+        "rating_band": band(card.rating),
+    }
+
+
+class TeamDayCardsView(APIView):
+    """Daily player cards for one team (``?date=`` a day; default its newest day): only that
+    team's members and league staff can see them. A player is on the team for a day if they
+    played for it that day. Players with too few matches for a card come under ``short``."""
+
+    permission_classes = [IsTeamMemberOrStaff]
+
+    def get_team(self) -> Team:
+        return get_object_or_404(Team, slug=self.kwargs["slug"])
+
+    def get(self, request, slug: str):
+        from apps.results.cards import card_week, release_of
+        from apps.results.day_cards import DAY_MIN
+        from apps.results.models import PlayerCard, PlayerDayCard
+
+        team = self.get_team()
+        mine = PlayerDayCard.objects.filter(team=team, player__hide_card=False)
+        days = list(mine.order_by("-day").values_list("day", flat=True).distinct())
+        try:
+            day = date.fromisoformat(request.query_params.get("date", ""))
+        except ValueError:
+            day = days[0] if days else None
+        rows = list(mine.filter(day=day).select_related("player", "team"))
+        weekly = {}
+        if day:
+            now = timezone.now()
+            for c in PlayerCard.objects.filter(
+                player__in=[r.player_id for r in rows], week__lte=card_week(day)
+            ).order_by("player", "-week"):
+                # Only a card that is already out: the week's own card comes out after it.
+                if release_of(c.week) <= now:
+                    weekly.setdefault(c.player_id, c)
+        out = [_day_card(r, weekly.get(r.player_id)) for r in rows]
+        name = lambda c: c["name"].casefold()  # noqa: E731
+        return Response(
+            {
+                "team": {"id": team.pk, "name": team.name, "tag": team.tag, "slug": team.slug},
+                "date": day,
+                "previous": next((d for d in days if day and d < day), None),
+                "next": next((d for d in reversed(days) if day and d > day), None),
+                "days": days,
+                "cards": sorted(
+                    (c for c in out if c["overall"] is not None),
+                    key=lambda c: (-c["overall"], name(c)),
+                ),
+                "short": sorted((c for c in out if c["overall"] is None), key=name),
+                "need": DAY_MIN,
             }
         )
 

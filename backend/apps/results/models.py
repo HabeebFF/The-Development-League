@@ -274,6 +274,43 @@ class CardWeights(models.Model):
         return "Card weights"
 
 
+class PlayerDayCard(models.Model):
+    """A player's card for one match day, made from that day's matches only and only shown
+    to their own team (see ``apps.results.day_cards``). With fewer matches than a card needs,
+    ``overall`` is empty and only the day's numbers show."""
+
+    player = models.ForeignKey("league.Player", on_delete=models.CASCADE, related_name="day_cards")
+    day = models.DateField(help_text="The day the matches were played (Lagos time)")
+    team = models.ForeignKey(
+        "league.Team", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+    role = models.CharField(max_length=12)
+    overall = models.PositiveSmallIntegerField(null=True, blank=True)
+    stats = models.JSONField(
+        default=list, blank=True, help_text="[{key, rating, stale, extra, value, detail}]"
+    )
+    matches = models.PositiveSmallIntegerField(default=0)
+    kills = models.PositiveSmallIntegerField(default=0)
+    knocks = models.PositiveSmallIntegerField(default=0)
+    damage = models.PositiveIntegerField(
+        null=True, blank=True, help_text="Damage dealt, over the matches that have it"
+    )
+    rating = models.FloatField(null=True, blank=True, help_text="The day's rating out of 10")
+    stamp = models.CharField(max_length=64, help_text="What the day's cards were made from")
+    rules = models.CharField(max_length=20)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-day", "-overall"]
+        constraints = [
+            models.UniqueConstraint(fields=["player", "day"], name="one_day_card_per_player_day")
+        ]
+        indexes = [models.Index(fields=["team", "day"])]
+
+    def __str__(self) -> str:
+        return f"{self.player} {self.day}: {self.overall} {self.role}"
+
+
 class PlayerMatchRating(models.Model):
     """A player's football-style rating out of 10 for one match (see ``results.ratings``)."""
 

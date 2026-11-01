@@ -1,6 +1,7 @@
 // FUT style player cards (``/cards``), out every Saturday at midnight (Lagos) for the Saturday to Friday week before.
 
 import type { TeamRef } from "./api";
+import type { Band } from "./ratings";
 
 export type CardStat = {
   key: string;
@@ -52,6 +53,36 @@ export type CardWeek = {
   previous: string | null;
   next: string | null;
   cards: PlayerCard[];
+};
+
+/** A player's card for one match day (only their own team sees it). Shaped like a weekly
+ *  card; ``overall_change`` is the gap to their latest weekly card. */
+export type DayCard = Omit<PlayerCard, "overall" | "tier"> & {
+  day: string;
+  /** Null when they played fewer matches than a card needs. */
+  overall: number | null;
+  tier: PlayerCard["tier"] | null;
+  weekly_overall: number | null;
+  weekly_week: string | null;
+  kills: number;
+  knocks: number;
+  damage: number | null;
+  rating: number | null;
+  rating_band: Band | null;
+};
+
+export type TeamDayCards = {
+  team: { id: number; name: string; tag: string; slug: string };
+  date: string | null;
+  previous: string | null;
+  next: string | null;
+  /** Every day the team has cards, newest first. */
+  days: string[];
+  cards: (DayCard & { overall: number; tier: PlayerCard["tier"] })[];
+  /** Played, but too few matches for a card. */
+  short: DayCard[];
+  /** Matches a day card needs. */
+  need: number;
 };
 
 export type TeamOfMonth = {

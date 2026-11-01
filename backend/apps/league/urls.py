@@ -32,5 +32,6 @@ urlpatterns = [
     path("cards/month", views.TeamOfMonthView.as_view(), name="cards-month"),
     path("cards/specials", views.CardSpecialsView.as_view(), name="cards-specials"),
     path("cards/<int:player_id>", views.PlayerCardView.as_view(), name="player-card"),
+    path("teams/<slug:slug>/day-cards", views.TeamDayCardsView.as_view(), name="team-day-cards"),
     path("admin/cards", views.CardAdminView.as_view(), name="admin-cards"),
 ]
