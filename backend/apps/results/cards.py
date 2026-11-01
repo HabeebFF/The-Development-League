@@ -353,9 +353,11 @@ def _count(w: Window, need: str) -> int:
     return w.n if need == "n" else w.counts[need]
 
 
-def _part_value(w: Window, part, league: dict[str, float]) -> float | None:
+def _part_value(
+    w: Window, part, league: dict[str, float], least: int = MIN_MATCHES
+) -> float | None:
     kind, num, den, need, _, sign = part
-    if _count(w, need) < NEEDS.get(need, MIN_MATCHES):
+    if _count(w, need) < NEEDS.get(need, least):
         return None
     if kind == "max":
         return sign * w.longest
@@ -374,22 +376,23 @@ def _place(value: float, pool: list[float]) -> float:
     return (less + (equal - 1) / 2) / (len(pool) - 1)
 
 
-def is_nader(w: Window) -> bool:
+def is_nader(w: Window, least: int = MIN_MATCHES) -> bool:
     """At least ``NADER_SHARE`` of their knocks and kills came from grenades and launchers."""
     s = w.sums
     total = s["weapon_kills"] + s["weapon_knocks"]
     return (
-        w.counts["weapons"] >= MIN_MATCHES
+        w.counts["weapons"] >= least
         and total >= 5
         and (s["nades"] + s["nade_knocks"]) / total >= NADER_SHARE
     )
 
 
 def rate_windows(
-    windows: dict[int, Window], naders: set[int] | None = None
+    windows: dict[int, Window], naders: set[int] | None = None, least: int = MIN_MATCHES
 ) -> dict[int, dict[str, float]]:
-    """Each player's place (0 to 1) in every stat they have enough matches for. With
-    ``naders``, those players' Grenade is placed among themselves only."""
+    """Each player's place (0 to 1) in every stat they have enough matches for (``least``,
+    fewer for a day card). With ``naders``, those players' Grenade is placed among themselves
+    only."""
     league: dict[str, float] = {}
     for parts in PARTS.values():
         for kind, num, den, *_ in parts:
@@ -401,7 +404,9 @@ def rate_windows(
 
     places: dict[int, dict[str, float]] = defaultdict(dict)
     for key, parts in PARTS.items():
-        values = [{pid: _part_value(w, p, league) for pid, w in windows.items()} for p in parts]
+        values = [
+            {pid: _part_value(w, p, league, least) for pid, w in windows.items()} for p in parts
+        ]
         pools = [[v for v in vals.values() if v is not None] for vals in values]
         group = set(naders or ()) & set(windows) if key == "NAD" else set()
         own = [[vals[pid] for pid in group if vals[pid] is not None] for vals in values]
@@ -422,13 +427,13 @@ def rating(place: float) -> int:
     return round(FLOOR + SPAN * place)
 
 
-def suggest_role(w: Window, places: dict[str, float]) -> str:
+def suggest_role(w: Window, places: dict[str, float], least: int = MIN_MATCHES) -> str:
     """What the numbers say this player plays as."""
     weapon_kills = w.sums["weapon_kills"]
-    if w.counts["weapons"] >= MIN_MATCHES and weapon_kills >= 5:
+    if w.counts["weapons"] >= least and weapon_kills >= 5:
         if w.sums["snipes"] / weapon_kills > 0.3:
             return SNIPER
-    if is_nader(w):
+    if is_nader(w, least):
         return GRENADER_ROLE
     rush = [places[k] for k in ("ENT", "CQC") if k in places]
     if rush and sum(rush) / len(rush) >= 0.5:

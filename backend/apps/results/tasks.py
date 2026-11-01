@@ -31,6 +31,25 @@ def refresh_ratings_task(season_id: int | None = None, force: bool = False) -> i
     matches = None
     if season_id is not None:
         matches = list(Match.objects.filter(match_day__stage__season_id=season_id))
+    rated = refresh(matches, force=force)
+    # Daily cards show the day's rating, and the matches may be new too.
+    refresh_day_cards_task.delay(season_id)
+    return rated
+
+
+@shared_task
+def refresh_day_cards_task(season_id: int | None = None, force: bool = False) -> int:
+    """Daily player cards for the days of the season's new or changed matches."""
+    from apps.league.models import Match
+
+    from .day_cards import refresh
+
+    matches = None
+    if season_id is not None:
+        matches = list(
+            Match.objects.filter(match_day__stage__season_id=season_id).select_related("match_day")
+        )
+        matches = [m for m in matches if m.status == Match.Status.PUBLISHED]
     return refresh(matches, force=force)
 
 

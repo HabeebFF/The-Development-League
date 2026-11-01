@@ -16,9 +16,12 @@ export const CARD_SHAPE =
 export default function PlayerCard({
   card,
   size = 1,
+  footer,
 }: {
   card: Card;
   size?: number;
+  /** Replaces the line along the bottom (a daily card shows its day). */
+  footer?: string;
 }) {
   const [top, bottom, ink, line] = TIER_COLORS[card.tier];
   const main = card.stats.filter((s) => !s.extra);
@@ -167,7 +170,7 @@ export default function PlayerCard({
         )}
         <div className="absolute inset-x-0 bottom-[1.3em]">
           <p className="text-center text-[0.5em] font-bold tracking-[0.25em] uppercase opacity-70">
-            {cardFooter(card)}
+            {footer ?? cardFooter(card)}
           </p>
         </div>
       </div>

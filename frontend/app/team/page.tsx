@@ -28,18 +28,21 @@ export default function TeamHome() {
       </p>
       <h1 className="mt-1 font-display text-5xl leading-none font-extrabold uppercase">{membership?.team.name ?? "Team area"}</h1>
       <p className="mt-2 text-sm text-muted">Signed in as {me.email}</p>
-      {membership && (
-        <div className="mt-4 flex flex-wrap gap-2">
-          {me.features.includes("assistant") && (
-            <Link href="/team/coach" className="btn btn-primary">
-              Coach report
-            </Link>
-          )}
+      <div className="mt-4 flex flex-wrap gap-2">
+        <Link href="/team/cards" className="btn btn-primary">
+          Daily cards
+        </Link>
+        {membership && me.features.includes("assistant") && (
+          <Link href="/team/coach" className="btn">
+            Coach report
+          </Link>
+        )}
+        {membership && (
           <Link href="/team/members" className="btn">
             {membership.role === "MANAGER" ? "Members and invites" : "Team members"}
           </Link>
-        </div>
-      )}
+        )}
+      </div>
 
       <h2 className="mt-10 font-display text-2xl uppercase">Matches</h2>
       {!canStudy && (
