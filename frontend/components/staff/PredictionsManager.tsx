@@ -159,6 +159,143 @@ export default function PredictionsManager() {
 
 // -- fixtures and markets ------------------------------------------------------------------------
 
+type AutoReport = { date: string; made: string[]; notes: string[] };
+type Auto = {
+  enabled: boolean;
+  weekdays: number[];
+  skip_dates: string[];
+  last_run_at: string | null;
+  last_report: Partial<AutoReport>;
+  today: string;
+  predictions_on: boolean;
+};
+const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+
+/** Markets the site makes by itself each scrim day: the switch, the days, nights off, and a
+ * button to make tonight's now. */
+function AutoPanel({ onRan }: { onRan: () => void }) {
+  const [conf, setConf] = useState<Auto | null>(null);
+  const [skip, setSkip] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
+  const [report, setReport] = useState<AutoReport | null>(null);
+
+  useEffect(() => {
+    api<Auto>("/admin/predictions/auto")
+      .then(setConf)
+      .catch((e) => setNote(message(e)));
+  }, []);
+
+  async function save(change: Partial<Auto>) {
+    setNote(null);
+    try {
+      setConf(await api<Auto>("/admin/predictions/auto", { method: "PATCH", body: change }));
+    } catch (e) {
+      setNote(message(e));
+    }
+  }
+
+  async function runNow() {
+    setBusy(true);
+    setNote(null);
+    try {
+      setReport(await api<AutoReport>("/admin/predictions/auto/run", { method: "POST", body: {} }));
+      onRan();
+    } catch (e) {
+      setNote(message(e));
+    }
+    setBusy(false);
+  }
+
+  if (!conf) return note ? <p className="text-bad">{note}</p> : null;
+  const last = report ?? (conf.last_report?.date ? (conf.last_report as AutoReport) : null);
+
+  return (
+    <section className="card p-4">
+      <div className="flex flex-wrap items-center gap-3">
+        <h2 className="section-title">Automatic markets</h2>
+        <button
+          type="button"
+          aria-pressed={conf.enabled}
+          className={`btn ml-auto px-3 py-1.5 text-sm ${conf.enabled ? "btn-primary" : "text-muted"}`}
+          onClick={() => save({ enabled: !conf.enabled })}
+        >
+          {conf.enabled ? "On" : "Off"}
+        </button>
+      </div>
+      <p className="mt-1 text-sm text-muted">
+        From 10:00 on a scrim day, tonight&apos;s 8PM and 10PM sessions get Booyah, total kills and first blood for each match, plus a winner, most Booyahs, a
+        top fragger and 2 head-to-heads for each session, all with suggested odds. Mondays add most points this week. Teams are copied from the last session at
+        the same hour (change a session&apos;s lobby below and its markets follow). Markets close as the session starts; change any odds before then.
+        {!conf.predictions_on && " Predictions are switched off on this site, so nothing is made by itself yet."}
+      </p>
+      <div className="mt-3 flex flex-wrap items-center gap-1 text-sm">
+        <span className="mr-1 text-muted">Scrim days</span>
+        {DAYS.map((d, i) => {
+          const on = conf.weekdays.includes(i);
+          return (
+            <button
+              key={d}
+              type="button"
+              aria-pressed={on}
+              className={`btn px-2 py-1 text-xs ${on ? "btn-primary" : "text-muted"}`}
+              onClick={() => save({ weekdays: on ? conf.weekdays.filter((x) => x !== i) : [...conf.weekdays, i] })}
+            >
+              {d}
+            </button>
+          );
+        })}
+      </div>
+      <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
+        <span className="text-muted">Nights off</span>
+        {conf.skip_dates.length === 0 && <span className="text-muted">none</span>}
+        {conf.skip_dates.map((d) => (
+          <button
+            key={d}
+            type="button"
+            className="btn px-2 py-1 text-xs"
+            title="Remove"
+            onClick={() => save({ skip_dates: conf.skip_dates.filter((x) => x !== d) })}
+          >
+            {d} &times;
+          </button>
+        ))}
+        <input type="date" min={conf.today} value={skip} onChange={(e) => setSkip(e.target.value)} className="input w-auto py-1" aria-label="Night off" />
+        <button
+          type="button"
+          disabled={!skip}
+          className="btn px-3 py-1 text-xs"
+          onClick={() => {
+            save({ skip_dates: [...conf.skip_dates, skip] });
+            setSkip("");
+          }}
+        >
+          Add night off
+        </button>
+      </div>
+      <div className="mt-4 flex flex-wrap items-center gap-3">
+        <button type="button" disabled={busy} className="btn btn-primary px-3 py-1.5 text-sm" onClick={runNow}>
+          {busy ? "Making..." : "Make tonight's now"}
+        </button>
+        {conf.last_run_at && !report && <span className="text-xs text-muted">Last run {when(conf.last_run_at)}</span>}
+      </div>
+      {last && (
+        <div className="mt-3 text-sm">
+          <p>
+            {last.date}: {last.made.length ? `${last.made.length} market${last.made.length === 1 ? "" : "s"} made.` : "nothing new to make."}
+          </p>
+          {last.notes.map((n) => (
+            <p key={n} className="text-xs text-bad">
+              {n}
+            </p>
+          ))}
+        </div>
+      )}
+      {note && <p className="mt-2 text-sm text-bad">{note}</p>}
+    </section>
+  );
+}
+
 function Markets() {
   const [seasons, setSeasons] = useState<Season[] | null>(null);
   const [teams, setTeams] = useState<TeamRef[]>([]);
@@ -192,6 +329,7 @@ function Markets() {
 
   return (
     <div className="mt-6 space-y-8">
+      <AutoPanel onRan={loadFixtures} />
       <section>
         <h2 className="section-title">Fixtures</h2>
         <p className="mt-1 text-sm text-muted">

@@ -2,6 +2,7 @@ import logging
 
 from celery import shared_task
 
+from . import auto
 from .markets import close_due_markets
 from .services import check_wallets
 
@@ -21,3 +22,12 @@ def check_wallets_task() -> int:
 def close_due_markets_task() -> int:
     """Every minute: markets past their closing time show as closed."""
     return close_due_markets()
+
+
+@shared_task
+def auto_markets_task() -> int:
+    """Hourly: on a scrim day from 10:00 Lagos time, make tonight's missing markets."""
+    report = auto.run()
+    for note in report["notes"]:
+        log.info("Automatic markets %s: %s", report["date"], note)
+    return len(report["made"])
