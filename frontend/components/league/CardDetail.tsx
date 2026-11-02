@@ -146,6 +146,8 @@ export default function CardDetail({
           overall rating weighs the stats that matter most for the role.
         </p>
 
+        {data.data?.shooting && <Shooting s={data.data.shooting} />}
+
         {card.history.length > 1 && (
           <History history={card.history} current={card.week} />
         )}
@@ -251,6 +253,57 @@ function History({
           {weekLabel(last.week)}
         </text>
       </svg>
+    </div>
+  );
+}
+
+const day = (d: string) => new Date(`${d}T00:00:00`).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+
+/** Headshot rate and the weapons they knock and kill with most, over the card's four weeks. */
+function Shooting({ s }: { s: NonNullable<Detail["shooting"]> }) {
+  return (
+    <div className="mt-8">
+      <h3 className="font-display text-xl uppercase">Headshots and weapons</h3>
+      <p className="text-xs text-muted">
+        {day(s.start)} to {day(s.end)}, {s.matches} matches
+      </p>
+      <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
+        <div className="card px-4 py-3">
+          <p className="text-[10px] font-bold tracking-widest text-muted uppercase">Headshot rate</p>
+          <p className="font-display text-3xl leading-tight">{s.hs_pct == null ? "–" : `${s.hs_pct}%`}</p>
+          <p className="text-xs text-muted">
+            {s.headshots} of {s.knocks} knocks
+          </p>
+        </div>
+        <div className="card px-4 py-3 sm:col-span-2">
+          <p className="text-[10px] font-bold tracking-widest text-muted uppercase">Main weapon</p>
+          <p className="font-display text-3xl leading-tight uppercase">{s.weapons[0]?.name ?? "–"}</p>
+          <p className="text-xs text-muted">
+            {s.weapons[0] ? `${s.weapons[0].share}% of their kills and knocks` : "No named weapon yet"}
+          </p>
+        </div>
+      </div>
+      {s.weapons.length > 0 && (
+        <ul className="mt-3 space-y-2">
+          {s.weapons.map((w) => (
+            <li key={w.id} className="text-sm">
+              <span className="flex items-baseline justify-between gap-3">
+                <span className="font-semibold">{w.name}</span>
+                <span className="text-xs text-muted">
+                  {w.kills} kills · {w.knocks} knocks · {w.share}%
+                </span>
+              </span>
+              <span className="mt-1 block h-1.5 bg-white/5">
+                <span className="block h-full bg-accent" style={{ width: `${w.share}%` }} />
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+      <p className="mt-2 text-xs text-muted">
+        The game only marks headshots on knocks, so the rate is headshot knocks out of knocks.
+        Weapons count kills and knocks on enemies with weapons staff have named.
+      </p>
     </div>
   );
 }
