@@ -275,8 +275,8 @@ function WeekAwards() {
     <section>
       <SectionHead title="Awards of the week" href="/awards" link="All awards" />
       <p className="mt-1 text-sm text-muted">{periodLabel(awards.data)}</p>
-      <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        {awards.data.awards.map((a) => (
+      <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        {[awards.data.mvp, ...awards.data.team_awards.filter((t) => t.key === "team"), ...awards.data.awards].map((a) => (
           <AwardCard key={a.key} award={a} compact />
         ))}
       </div>

@@ -81,6 +81,10 @@ def merge_teams(source: Team, target: Team) -> dict:
     if not TeamAlias.objects.filter(in_game_name=source.name, season=None).exists():
         TeamAlias.objects.create(team=target, in_game_name=source.name)
 
+    if target.igl_id is None and source.igl_id is not None:
+        target.igl_id = source.igl_id
+        target.save(update_fields=["igl"])
+
     StandingRow.objects.filter(team=source).delete()
     name = source.name
     source.delete()

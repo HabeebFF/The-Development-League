@@ -21,6 +21,7 @@ import { useApi } from "@/lib/useApi";
 import Loading, { Skeleton } from "./Loading";
 import { Form } from "./StandingsTable";
 import { TeamMark } from "./TeamBadge";
+import TeamTrophies from "./TeamTrophies";
 
 const RECENT = 5;
 
@@ -162,6 +163,8 @@ export default function TeamView({ slug }: { slug: string }) {
             <p className="mt-2 text-sm text-muted">No roster yet.</p>
           )}
         </section>
+
+        <TeamTrophies slug={t.slug} />
 
         <section>
           <h2 className="section-title">Recent matches</h2>

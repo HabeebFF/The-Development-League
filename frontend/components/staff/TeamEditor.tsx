@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { api, ApiError } from "@/lib/api";
 
@@ -14,7 +14,11 @@ export type AdminTeam = {
   is_league_member: boolean;
   aliases: string[];
   matches_played: number;
+  igl: number | null;
+  igl_name: string | null;
 };
+
+type TeamPlayer = { id: number; name: string; matches: number };
 
 function message(e: unknown): string {
   return e instanceof ApiError ? e.message : "Something went wrong. Try again.";
@@ -34,6 +38,13 @@ export default function TeamEditor({
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const [into, setInto] = useState("");
+  const [players, setPlayers] = useState<TeamPlayer[] | null>(null);
+
+  useEffect(() => {
+    api<TeamPlayer[]>(`/admin/teams/${team.slug}/players`)
+      .then(setPlayers)
+      .catch(() => setPlayers([]));
+  }, [team.slug]);
 
   async function save(form: FormData) {
     setBusy(true);
@@ -45,6 +56,7 @@ export default function TeamEditor({
       body.set("tag", String(form.get("tag") ?? "").trim());
       body.set("primary_color", String(form.get("primary_color") ?? ""));
       body.set("is_league_member", form.get("is_league_member") ? "true" : "false");
+      if (players) body.set("igl", String(form.get("igl") ?? ""));
       const logo = form.get("logo");
       if (logo instanceof File && logo.size > 0) body.set("logo", logo);
       await api(`/admin/teams/${team.slug}`, { method: "PATCH", body });
@@ -92,6 +104,18 @@ export default function TeamEditor({
         <label className="block text-sm sm:col-span-2">
           <span className="text-muted">Logo (PNG or JPG, square works best)</span>
           <input name="logo" type="file" accept="image/png,image/jpeg,image/webp" className="input mt-1" />
+        </label>
+        <label className="block text-sm sm:col-span-2">
+          <span className="text-muted">IGL (in-game leader, for the Best IGL award)</span>
+          <select name="igl" defaultValue={team.igl ?? ""} key={players ? "ready" : "loading"} disabled={!players} className="input mt-1">
+            <option value="">{players ? "Not set" : team.igl_name ?? "Loading players..."}</option>
+            {players && team.igl && !players.some((p) => p.id === team.igl) && <option value={team.igl}>{team.igl_name}</option>}
+            {players?.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name} ({p.matches} {p.matches === 1 ? "match" : "matches"})
+              </option>
+            ))}
+          </select>
         </label>
         <label className="flex items-center gap-2 text-sm sm:col-span-2">
           <input name="is_league_member" type="checkbox" defaultChecked={team.is_league_member} />

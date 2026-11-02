@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { periodLabel, unit } from "./awards.ts";
+import { headline, periodLabel, unit } from "./awards.ts";
 
 test("periods read as a date range or a month", () => {
   assert.equal(periodLabel({ period: "week", start: "2026-10-05", end: "2026-10-11" }), "5 – 11 Oct");
@@ -13,4 +13,12 @@ test("units match the award", () => {
   assert.equal(unit("player", 1), "kill");
   assert.equal(unit("sniper", 3), "sniper kills");
   assert.equal(unit("grenader", 2), "explosive kills");
+});
+
+test("team awards and the MVP read right", () => {
+  assert.equal(unit("kill_team", 45), "kills");
+  assert.equal(unit("team", 1), "point");
+  assert.equal(unit("igl", 15), "pts per match");
+  assert.equal(headline("mvp", 8), "8.0");
+  assert.equal(headline("team", 80), "80");
 });

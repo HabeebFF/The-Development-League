@@ -12,9 +12,15 @@ from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.results.models import StandingRow
+from apps.results.models import PlayerMatchResult, StandingRow
 from apps.results.standings import schedule_rebuild
-from common.permissions import IsStaff, IsSuperAdmin, IsTeamMemberOrStaff, PublicRead
+from common.permissions import (
+    IsStaff,
+    IsSuperAdmin,
+    IsTeamManagerOrStaff,
+    IsTeamMemberOrStaff,
+    PublicRead,
+)
 
 from .merge import MergeError, merge_players, merge_teams
 from .models import (
@@ -90,8 +96,10 @@ class TeamAdminViewSet(viewsets.ModelViewSet):
     lookup_field = "slug"
 
     def get_queryset(self):
-        qs = Team.objects.prefetch_related("aliases").annotate(
-            matches_played=Count("match_results", distinct=True)
+        qs = (
+            Team.objects.select_related("igl")
+            .prefetch_related("aliases")
+            .annotate(matches_played=Count("match_results", distinct=True))
         )
         search = self.request.query_params.get("search", "").strip()
         if search:
@@ -101,6 +109,11 @@ class TeamAdminViewSet(viewsets.ModelViewSet):
                 | Q(aliases__in_game_name__icontains=search)
             ).distinct()
         return qs
+
+    @action(detail=True, methods=["get"])
+    def players(self, request, slug=None):
+        """Everyone who has played for this team, most matches first (the IGL picker)."""
+        return Response(_team_players(self.get_object()))
 
     @action(detail=True, methods=["post"])
     def merge(self, request, slug=None):
@@ -461,6 +474,76 @@ class AwardsView(APIView):
         except ValueError:
             day = latest_day() or timezone.localdate()
         return Response(awards(kind, day))
+
+
+def _team_players(team: Team) -> list[dict]:
+    """Everyone who has played for ``team``, most matches first (the IGL pickers)."""
+    rows = (
+        PlayerMatchResult.objects.filter(team=team)
+        .values("player_id", "player__display_name")
+        .annotate(n=Count("match", distinct=True))
+        .order_by("-n", "player__display_name")
+    )
+    return [
+        {"id": r["player_id"], "name": r["player__display_name"], "matches": r["n"]} for r in rows
+    ]
+
+
+class TeamIglView(APIView):
+    """The team's IGL, for the Best IGL award. The team's managers pick it (staff can too);
+    anyone on the team can see it. ``PUT {"igl": player id | null}``; the player must have
+    played for the team."""
+
+    permission_classes = [IsTeamManagerOrStaff]  # members may GET (below)
+
+    def get_permissions(self):
+        if self.request.method == "GET":
+            return [IsTeamMemberOrStaff()]
+        return [IsTeamManagerOrStaff()]
+
+    def get_team(self) -> Team:
+        if not hasattr(self, "_team"):
+            self._team = get_object_or_404(
+                Team.objects.select_related("igl"), slug=self.kwargs["slug"]
+            )
+        return self._team
+
+    def _body(self, team: Team) -> dict:
+        return {
+            "igl": team.igl_id,
+            "igl_name": team.igl.display_name if team.igl else None,
+            "players": _team_players(team),
+        }
+
+    def get(self, request, slug):
+        return Response(self._body(self.get_team()))
+
+    def put(self, request, slug):
+        team = self.get_team()
+        pick = request.data.get("igl")
+        if pick in (None, ""):
+            team.igl = None
+        else:
+            try:
+                pick = int(pick)
+            except (TypeError, ValueError):
+                raise ValidationError({"igl": "Pick a player."}) from None
+            if not PlayerMatchResult.objects.filter(team=team, player_id=pick).exists():
+                raise ValidationError({"igl": "Pick someone who has played for this team."})
+            team.igl = Player.objects.get(pk=pick)
+        team.save(update_fields=["igl", "updated_at"])
+        return Response(self._body(team))
+
+
+class TeamAwardsView(APIView):
+    """Every team award one team has won (Team of the week/month, Top kill team, Best IGL)."""
+
+    permission_classes = [PublicRead]
+
+    def get(self, request, slug):
+        from apps.results.awards import team_trophies
+
+        return Response({"awards": team_trophies(get_object_or_404(Team, slug=slug))})
 
 
 class KillsView(APIView):

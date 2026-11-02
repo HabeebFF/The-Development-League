@@ -8,7 +8,7 @@ export const metadata: Metadata = { title: "Awards" };
 export default function AwardsPage() {
   return (
     <>
-      <PageHeader eyebrow="Player awards" title="Awards" />
+      <PageHeader eyebrow="Team and player awards" title="Awards" />
       <section className="mx-auto max-w-6xl px-4 py-8">
         <AwardsView />
       </section>

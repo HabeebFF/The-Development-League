@@ -42,6 +42,7 @@ export default function StaffTeams() {
                 <span className="text-xs text-muted">
                   {team.matches_played} {team.matches_played === 1 ? "match" : "matches"}
                   {team.is_league_member ? "" : " · not a league team"}
+                  {team.igl_name ? ` · IGL ${team.igl_name}` : ""}
                 </span>
               </span>
               <button className="btn px-2 py-1 text-xs" onClick={() => toggle(team.slug, "edit")}>

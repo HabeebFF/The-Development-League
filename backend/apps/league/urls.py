@@ -22,6 +22,7 @@ router.register("admin/matches", views.MatchAdminViewSet, basename="admin-match"
 urlpatterns = [
     *router.urls,
     path("awards", views.AwardsView.as_view(), name="awards"),
+    path("team-awards/<slug:slug>", views.TeamAwardsView.as_view(), name="team-awards"),
     path("kills", views.KillsView.as_view(), name="kills"),
     path("ratings", views.RatingsView.as_view(), name="ratings"),
     path(
@@ -32,6 +33,7 @@ urlpatterns = [
     path("cards/month", views.TeamOfMonthView.as_view(), name="cards-month"),
     path("cards/specials", views.CardSpecialsView.as_view(), name="cards-specials"),
     path("cards/<int:player_id>", views.PlayerCardView.as_view(), name="player-card"),
+    path("teams/<slug:slug>/igl", views.TeamIglView.as_view(), name="team-igl"),
     path("teams/<slug:slug>/day-cards", views.TeamDayCardsView.as_view(), name="team-day-cards"),
     path("admin/cards", views.CardAdminView.as_view(), name="admin-cards"),
 ]

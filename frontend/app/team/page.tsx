@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
+import TeamIgl from "@/components/team/TeamIgl";
 import { api, type MatchDay, type Paged } from "@/lib/api";
 
 import { useTeam } from "./TeamGate";
@@ -43,6 +44,8 @@ export default function TeamHome() {
           </Link>
         )}
       </div>
+
+      {membership && <TeamIgl slug={membership.team.slug} canPick={membership.role === "MANAGER" || !!me.staff_role} />}
 
       <h2 className="mt-10 font-display text-2xl uppercase">Matches</h2>
       {!canStudy && (
