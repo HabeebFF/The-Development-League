@@ -14,6 +14,7 @@ from django.db.models import Min
 
 from apps.league.models import Match, MatchDay, Team
 
+from . import weapons
 from .awards import latest_day, matches_between, period_of, published
 from .models import PlayerMatchResult
 
@@ -38,6 +39,8 @@ def rows(matches: list[Match]) -> list[dict]:
         teams[r.player_id][r.team_id] += 1
         played[r.player_id].add(r.match_id)
 
+    known = weapons.names()
+    used = weapons.counts([m.pk for m in matches])
     team_of = {pid: c.most_common(1)[0][0] for pid, c in teams.items()}
     by_id = {t.pk: t for t in Team.objects.filter(pk__in=set(team_of.values()))}
     key = lambda t: (t["kills"], t["knocks"], t["headshots"])  # noqa: E731
@@ -52,6 +55,8 @@ def rows(matches: list[Match]) -> list[dict]:
                 **t,
                 "rank": rank,
                 "matches": len(played[t["player_id"]]),
+                "hs_pct": weapons.hs_pct(t["headshots"], t["knocks"]),
+                "weapon": weapons.main(used.get(t["player_id"]), known),
                 "team": (
                     {
                         "id": team.pk,

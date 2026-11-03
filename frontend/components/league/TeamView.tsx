@@ -3,6 +3,7 @@
 import Link from "next/link";
 
 import type { Paged } from "@/lib/api";
+import { BLANK_PHOTO, TIER_COLORS } from "@/lib/cards";
 import {
   currentSeason,
   mapName,
@@ -12,6 +13,7 @@ import {
   shortDate,
   type MatchDetail,
   type MatchListItem,
+  type RosterPlayer,
   type Season,
   type Standings,
   type TeamDetail,
@@ -54,6 +56,72 @@ function RecentMatch({ match, teamId }: { match: MatchListItem; teamId: number }
           </span>
         )}
       </Link>
+    </li>
+  );
+}
+
+function RosterStat({ label, value }: { label: string; value: string | number }) {
+  return (
+    <span className="min-w-0">
+      <span className="block font-display text-xl leading-none text-white">{value}</span>
+      <span className="block text-[9px] font-bold tracking-widest text-muted uppercase">{label}</span>
+    </span>
+  );
+}
+
+/** One current player: photo, card rating, role and their numbers for the team this season. */
+function RosterCard({ r, colour }: { r: RosterPlayer; colour: string }) {
+  const name = r.player.display_name || r.player.game_uid;
+  const [top, bottom, ink] = r.card ? TIER_COLORS[r.card.tier] : [colour, "#181b26", "#fff"];
+  const body = (
+    <>
+      <span className="pointer-events-none absolute inset-x-0 top-0 h-1" style={{ background: colour }} />
+      <span className="flex items-start gap-3">
+        <span className="relative h-16 w-16 shrink-0 overflow-hidden" style={{ background: `linear-gradient(135deg, ${colour}, #181b26)`, clipPath: "polygon(0 0, 100% 0, 100% 78%, 78% 100%, 0 100%)" }}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={r.photo || BLANK_PHOTO} alt="" className="h-full w-full object-cover object-top" />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block truncate font-display text-xl leading-tight uppercase">{name}</span>
+          <span className="block truncate text-[11px] font-semibold tracking-widest text-muted uppercase">
+            {[...new Set([r.role, r.card?.role_label].filter(Boolean).map((x) => x!.toUpperCase()))].join(" · ") || "Player"}
+            {!r.on_roster && <span className="ml-1.5 normal-case tracking-normal text-muted/80">(from the logs)</span>}
+          </span>
+          <span className="mt-1 block truncate text-xs text-muted">
+            {r.main_weapon ? (
+              <>
+                Main weapon <span className="font-semibold text-white">{r.main_weapon.name}</span>
+              </>
+            ) : (
+              "No named weapon yet"
+            )}
+          </span>
+        </span>
+        {r.card && (
+          <span className="flex h-12 w-11 shrink-0 flex-col items-center justify-center font-display leading-none" style={{ background: `linear-gradient(160deg, ${top}, ${bottom})`, color: ink, clipPath: "polygon(0 0, 100% 0, 100% 80%, 50% 100%, 0 80%)" }} title={`Card rating ${r.card.overall}`}>
+            <span className="text-2xl">{r.card.overall}</span>
+            <span className="text-[8px] font-bold tracking-widest uppercase">OVR</span>
+          </span>
+        )}
+      </span>
+      <span className="mt-3 grid grid-cols-5 gap-1 border-t border-line pt-3 text-center">
+        <RosterStat label="Played" value={r.matches} />
+        <RosterStat label="Kills" value={r.kills} />
+        <RosterStat label="HS%" value={r.hs_pct == null ? "–" : `${r.hs_pct}%`} />
+        <RosterStat label="Rating" value={r.avg_rating == null ? "–" : r.avg_rating.toFixed(1)} />
+        <RosterStat label="Damage" value={r.damage == null ? "–" : r.damage >= 10000 ? `${Math.round(r.damage / 1000)}k` : r.damage.toLocaleString()} />
+      </span>
+    </>
+  );
+  return (
+    <li>
+      {r.card ? (
+        <Link href={`/cards/${r.player.id}`} className="card card-hover block overflow-hidden p-4">
+          {body}
+        </Link>
+      ) : (
+        <div className="card overflow-hidden p-4">{body}</div>
+      )}
     </li>
   );
 }
@@ -142,24 +210,36 @@ export default function TeamView({ slug }: { slug: string }) {
         <section>
           <h2 className="section-title">Roster</h2>
           {t.roster.length ? (
-            <ul className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
-              {t.roster.map((r) => (
-                <li key={r.player.id} className="card card-hover overflow-hidden p-4">
-                  <span className="pointer-events-none absolute inset-x-0 top-0 h-1" style={{ background: colour }} />
-                  <span
-                    className="flex h-12 w-12 items-center justify-center font-display text-xl text-white"
-                    style={{ background: `linear-gradient(135deg, ${colour}, #181b26)`, clipPath: "polygon(0 0, 100% 0, 100% 75%, 75% 100%, 0 100%)" }}
-                    aria-hidden
-                  >
-                    {(r.player.display_name || r.player.game_uid).slice(0, 1).toUpperCase()}
-                  </span>
-                  <p className="mt-3 truncate font-display text-xl leading-tight uppercase">{r.player.display_name || r.player.game_uid}</p>
-                  <p className="text-[11px] font-semibold tracking-widest text-muted uppercase">{r.role || "Player"}</p>
-                </li>
-              ))}
-            </ul>
+            <>
+              <ul className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                {t.roster.map((r) => (
+                  <RosterCard key={r.player.id} r={r} colour={colour} />
+                ))}
+              </ul>
+              <p className="mt-2 text-xs text-muted">
+                Numbers are for {t.name} this season. HS% is headshot knocks out of knocks; the main weapon is the one with
+                the most kills and knocks.
+                {t.roster.some((r) => !r.on_roster) && " Players marked “from the logs” were seen playing for the team but staff haven’t added them to the roster yet."}
+              </p>
+            </>
           ) : (
             <p className="mt-2 text-sm text-muted">No roster yet.</p>
+          )}
+          {t.former.length > 0 && (
+            <div className="mt-6">
+              <h3 className="text-[11px] font-bold tracking-widest text-muted uppercase">Former players</h3>
+              <ul className="mt-2 flex flex-wrap gap-2">
+                {t.former.map((f) => (
+                  <li key={f.player.id} className="chip">
+                    {f.player.display_name || f.player.game_uid}
+                    <span className="ml-1.5 text-muted">
+                      {f.matches} match{f.matches === 1 ? "" : "es"}
+                      {f.left_on ? ` · left ${shortDate(f.left_on)}` : ""}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
           )}
         </section>
 

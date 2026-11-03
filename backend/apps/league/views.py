@@ -946,8 +946,19 @@ class PlayerCardView(APIView):
             {
                 **_card(pick, request),
                 "history": [{"week": c.week, "overall": c.overall, "role": c.role} for c in cards],
+                "shooting": _card_shooting(pick),
             }
         )
+
+
+def _card_shooting(card) -> dict:
+    """Headshot rate and most used weapons over the card's four weeks."""
+    from apps.results.awards import matches_between
+    from apps.results.weapons import shooting
+
+    start, end = card.week - timedelta(days=21), card.week + timedelta(days=6)
+    ids = [m.pk for m in matches_between(start, end)]
+    return {"start": start, "end": end, **shooting(ids, [card.player_id])[card.player_id]}
 
 
 class CardAdminView(APIView):

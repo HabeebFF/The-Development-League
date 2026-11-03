@@ -138,6 +138,17 @@ export type CardSpecials = {
 
 export type CardDetail = PlayerCard & {
   history: { week: string; overall: number; role: Role }[];
+  /** Headshot rate and most used weapons over the card's four weeks. */
+  shooting?: {
+    start: string;
+    end: string;
+    matches: number;
+    kills: number;
+    knocks: number;
+    headshots: number;
+    hs_pct: number | null;
+    weapons: { id: number; name: string; kills: number; knocks: number; uses: number; share: number }[];
+  };
 };
 
 export type Role = "RUSHER" | "GRENADER" | "SNIPER" | "ALL_ROUNDER";

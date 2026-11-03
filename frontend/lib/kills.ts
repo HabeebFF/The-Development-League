@@ -3,6 +3,8 @@
 import { periodLabel } from "./awards.ts";
 import type { TeamRef } from "./api";
 
+export type WeaponUse = { id: number; name: string; uses: number; share: number };
+
 export type KillRow = {
   rank: number;
   player: string;
@@ -14,6 +16,10 @@ export type KillRow = {
   /** Damage dealt to enemies; null when none of the player's matches had a replay .bin. */
   damage: number | null;
   matches: number;
+  /** Headshot knocks as a percentage of knocks; null without knocks. */
+  hs_pct: number | null;
+  /** Most used named weapon (kills + knocks); null when none was named. */
+  weapon: WeaponUse | null;
 };
 
 export type KillScope = "match" | "session" | "week" | "month";

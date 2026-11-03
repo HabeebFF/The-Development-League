@@ -21,6 +21,7 @@ export default function KillTable({ list, showMatches = true, query = "" }: { li
   const rows = all || searching ? found : found.slice(0, FIRST);
   const cell = "px-2 py-2 text-right tabular-nums";
   const damage = list.players.some((p) => p.damage != null);
+  const weapons = list.players.some((p) => p.weapon);
   return (
     <>
       <div className="card overflow-x-auto">
@@ -32,6 +33,8 @@ export default function KillTable({ list, showMatches = true, query = "" }: { li
               <th className={cell}>Kills</th>
               <th className={cell}>Knocks</th>
               <th className={`${cell} hidden sm:table-cell`}>Headshots</th>
+              <th className={cell} title="Headshot knocks as a share of knocks">HS%</th>
+              {weapons && <th className="hidden px-2 py-2 text-left md:table-cell">Main weapon</th>}
               {damage && <th className={`${cell} hidden sm:table-cell`}>Damage</th>}
               {showMatches && <th className={`${cell} hidden sm:table-cell`}>Matches</th>}
             </tr>
@@ -56,6 +59,12 @@ export default function KillTable({ list, showMatches = true, query = "" }: { li
                 <td className={`${cell} font-display text-xl text-white`}>{p.kills}</td>
                 <td className={cell}>{p.knocks}</td>
                 <td className={`${cell} hidden sm:table-cell`}>{p.headshots}</td>
+                <td className={`${cell} text-muted`}>{p.hs_pct == null ? "–" : `${p.hs_pct}%`}</td>
+                {weapons && (
+                  <td className="hidden px-2 py-2 text-left text-sm md:table-cell" title={p.weapon ? `${p.weapon.uses} kills and knocks, ${p.weapon.share}% of theirs` : undefined}>
+                    {p.weapon ? p.weapon.name : <span className="text-muted">–</span>}
+                  </td>
+                )}
                 {damage && <td className={`${cell} hidden sm:table-cell`}>{p.damage == null ? "–" : p.damage.toLocaleString()}</td>}
                 {showMatches && <td className={`${cell} hidden text-muted sm:table-cell`}>{p.matches}</td>}
               </tr>
@@ -68,7 +77,7 @@ export default function KillTable({ list, showMatches = true, query = "" }: { li
           {searching && `${plural(found.length, "player")} found · `}
           {plural(list.kills, "kill")} by {plural(list.players.length, "player")}
           {showMatches ? ` in ${list.matches} match${list.matches === 1 ? "" : "es"}` : ""}. Ties go to more knocks, then more headshot
-          knocks.
+          knocks. HS% is headshot knocks out of knocks (the game only marks headshots on knocks).
         </span>
         {!searching && list.players.length > FIRST && (
           <button className="ml-auto text-accent hover:underline" onClick={() => setAll((a) => !a)}>
