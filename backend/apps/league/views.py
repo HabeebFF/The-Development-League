@@ -307,6 +307,13 @@ class MatchViewSet(viewsets.ReadOnlyModelViewSet):
     def get_serializer_class(self):
         return MatchDetailSerializer if self.action == "retrieve" else MatchListSerializer
 
+    @action(detail=True, methods=["get"])
+    def mvp(self, request, pk=None):
+        """The match MVP (best rating), their weapons and the abilities the replay shows."""
+        from apps.results.mvp import for_match
+
+        return Response({"mvp": for_match(self.get_object())})
+
 
 # -- staff: league structure -------------------------------------------------------------------
 
