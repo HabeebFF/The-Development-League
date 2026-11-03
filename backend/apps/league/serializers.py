@@ -112,6 +112,10 @@ class TeamAdminSerializer(serializers.ModelSerializer):
     slug = serializers.SlugField(required=False)
     aliases = serializers.SerializerMethodField()
     matches_played = serializers.IntegerField(read_only=True, default=0)
+    igl = serializers.PrimaryKeyRelatedField(
+        queryset=Player.objects.all(), allow_null=True, required=False
+    )
+    igl_name = serializers.CharField(source="igl.display_name", read_only=True, default=None)
 
     class Meta:
         model = Team
@@ -128,6 +132,8 @@ class TeamAdminSerializer(serializers.ModelSerializer):
             "plan",
             "aliases",
             "matches_played",
+            "igl",
+            "igl_name",
             "created_at",
         ]
         read_only_fields = ["created_at"]

@@ -129,6 +129,15 @@ class Team(TimeStampedModel):
         related_name="teams",
         help_text="League teams get the league_team plan automatically",
     )
+    # Who calls for the team in game; the logs can't tell, so staff pick (Best IGL award).
+    igl = models.ForeignKey(
+        "league.Player",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="igl_of",
+        help_text="The team's in-game leader, for the Best IGL award",
+    )
 
     class Meta:
         ordering = ["name"]

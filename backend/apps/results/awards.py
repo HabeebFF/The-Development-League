@@ -11,6 +11,17 @@ Kills carry a weapon number from the logs; staff name each number once (Staff > 
 Weapons). Until any weapon has the class an award needs, that award says so instead of
 naming a winner.
 
+Alongside them (kept apart so the player cards' four award slots don't change):
+
+- MVP: the best average match rating (``apps.results.ratings``), from players with at least
+  ``MIN_MATCHES`` matches in the period (fewer when nobody played that many).
+- Team of the week / month: most league points. Ties go to Booyahs, then kills.
+- Top kill team: most team kills. Ties go to kills per match, then Booyahs.
+- Best IGL: each team's manager (or staff) picks the IGL (``Team.igl``); the IGL whose team
+  scored the most points per match in the matches they played, with the same minimum as the MVP.
+
+Totals (not per match) for the team awards on purpose: they reward turning up.
+
 A week runs Monday to Sunday; a month is a calendar month. Only published matches count,
 dated by when they started (or their match day when the start is unknown).
 """
@@ -30,12 +41,13 @@ from django.utils import timezone
 
 from apps.league.models import Match, Player, Team
 
-from .models import MatchEvent, PlayerMatchResult
+from .models import MatchEvent, PlayerMatchResult, TeamMatchResult
 
 CLOSE_M = 15.0
 FIGHT_GAP_S = 30.0  # same as the coach: hits between two teams this close are one fight
 TRACK_SLACK_S = 1.0  # a track point this close in time to the knock is good enough
 TOP = 3  # winner plus runners-up
+MIN_MATCHES = {"week": 4, "month": 8}  # for the MVP and Best IGL
 SNIPER, THROWABLE, EXPLOSIVE = "SNIPER", "THROWABLE", "EXPLOSIVE"
 GRENADER = {THROWABLE, EXPLOSIVE}
 
@@ -312,6 +324,7 @@ def awards(kind: str, day: date, between: tuple[date, date] | None = None) -> di
 
     from apps.coach.models import WeaponName
 
+    team_out = team_awards(kind, matches)
     named = set(WeaponName.objects.values_list("weapon_id", flat=True))
     kills = MatchEvent.objects.filter(match__in=matches, kind=MatchEvent.Kind.KILL)
     unknown = kills.exclude(weapon_id__in=named).count()
@@ -324,7 +337,233 @@ def awards(kind: str, day: date, between: tuple[date, date] | None = None) -> di
         "previous": start - timedelta(days=1),
         "next": end + timedelta(days=1) if latest and end < latest else None,
         "awards": out,
+        "mvp": mvp(kind, matches),
+        "team_awards": team_out,
         # Kills whose weapon staff haven't named: they can't count for sniper or grenader.
         "unidentified_kills": unknown,
         "kills": kills.count(),
     }
+
+
+# -- MVP and team awards --------------------------------------------------------------------
+
+
+def _team_fields(team: Team | None) -> dict:
+    return {
+        "team": team.name if team else None,
+        "team_slug": team.slug if team else None,
+        "team_tag": team.tag if team else "",
+        "team_color": team.primary_color if team else "",
+        "logo": team.logo.url if team and team.logo else None,
+    }
+
+
+def _plural(n: int | float, word: str) -> str:
+    return f"{n:g} {word}{'' if n == 1 else 'es' if word.endswith('ch') else 's'}"
+
+
+def mvp(kind: str, matches: list[Match]) -> dict:
+    """The best average match rating, from players who played enough of the period."""
+    from .ratings import board, points
+
+    entry = {
+        "key": "mvp",
+        "title": f"MVP of the {kind}",
+        "rule": f"Best average player rating, from players with at least {MIN_MATCHES[kind]}"
+        " matches (or the most anyone played). Ties go to more matches, then more kills.",
+        "top": [],
+    }
+    pts = {**points(), "potd_min": MIN_MATCHES[kind]}
+    table = board(matches, pts)
+    need = table["need"]
+    picked = [p for p in table["players"] if p["matches"] >= need][:TOP]
+    teams = {t.pk: t for t in Team.objects.filter(pk__in=[p["team"]["id"] for p in picked
+                                                         if p["team"]])}  # fmt: skip
+    for p in picked:
+        entry["top"].append(
+            {
+                "player": p["player"],
+                "player_id": p["player_id"],
+                **_team_fields(teams.get(p["team"]["id"]) if p["team"] else None),
+                "value": p["rating"],
+                "detail": f"{p['rating']:.1f} average · {_plural(p['matches'], 'match')}"
+                f" · {_plural(p['kills'], 'kill')}",
+                "matches": sorted({r["match"] for r in p["ratings"]}),
+            }
+        )
+    return entry
+
+
+@dataclass
+class TeamLine:
+    points: int = 0
+    kills: int = 0
+    booyahs: int = 0
+    placements: list[int] = field(default_factory=list)
+    matches: list[int] = field(default_factory=list)
+
+    def add(self, r: TeamMatchResult) -> None:
+        self.points += r.total_points
+        self.kills += r.kills
+        self.booyahs += r.placement == 1
+        self.placements.append(r.placement)
+        self.matches.append(r.match_id)
+
+    @property
+    def played(self) -> int:
+        return len(self.matches)
+
+    @property
+    def avg_place(self) -> float:
+        return sum(self.placements) / len(self.placements) if self.placements else 99.0
+
+
+def team_awards(kind: str, matches: list[Match]) -> list[dict]:
+    """Team of the week (or month), Top kill team and Best IGL."""
+    results = list(
+        TeamMatchResult.objects.filter(match__in=matches).select_related("team", "team__igl")
+    )
+    lines: dict[int, TeamLine] = defaultdict(TeamLine)
+    by_match: dict[tuple[int, int], TeamMatchResult] = {}
+    teams: dict[int, Team] = {}
+    for r in results:
+        lines[r.team_id].add(r)
+        by_match[(r.match_id, r.team_id)] = r
+        teams[r.team_id] = r.team
+
+    def team_row(tid: int, value, detail: str, line: TeamLine) -> dict:
+        return {
+            "player": None,
+            "player_id": None,
+            **_team_fields(teams[tid]),
+            "value": value,
+            "detail": detail,
+            "matches": sorted(set(line.matches)),
+        }
+
+    def summary(ln: TeamLine) -> str:
+        return (
+            f"{_plural(ln.points, 'point')} · {_plural(ln.played, 'match')}"
+            f" · {_plural(ln.booyahs, 'Booyah')} · average place {ln.avg_place:.1f}"
+        )
+
+    best = sorted(
+        (t for t in lines if lines[t].played),
+        key=lambda t: (lines[t].points, lines[t].booyahs, lines[t].kills),
+        reverse=True,
+    )[:TOP]
+    killers = sorted(
+        (t for t in lines if lines[t].kills > 0),
+        key=lambda t: (lines[t].kills, lines[t].kills / lines[t].played, lines[t].booyahs),
+        reverse=True,
+    )[:TOP]
+    out = [
+        {
+            "key": "team",
+            "title": f"Team of the {kind}",
+            "rule": "Most league points (placement plus kill points). Ties go to more Booyahs,"
+            " then more kills.",
+            "top": [team_row(t, lines[t].points, summary(lines[t]), lines[t]) for t in best],
+        },
+        {
+            "key": "kill_team",
+            "title": "Top kill team",
+            "rule": "Most team kills. Ties go to more kills per match, then more Booyahs.",
+            "top": [
+                team_row(
+                    t,
+                    lines[t].kills,
+                    f"{_plural(lines[t].kills, 'kill')} · {_plural(lines[t].played, 'match')}"
+                    f" · {lines[t].kills / lines[t].played:.1f} per match",
+                    lines[t],
+                )
+                for t in killers
+            ],
+        },
+    ]
+
+    # Best IGL: the team's results in the matches its IGL played for it.
+    igl_entry = {
+        "key": "igl",
+        "title": "Best IGL",
+        "rule": "Each team manager picks their IGL in the Team area. The IGL whose team scored"
+        " the most points per match in the matches they played, with at least"
+        f" {MIN_MATCHES[kind]} matches (or the most any IGL played). Ties go to better"
+        " average placement, then more matches.",
+        "top": [],
+    }
+    igls = {tid: t.igl for tid, t in teams.items() if t.igl_id}
+    played = PlayerMatchResult.objects.filter(
+        match__in=matches, player_id__in=[p.pk for p in igls.values()]
+    ).values_list("match_id", "player_id", "team_id")
+    igl_lines: dict[int, TeamLine] = defaultdict(TeamLine)
+    for match_id, player_id, team_id in played:
+        igl = igls.get(team_id)
+        if igl and igl.pk == player_id and (r := by_match.get((match_id, team_id))):
+            igl_lines[team_id].add(r)
+    total_igls = Team.objects.filter(igl__isnull=False, is_league_member=True).count()
+    igl_entry["teams_with_igl"] = total_igls
+    if not total_igls:
+        igl_entry["blocked"] = (
+            "No team has picked its IGL yet. Team managers pick theirs in the Team area."
+        )
+    elif igl_lines:
+        need = min(MIN_MATCHES[kind], max(ln.played for ln in igl_lines.values()))
+        ranked = sorted(
+            (t for t, ln in igl_lines.items() if ln.played >= need),
+            key=lambda t: (
+                igl_lines[t].points / igl_lines[t].played,
+                -igl_lines[t].avg_place,
+                igl_lines[t].played,
+            ),
+            reverse=True,
+        )[:TOP]
+        for t in ranked:
+            ln = igl_lines[t]
+            per = round(ln.points / ln.played, 1)
+            igl_entry["top"].append(
+                {
+                    **team_row(t, per, "", ln),
+                    "player": igls[t].display_name,
+                    "player_id": igls[t].pk,
+                    "detail": f"{per:g} points per match · {_plural(ln.played, 'match')}"
+                    f" · average place {ln.avg_place:.1f}",
+                }
+            )
+    out.append(igl_entry)
+    return out
+
+
+def periods_played() -> list[tuple[str, date]]:
+    """Every week and month with published matches, newest first, as (kind, first day)."""
+    days = set()
+    for m in Match.objects.filter(published()).select_related("match_day"):
+        if d := match_date(m):
+            days.add(d)
+    seen = {(k, period_of(k, d)[0]) for d in days for k in ("week", "month")}
+    return sorted(seen, key=lambda p: (p[1], p[0]), reverse=True)
+
+
+def team_trophies(team: Team) -> list[dict]:
+    """Every team award (and Best IGL) this team has won, newest first."""
+    stamp = (
+        Match.objects.filter(published()).aggregate(u=Max("updated_at"))["u"],
+        Team.objects.aggregate(u=Max("updated_at"))["u"],
+    )
+    key = "awards:trophies:" + hashlib.md5(repr(stamp).encode()).hexdigest()
+    table = cache.get(key)
+    if table is None:
+        table = []
+        for kind, start in periods_played():
+            start, end = period_of(kind, start)
+            for a in team_awards(kind, matches_between(start, end)):
+                if a["top"]:
+                    w = a["top"][0]
+                    table.append(
+                        {"kind": kind, "start": start, "end": end, "key": a["key"],
+                         "title": a["title"], "team_slug": w["team_slug"],
+                         "player": w["player"], "detail": w["detail"]}
+                    )  # fmt: skip
+        cache.set(key, table, 60 * 60 * 24)
+    return [{k: v for k, v in t.items() if k != "team_slug"} for t in table
+            if t["team_slug"] == team.slug]  # fmt: skip
