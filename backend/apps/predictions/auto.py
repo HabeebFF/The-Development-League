@@ -3,7 +3,9 @@
 From 10:00 Lagos time on a scrim day the hourly task makes tonight's fixtures (the 8PM and
 10PM sessions, matches 1 to 5) and opens the standard markets on them with suggested odds:
 
-- each match: Booyah, total kills over/under, first blood;
+- each match: Booyah, total kills over/under, first blood, first team out, top fragger,
+  top 3 and finishing position for every team, kills over/under for the 4 teams and 5
+  players with the most kills lately, and 2 kills handicaps between close teams;
 - each session: winner, most Booyahs, top fragger and two head-to-heads;
 - Mondays: most points over the week (Monday to Sunday).
 
@@ -27,7 +29,7 @@ from django.db.models import Count
 from django.utils import timezone
 
 from apps.accounts.models import User
-from apps.league.models import Match, MatchDay, Season, Team
+from apps.league.models import Match, MatchDay, Player, Season, Team
 from apps.results.models import PlayerMatchResult, TeamMatchResult
 
 from .markets import MarketError, create_market, transition
@@ -39,7 +41,10 @@ C, S = Market.Category, Market.Status
 SESSIONS = {"8PM": dt.time(20), "10PM": dt.time(22)}
 MATCHES = 5  # matches in a session
 STARTS_AT = dt.time(10)  # local time markets are made from
-FRAGGERS = 8  # players in a session top fragger market
+FRAGGERS = 8  # players in a top fragger market
+KILL_TEAMS = 4  # teams with a kills over/under each match (the most kills lately)
+STAR_PLAYERS = 5  # players with a kills over/under each match
+HANDICAPS = 2  # kills handicaps each match, between the closest pairs
 WEEK_TEAMS = 8  # teams in the weekly market
 HEAD_TO_HEADS = 2
 RECENT = 20  # recent published matches used to rank teams and players
@@ -101,20 +106,26 @@ def last_lobby(session: str, before: dt.date) -> list[int]:
     return []
 
 
-def team_form(teams: list[int]) -> dict[int, float]:
-    """Average points over each team's recent published matches (0 with none)."""
+def team_form(teams: list[int], field: str = "total_points") -> dict[int, float]:
+    """Average points (or ``kills``) over each team's recent published matches (0 with none)."""
     rows = TeamMatchResult.objects.filter(
         team_id__in=teams, match__status=Match.Status.PUBLISHED
     ).order_by("-match__started_at", "-match_id")
     seen: dict[int, list[int]] = defaultdict(list)
-    for team, points in rows.values_list("team_id", "total_points"):
+    for team, value in rows.values_list("team_id", field):
         if len(seen[team]) < RECENT:
-            seen[team].append(points)
+            seen[team].append(value)
     return {t: (sum(seen[t]) / len(seen[t]) if seen[t] else 0.0) for t in teams}
 
 
 def top_players(teams: list[int], n: int = FRAGGERS) -> list[int]:
     """The ``n`` players of these teams with the most kills a match lately (3+ matches)."""
+    return list(player_form(teams, n))
+
+
+def player_form(teams: list[int], n: int) -> dict[int, float]:
+    """The ``n`` players of these teams with the most kills a match lately (3+ matches), with
+    their average kills, best first."""
     rows = (
         PlayerMatchResult.objects.filter(
             player__current_team_id__in=teams, match__status=Match.Status.PUBLISHED
@@ -126,11 +137,8 @@ def top_players(teams: list[int], n: int = FRAGGERS) -> list[int]:
     for player, k in rows:
         if len(kills[player]) < RECENT:
             kills[player].append(k)
-    ranked = sorted(
-        (p for p in kills if len(kills[p]) >= 3),
-        key=lambda p: (-sum(kills[p]) / len(kills[p]), p),
-    )
-    return ranked[:n]
+    avg = {p: sum(k) / len(k) for p, k in kills.items() if len(k) >= 3}
+    return {p: avg[p] for p in sorted(avg, key=lambda p: (-avg[p], p))[:n]}
 
 
 def close_pairs(teams: list[int], form: dict[int, float], n: int = HEAD_TO_HEADS) -> list[list]:
@@ -233,16 +241,56 @@ class Run:
             for n in range(1, MATCHES + 1)
         ]
         line = kills_line(self.season)
+        names = dict(Team.objects.filter(pk__in=teams).values_list("pk", "name"))
+        kills = team_form(teams, "kills")
+        killers = sorted(teams, key=lambda t: (-kills[t], t))[:KILL_TEAMS]
+        pairs = close_pairs(teams, kills, HANDICAPS)
+        stars = player_form(teams, STAR_PLAYERS)
+        fraggers = top_players(teams)
+        people = dict(Player.objects.filter(pk__in=stars).values_list("pk", "display_name"))
         for f in matches:
             n, k = f.match_number, f"{session}:m{f.match_number}"
-            self.market(f"{k}:booyah", C.BOOYAH, f"Booyah · Match {n}", {"teams": teams}, closes, f)
+            m = f"Match {n}"
+            self.market(f"{k}:booyah", C.BOOYAH, f"Booyah · {m}", {"teams": teams}, closes, f)
             self.market(
-                f"{k}:kills", C.TOTAL_KILLS, f"Total kills · Match {n}", {"line": line}, closes, f
+                f"{k}:kills", C.TOTAL_KILLS, f"Total kills · {m}", {"line": line}, closes, f
             )
             self.market(
-                f"{k}:first-blood", C.FIRST_BLOOD, f"First blood · Match {n}",
-                {"teams": teams}, closes, f,
-            )  # fmt: skip
+                f"{k}:first-blood", C.FIRST_BLOOD, f"First blood · {m}", {"teams": teams}, closes, f
+            )
+            self.market(
+                f"{k}:first-out", C.FIRST_OUT, f"First team out · {m}", {"teams": teams}, closes, f
+            )
+            if len(fraggers) >= 2:
+                self.market(
+                    f"{k}:fragger", C.TOP_FRAGGER, f"Top fragger · {m}",
+                    {"players": fraggers}, closes, f,
+                )  # fmt: skip
+            for t in teams:
+                self.market(
+                    f"{k}:top3:{t}", C.TOP_N, f"{names[t]} top 3 · {m}",
+                    {"team": t, "n": 3}, closes, f,
+                )  # fmt: skip
+                self.market(
+                    f"{k}:band:{t}", C.FINISH_BAND, f"{names[t]} finishing position · {m}",
+                    {"team": t}, closes, f,
+                )  # fmt: skip
+            for t in killers:
+                self.market(
+                    f"{k}:team-kills:{t}", C.TEAM_KILLS, f"{names[t]} kills · {m}",
+                    {"team": t, "line": max(1, round(kills[t]))}, closes, f,
+                )  # fmt: skip
+            for a, b in pairs:
+                self.market(
+                    f"{k}:handicap:{a}-{b}", C.KILLS_HANDICAP,
+                    f"{names[a]} v {names[b]}: kills handicap · {m}",
+                    {"teams": [a, b], "line": max(1, round(kills[a] - kills[b]))}, closes, f,
+                )  # fmt: skip
+            for p, avg in stars.items():
+                self.market(
+                    f"{k}:player-kills:{p}", C.PLAYER_KILLS, f"{people[p]} kills · {m}",
+                    {"player": p, "line": max(1, round(avg))}, closes, f,
+                )  # fmt: skip
         self.market(
             f"{session}:winner", C.SESSION_WINNER, f"{session} winner", {"teams": teams},
             closes, whole,
@@ -251,13 +299,11 @@ class Run:
             f"{session}:booyahs", C.MOST_BOOYAHS, f"Most Booyahs · {session}", {"teams": teams},
             closes, whole,
         )  # fmt: skip
-        players = top_players(teams)
-        if len(players) >= 2:
+        if len(fraggers) >= 2:
             self.market(
                 f"{session}:fragger", C.SESSION_FRAGGER, f"{session} top fragger",
-                {"players": players}, closes, whole,
+                {"players": fraggers}, closes, whole,
             )  # fmt: skip
-        names = dict(Team.objects.filter(pk__in=teams).values_list("pk", "name"))
         for a, b in close_pairs(teams, team_form(teams)):
             self.market(
                 f"{session}:h2h:{a}-{b}", C.SESSION_H2H,

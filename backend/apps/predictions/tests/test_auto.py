@@ -107,6 +107,14 @@ def test_a_scrim_day_gets_both_sessions_with_open_markets(lg):
         assert cats.count(C.BOOYAH) == 5 and cats.count(C.TOTAL_KILLS) == 5
         assert cats.count(C.FIRST_BLOOD) == 5 and cats.count(C.SESSION_H2H) == 2
         assert {C.SESSION_WINNER, C.MOST_BOOYAHS, C.SESSION_FRAGGER} <= set(cats)
+        # Every match: first team out, top fragger, top 3 and finishing position per team,
+        # kills lines for the 4 teams and 5 players with the most kills, 2 handicaps.
+        for cat, each in (
+            (C.FIRST_OUT, 1), (C.TOP_FRAGGER, 1), (C.TOP_N, 4), (C.FINISH_BAND, 4),
+            (C.TEAM_KILLS, 4), (C.KILLS_HANDICAP, 2), (C.PLAYER_KILLS, 5),
+        ):  # fmt: skip
+            assert cats.count(cat) == 5 * each, cat
+        assert markets.count() == 5 * 24 + 5
         start = auto.session_start(date, session)
         for m in markets:
             assert m.status == S.OPEN and m.closes_at == start
@@ -114,6 +122,16 @@ def test_a_scrim_day_gets_both_sessions_with_open_markets(lg):
         booyah = markets.filter(category=C.BOOYAH).first()
         assert sorted(booyah.outcomes.values_list("team__name", flat=True)) == names
         assert all(o.odds > 1 for o in booyah.outcomes.all())
+    # Lines sit near each side's recent average, and handicaps give the stronger side less.
+    m1 = made(date, "8PM").filter(fixture__match_number=1)
+    alpha = m1.get(category=C.TEAM_KILLS, params__team=lg["teams"]["Alpha"].pk)
+    assert alpha.params["line"] == 10  # Alpha averaged 10 kills (8 + 1..3)
+    for h in m1.filter(category=C.KILLS_HANDICAP):
+        a, b = h.params["teams"]
+        assert h.params["line"] >= 1
+        assert h.outcomes.get(team_id=a).label.endswith(f"-{h.params['line'] - 0.5:g} kills")
+    star = m1.filter(category=C.PLAYER_KILLS).first()
+    assert star.params["line"] >= 1 and star.outcomes.count() == 2
     # The two head-to-heads never share a team.
     h2h = made(date, "8PM").filter(category=C.SESSION_H2H)
     ids = [t for m in h2h for t in m.params["teams"]]

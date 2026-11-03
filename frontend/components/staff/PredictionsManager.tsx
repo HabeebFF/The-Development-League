@@ -224,9 +224,10 @@ function AutoPanel({ onRan }: { onRan: () => void }) {
         </button>
       </div>
       <p className="mt-1 text-sm text-muted">
-        From 10:00 on a scrim day, tonight&apos;s 8PM and 10PM sessions get Booyah, total kills and first blood for each match, plus a winner, most Booyahs, a
-        top fragger and 2 head-to-heads for each session, all with suggested odds. Mondays add most points this week. Teams are copied from the last session at
-        the same hour (change a session&apos;s lobby below and its markets follow). Markets close as the session starts; change any odds before then.
+        From 10:00 on a scrim day, tonight&apos;s 8PM and 10PM sessions get, for each match, Booyah, total kills, first blood, first team out, top fragger, top
+        3 and finishing position for every team, kills lines for the leading teams and players, and 2 kills handicaps, plus a winner, most Booyahs, a top
+        fragger and 2 head-to-heads for each session, all with suggested odds. Mondays add most points this week. Teams are copied from the last session at the
+        same hour (change a session&apos;s lobby below and its markets follow). Markets close as the session starts; change any odds before then.
         {!conf.predictions_on && " Predictions are switched off on this site, so nothing is made by itself yet."}
       </p>
       <div className="mt-3 flex flex-wrap items-center gap-1 text-sm">
