@@ -24,6 +24,7 @@ const ICON = {
   ratings: "M12 2l2.4 4.9 5.4.8-3.9 3.8.9 5.4L12 14.3l-4.8 2.6.9-5.4-3.9-3.8 5.4-.8zM4 20h16v2H4z",
   awards: "M7 2h10v3h3v3a5 5 0 0 1-4.6 5A5 5 0 0 1 13 15.9V18h3v4H8v-4h3v-2.1A5 5 0 0 1 8.6 13 5 5 0 0 1 4 8V5h3zm0 5H6v1a3 3 0 0 0 1.4 2.5A7 7 0 0 1 7 8zm10 0v1a7 7 0 0 1-.4 2.5A3 3 0 0 0 18 8V7z",
   cards: "M7 2h10l3 3v12l-8 5-8-5V5zm5 5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5m-4 9h8c0-2-1.8-3-4-3s-4 1-4 3",
+  map: "M9 3 3 5.5v15.5l6-2.5 6 2.5 6-2.5V3l-6 2.5zm0 2.2 6 2.5v11.6l-6-2.5z",
   players: "M12 3a4 4 0 1 1 0 8 4 4 0 0 1 0-8m-7 17c0-3.9 3.1-7 7-7s7 3.1 7 7z",
   teams: "M12 3 4 6v6c0 4.5 3.4 8.3 8 9 4.6-.7 8-4.5 8-9V6z",
   pp: "M12 2 4 5v6c0 5 3.4 9.4 8 11 4.6-1.6 8-6 8-11V5zm-1 6h2v3h3v2h-3v3h-2v-3H8v-2h3z",
@@ -35,6 +36,7 @@ export const HOME: NavLink = { href: "/", label: "Home", blurb: "", icon: ICON.h
 
 export const PLAYER_PAGES: NavLink[] = [
   { href: "/kills", label: "Kill list", blurb: "Top fraggers for each session, week and month", icon: ICON.kills },
+  { href: "/maps", label: "Map leaders", blurb: "Top players, teams and weapons on each map", icon: ICON.map },
   { href: "/ratings", label: "Player ratings", blurb: "Every player marked out of 10, like football", icon: ICON.ratings },
   { href: "/cards", label: "Player cards", blurb: "FUT-style cards, new ones every Saturday", icon: ICON.cards },
   { href: "/awards", label: "Awards", blurb: "Best player, rusher, sniper and grenader", icon: ICON.awards },

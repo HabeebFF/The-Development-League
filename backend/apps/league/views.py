@@ -497,6 +497,26 @@ class KillsView(APIView):
         return Response(killboard.for_period(kind, day))
 
 
+class MapStatsView(APIView):
+    """Top performers and most used weapons on one map: ``?map=<slug>`` (default: the map
+    with the most matches) and ``?period=all|month|week&date=`` (default all time)."""
+
+    permission_classes = [PublicRead]
+
+    def get(self, request):
+        from apps.results.map_stats import PERIODS, for_map
+
+        params = request.query_params
+        kind = params.get("period", "all")
+        if kind not in PERIODS:
+            kind = "all"
+        try:
+            day = date.fromisoformat(params.get("date", ""))
+        except ValueError:
+            day = None
+        return Response(for_map(params.get("map") or None, kind, day))
+
+
 class RatingsView(APIView):
     """Player ratings out of 10 (see apps.results.ratings).
 
