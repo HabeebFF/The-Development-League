@@ -439,3 +439,42 @@ class Leg(models.Model):
 
     def __str__(self) -> str:
         return f"{self.outcome} at {self.odds_accepted}"
+
+
+def every_day() -> list[int]:
+    return [0, 1, 2, 3, 4, 5, 6]
+
+
+class AutoSettings(models.Model):
+    """How markets are made automatically each scrim day (one row). See ``auto.py``."""
+
+    enabled = models.BooleanField(default=True)
+    weekdays = models.JSONField(default=every_day, help_text="Scrim days: 0 = Monday ... 6")
+    skip_dates = models.JSONField(default=list, blank=True, help_text="Nights off, YYYY-MM-DD")
+    last_run_at = models.DateTimeField(null=True, blank=True)
+    last_report = models.JSONField(default=dict, blank=True)
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+    updated_at = models.DateTimeField(auto_now=True)
+
+    @classmethod
+    def get(cls) -> "AutoSettings":
+        return cls.objects.get_or_create(pk=1)[0]
+
+
+class AutoMarket(models.Model):
+    """A market the site made by itself, by what it is for (``key``), so it is made only
+    once: a market staff deleted isn't made again."""
+
+    key = models.CharField(max_length=120, unique=True)
+    market = models.ForeignKey(
+        Market, on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self) -> str:
+        return self.key
