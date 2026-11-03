@@ -16,6 +16,10 @@ router.register(
 
 urlpatterns = [
     *router.urls,
+    path("admin/predictions/auto", views.AutoSettingsView.as_view(), name="admin-predictions-auto"),
+    path(
+        "admin/predictions/auto/run", views.AutoRunView.as_view(), name="admin-predictions-auto-run"
+    ),
     path(
         "admin/predictions/outcomes/<int:pk>",
         views.OutcomeAdminView.as_view(),

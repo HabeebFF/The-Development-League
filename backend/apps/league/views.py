@@ -320,6 +320,13 @@ class MatchViewSet(viewsets.ReadOnlyModelViewSet):
     def get_serializer_class(self):
         return MatchDetailSerializer if self.action == "retrieve" else MatchListSerializer
 
+    @action(detail=True, methods=["get"])
+    def mvp(self, request, pk=None):
+        """The match MVP (best rating), their weapons and the abilities the replay shows."""
+        from apps.results.mvp import for_match
+
+        return Response({"mvp": for_match(self.get_object())})
+
 
 # -- staff: league structure -------------------------------------------------------------------
 
@@ -578,6 +585,26 @@ class KillsView(APIView):
         except ValueError:
             day = latest_day() or timezone.localdate()
         return Response(killboard.for_period(kind, day))
+
+
+class MapStatsView(APIView):
+    """Top performers and most used weapons on one map: ``?map=<slug>`` (default: the map
+    with the most matches) and ``?period=all|month|week&date=`` (default all time)."""
+
+    permission_classes = [PublicRead]
+
+    def get(self, request):
+        from apps.results.map_stats import PERIODS, for_map
+
+        params = request.query_params
+        kind = params.get("period", "all")
+        if kind not in PERIODS:
+            kind = "all"
+        try:
+            day = date.fromisoformat(params.get("date", ""))
+        except ValueError:
+            day = None
+        return Response(for_map(params.get("map") or None, kind, day))
 
 
 class RatingsView(APIView):
@@ -1029,8 +1056,19 @@ class PlayerCardView(APIView):
             {
                 **_card(pick, request),
                 "history": [{"week": c.week, "overall": c.overall, "role": c.role} for c in cards],
+                "shooting": _card_shooting(pick),
             }
         )
+
+
+def _card_shooting(card) -> dict:
+    """Headshot rate and most used weapons over the card's four weeks."""
+    from apps.results.awards import matches_between
+    from apps.results.weapons import shooting
+
+    start, end = card.week - timedelta(days=21), card.week + timedelta(days=6)
+    ids = [m.pk for m in matches_between(start, end)]
+    return {"start": start, "end": end, **shooting(ids, [card.player_id])[card.player_id]}
 
 
 class CardAdminView(APIView):

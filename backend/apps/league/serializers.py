@@ -84,26 +84,28 @@ class TeamPublicSerializer(serializers.ModelSerializer):
 
 
 class TeamDetailSerializer(TeamPublicSerializer):
+    """A team with its full roster: current players with their photo, card and numbers for
+    the team this season, and former players (see ``apps.results.roster``)."""
+
     roster = serializers.SerializerMethodField()
+    former = serializers.SerializerMethodField()
 
     class Meta(TeamPublicSerializer.Meta):
-        fields = [*TeamPublicSerializer.Meta.fields, "roster"]
+        fields = [*TeamPublicSerializer.Meta.fields, "roster", "former"]
+
+    def _full(self, team: Team) -> dict:
+        from apps.results.roster import roster
+
+        cache = self.context.setdefault("_roster", {})
+        if team.pk not in cache:
+            cache[team.pk] = roster(team)
+        return cache[team.pk]
 
     def get_roster(self, team: Team):
-        season = Season.objects.filter(is_active=True).first()
-        if season is None:
-            return []
-        entries = team.roster_entries.filter(season=season, left_on__isnull=True).select_related(
-            "player"
-        )
-        return [
-            {
-                "player": PlayerRefSerializer(e.player).data,
-                "role": e.role,
-                "joined_on": e.joined_on,
-            }
-            for e in entries
-        ]
+        return self._full(team)["players"]
+
+    def get_former(self, team: Team):
+        return self._full(team)["former"]
 
 
 class TeamAdminSerializer(serializers.ModelSerializer):

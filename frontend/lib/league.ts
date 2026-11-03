@@ -6,8 +6,31 @@ export type { TeamRef };
 
 export type Team = TeamRef & { secondary_color: string | null; socials: Record<string, string> };
 
+type PlayerRef = { id: number; game_uid: string; display_name: string };
+
+/** One current player on a team page, with their numbers for the team this season. */
+export type RosterPlayer = {
+  player: PlayerRef;
+  role: string;
+  joined_on: string | null;
+  /** False when staff haven't added them: the match logs show them playing for the team. */
+  on_roster: boolean;
+  photo: string | null;
+  cutout: boolean;
+  card: { overall: number; tier: "gold" | "silver" | "bronze"; role: string; role_label: string; week: string } | null;
+  matches: number;
+  kills: number;
+  knocks: number;
+  headshots: number;
+  hs_pct: number | null;
+  damage: number | null;
+  avg_rating: number | null;
+  main_weapon: { id: number; name: string; uses: number; share: number } | null;
+};
+
 export type TeamDetail = Team & {
-  roster: { player: { id: number; game_uid: string; display_name: string }; role: string; joined_on: string | null }[];
+  roster: RosterPlayer[];
+  former: { player: PlayerRef; role: string; left_on: string | null; matches: number }[];
 };
 
 export type Season = {

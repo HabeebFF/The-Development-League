@@ -24,6 +24,7 @@ urlpatterns = [
     path("awards", views.AwardsView.as_view(), name="awards"),
     path("team-awards/<slug:slug>", views.TeamAwardsView.as_view(), name="team-awards"),
     path("kills", views.KillsView.as_view(), name="kills"),
+    path("map-stats", views.MapStatsView.as_view(), name="map-stats"),
     path("ratings", views.RatingsView.as_view(), name="ratings"),
     path(
         "ratings/player/<int:player_id>", views.PlayerRatingsView.as_view(), name="player-ratings"

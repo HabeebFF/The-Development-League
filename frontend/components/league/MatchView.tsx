@@ -11,6 +11,7 @@ import { useApi } from "@/lib/useApi";
 
 import KillTable from "./KillTable";
 import Loading from "./Loading";
+import MatchMvp from "./MatchMvp";
 import MatchRatings from "./MatchRatings";
 import PageHeader from "./PageHeader";
 import TeamBadge from "./TeamBadge";
@@ -61,6 +62,7 @@ export default function MatchView({ id }: { id: number }) {
         <Link href={`/results/${m.match_day}`} className="text-xs font-bold tracking-widest text-muted uppercase hover:text-accent">
           &larr; Match day
         </Link>
+        <MatchMvp id={m.id} />
         <div className="card mt-4 overflow-x-auto">
           <table className="table">
             <thead>

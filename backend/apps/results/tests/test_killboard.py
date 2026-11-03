@@ -99,3 +99,34 @@ def test_week_and_month(league):
 def test_hidden_without_public_site(league):
     with override_settings(PUBLIC_SITE=False):
         assert APIClient().get("/api/v1/kills").status_code in (401, 403)
+
+
+def test_headshot_rate_and_main_weapon(league):
+    from apps.coach.models import WeaponName
+    from apps.results.models import MatchEvent
+
+    m1 = league["m1"]
+    ace, two, foe = (Player.objects.get(display_name=n) for n in ("ACE", "TWO", "FOE"))
+    alpha, bravo = Team.objects.get(name="Alpha"), Team.objects.get(name="Bravo")
+    WeaponName.objects.create(weapon_id=812, name="Hawk")
+    WeaponName.objects.create(weapon_id=635, name="AWM")
+
+    def hit(kind, actor, target, weapon, at=alpha, tt=bravo):
+        MatchEvent.objects.create(
+            match=m1, kind=kind, source=MatchEvent.Source.DEBUGGER, actor_player=actor,
+            target_player=target, actor_team=at, target_team=tt, weapon_id=weapon,
+        )  # fmt: skip
+
+    K, N = MatchEvent.Kind.KILL, MatchEvent.Kind.KNOCK
+    hit(K, ace, foe, 812)
+    hit(N, ace, foe, 812)
+    hit(K, ace, foe, 635)
+    hit(K, ace, foe, 0)  # zone or fall: not a named weapon
+    hit(K, ace, two, 635, bravo, alpha)  # wrong teams on purpose: still an enemy
+    hit(K, ace, two, 635, alpha, alpha)  # a team-mate: left out
+    data = get(f"?match={m1.pk}")
+    rows = {p["player"]: p for p in data["players"]}
+    assert rows["ACE"]["hs_pct"] == 20  # 1 headshot knock of 5
+    assert rows["ACE"]["weapon"]["name"] in ("Hawk", "AWM")
+    assert rows["ACE"]["weapon"]["uses"] == 2
+    assert rows["TWO"]["hs_pct"] == 0 and rows["TWO"]["weapon"] is None

@@ -4,6 +4,8 @@ Balances are only ever read here; the one write (a staff adjustment) goes throug
 ``services.post_entry`` like every other coin movement.
 """
 
+import datetime as dt
+
 from django.conf import settings
 from django.db import transaction
 from django.db.models import (
@@ -32,7 +34,7 @@ from apps.league.models import Match, MatchDay, Season
 from common.pagination import DefaultPagination
 from common.permissions import IsStaff, IsSuperAdmin, PublicRead
 
-from . import settlement
+from . import auto, settlement
 from .markets import (
     MarketError,
     PlayerRules,
@@ -44,6 +46,7 @@ from .markets import (
     transition,
 )
 from .models import (
+    AutoSettings,
     Bet,
     Fixture,
     LedgerEntry,
@@ -655,6 +658,14 @@ class FixtureAdminViewSet(viewsets.ModelViewSet):
         ]
         return Response(sorted(rows, key=lambda r: not r["likely"]))
 
+    def perform_update(self, serializer):
+        before = set(serializer.instance.teams.values_list("pk", flat=True))
+        fixture = serializer.save()
+        after = set(fixture.teams.values_list("pk", flat=True))
+        if fixture.match_number is None and after != before and len(after) >= 2:
+            # The automatic markets of this session follow the new lobby.
+            auto.rebuild_session(fixture, self.request.user)
+
     def perform_destroy(self, fixture):
         if fixture.markets.exists():
             raise ValidationError({"detail": "This fixture has markets; void them instead."})
@@ -1069,3 +1080,75 @@ class LeaderboardView(APIView):
         return Response(
             {"metric": metric, "accuracy_min_settled": ACCURACY_MIN_SETTLED, "rows": rows}
         )
+
+
+# -- staff: automatic markets ----------------------------------------------------------------------
+
+
+class AutoSettingsSerializer(serializers.ModelSerializer):
+    updated_by = serializers.StringRelatedField()
+
+    class Meta:
+        model = AutoSettings
+        fields = [
+            "enabled",
+            "weekdays",
+            "skip_dates",
+            "last_run_at",
+            "last_report",
+            "updated_by",
+            "updated_at",
+        ]
+        read_only_fields = ["last_run_at", "last_report", "updated_by", "updated_at"]
+
+    def validate_weekdays(self, value):
+        if not isinstance(value, list) or any(
+            not isinstance(d, int) or isinstance(d, bool) or not 0 <= d <= 6 for d in value
+        ):
+            raise ValidationError("Weekdays are numbers from 0 (Monday) to 6 (Sunday).")
+        return sorted(set(value))
+
+    def validate_skip_dates(self, value):
+        if not isinstance(value, list):
+            raise ValidationError("Give a list of dates.")
+        try:
+            dates = {dt.date.fromisoformat(str(d)) for d in value}
+        except ValueError as exc:
+            raise ValidationError("Dates look like 2026-11-02.") from exc
+        # Nights off already past are dropped, so the list stays short.
+        return sorted(d.isoformat() for d in dates if d >= auto.today())
+
+
+class AutoSettingsView(APIView):
+    """GET/PATCH how markets are made automatically; POST .../run makes them now."""
+
+    permission_classes = [IsStaff]
+
+    def get(self, request):
+        data = AutoSettingsSerializer(AutoSettings.get()).data
+        return Response(
+            {**data, "today": auto.today(), "predictions_on": settings.PREDICTIONS_ENABLED}
+        )
+
+    def patch(self, request):
+        conf = AutoSettings.get()
+        data = AutoSettingsSerializer(conf, data=request.data, partial=True)
+        data.is_valid(raise_exception=True)
+        data.save(updated_by=request.user)
+        return self.get(request)
+
+
+class AutoRunView(APIView):
+    """Make the day's missing markets now (whatever the switch, the day or the hour)."""
+
+    permission_classes = [IsStaff]
+
+    def post(self, request):
+        raw = request.data.get("date")
+        try:
+            date = dt.date.fromisoformat(raw) if raw else auto.today()
+        except (TypeError, ValueError) as exc:
+            raise ValidationError({"date": "Dates look like 2026-11-02."}) from exc
+        if date < auto.today():
+            raise ValidationError({"date": "That date has passed."})
+        return Response(auto.run(date, force=True, actor=request.user))
