@@ -290,3 +290,84 @@ def test_the_hourly_task_waits_for_ten(lg, monkeypatch):
     eleven = dt.datetime.combine(date, dt.time(11, 5), tzinfo=auto.local_tz())
     monkeypatch.setattr(auto.timezone, "now", lambda: eleven)
     assert auto.run()["made"]
+
+
+def test_a_lobby_change_says_what_it_remade(lg, staff):
+    date = next_weekday(2)
+    auto.run(date)
+    whole = Fixture.objects.get(date=date, session="8PM", match_number=None)
+    new = [lg["teams"][n].pk for n in ("Alpha", "Bravo", "Idle")]
+    res = as_user(staff).patch(
+        f"/api/v1/admin/predictions/fixtures/{whole.pk}", {"teams": new}, format="json"
+    )
+    assert res.status_code == 200, res.content
+    assert res.json()["markets"]["made"] > 0
+    # Saving the same lobby again changes nothing, so there's nothing to report.
+    again = as_user(staff).patch(
+        f"/api/v1/admin/predictions/fixtures/{whole.pk}", {"teams": new}, format="json"
+    )
+    assert "markets" not in again.json()
+
+
+def test_a_lobby_that_makes_nothing_keeps_the_old_markets(lg, staff, monkeypatch):
+    date = next_weekday(2)
+    auto.run(date)
+    whole = Fixture.objects.get(date=date, session="8PM", match_number=None)
+    before = sorted(made(date, "8PM").values_list("pk", flat=True))
+    keys = AutoMarket.objects.filter(key__contains=":8PM:").count()
+    monkeypatch.setattr(auto.Run, "session", lambda self, session: None)
+    new = [lg["teams"][n].pk for n in ("Alpha", "Bravo", "Idle")]
+    res = as_user(staff).patch(
+        f"/api/v1/admin/predictions/fixtures/{whole.pk}", {"teams": new}, format="json"
+    )
+    assert res.status_code == 200, res.content
+    assert sorted(made(date, "8PM").values_list("pk", flat=True)) == before
+    assert AutoMarket.objects.filter(key__contains=":8PM:").count() == keys
+    assert res.json()["markets"]["made"] == 0
+    assert "old ones were kept" in res.json()["markets"]["notes"][0]
+    # The lobby itself is still saved.
+    assert sorted(whole.teams.values_list("pk", flat=True)) == sorted(new)
+
+
+def test_making_the_same_market_twice_at_once_is_not_an_error(lg, monkeypatch):
+    date = next_weekday(2)
+    auto.run(date)
+    count = Market.objects.count()
+    real = AutoMarket.objects
+
+    class Racing:
+        """Looks as if nothing was made yet, as the other run's rows aren't seen yet."""
+
+        class objects:  # noqa: N801
+            @staticmethod
+            def filter(**kw):
+                class Q:
+                    def exists(self):
+                        return False
+
+                return Q()
+
+            create = staticmethod(real.create)
+
+    monkeypatch.setattr(auto, "AutoMarket", Racing)
+    report = auto.run(date, force=True)
+    assert report["made"] == []
+    assert Market.objects.count() == count
+
+
+def test_markets_can_be_made_only_two_weeks_ahead(lg, staff):
+    client = as_user(staff)
+    conf = client.get("/api/v1/admin/predictions/auto").json()
+    latest = dt.date.fromisoformat(conf["latest_day"])
+    assert latest == auto.today() + dt.timedelta(days=auto.MAKE_AHEAD_DAYS)
+    far = client.post(
+        "/api/v1/admin/predictions/auto/run",
+        {"date": (latest + dt.timedelta(days=1)).isoformat()},
+        format="json",
+    )
+    assert far.status_code == 400
+    assert not Market.objects.exists()
+    edge = client.post(
+        "/api/v1/admin/predictions/auto/run", {"date": latest.isoformat()}, format="json"
+    )
+    assert edge.status_code == 200, edge.content
