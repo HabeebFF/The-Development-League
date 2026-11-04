@@ -176,6 +176,7 @@ const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 function AutoPanel({ onRan }: { onRan: () => void }) {
   const [conf, setConf] = useState<Auto | null>(null);
   const [skip, setSkip] = useState("");
+  const [day, setDay] = useState("");
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
   const [report, setReport] = useState<AutoReport | null>(null);
@@ -199,7 +200,7 @@ function AutoPanel({ onRan }: { onRan: () => void }) {
     setBusy(true);
     setNote(null);
     try {
-      setReport(await api<AutoReport>("/admin/predictions/auto/run", { method: "POST", body: {} }));
+      setReport(await api<AutoReport>("/admin/predictions/auto/run", { method: "POST", body: day ? { date: day } : {} }));
       onRan();
     } catch (e) {
       setNote(message(e));
@@ -227,7 +228,8 @@ function AutoPanel({ onRan }: { onRan: () => void }) {
         From 10:00 on a scrim day, tonight&apos;s 8PM and 10PM sessions get, for each match, Booyah, total kills, first blood, first team out, top fragger, top
         3 and finishing position for every team, kills lines for the leading teams and players, and 2 kills handicaps, plus a winner, most Booyahs, a top
         fragger and 2 head-to-heads for each session, all with suggested odds. Mondays add most points this week. Teams are copied from the last session at the
-        same hour (change a session&apos;s lobby below and its markets follow). Markets close as the session starts; change any odds before then.
+        same hour (change a session&apos;s lobby below and its markets follow). Pick a later day to make its markets ahead of time, then set its lobbies.
+        Markets close as the session starts; change any odds before then.
         {!conf.predictions_on && " Predictions are switched off on this site, so nothing is made by itself yet."}
       </p>
       <div className="mt-3 flex flex-wrap items-center gap-1 text-sm">
@@ -275,8 +277,19 @@ function AutoPanel({ onRan }: { onRan: () => void }) {
         </button>
       </div>
       <div className="mt-4 flex flex-wrap items-center gap-3">
+        <label className="flex items-center gap-2 text-sm">
+          <span className="text-muted">Day</span>
+          <input
+            type="date"
+            min={conf.today}
+            value={day || conf.today}
+            onChange={(e) => setDay(e.target.value === conf.today ? "" : e.target.value)}
+            className="input w-auto py-1"
+            aria-label="Day to make markets for"
+          />
+        </label>
         <button type="button" disabled={busy} className="btn btn-primary px-3 py-1.5 text-sm" onClick={runNow}>
-          {busy ? "Making..." : "Make tonight's now"}
+          {busy ? "Making..." : day ? `Make markets for ${day}` : "Make tonight's now"}
         </button>
         {conf.last_run_at && !report && <span className="text-xs text-muted">Last run {when(conf.last_run_at)}</span>}
       </div>
