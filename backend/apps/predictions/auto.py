@@ -230,7 +230,7 @@ class Run:
             if len(teams) < 2:
                 self.notes.append(
                     f"{session}: no earlier {session} session to copy teams from. "
-                    "Set the lobby, then press Make tonight's now."
+                    "Set its lobby below, then make the day's markets again."
                 )
                 return
             whole.teams.set(teams)
