@@ -24,7 +24,7 @@ from statistics import median
 from zoneinfo import ZoneInfo
 
 from django.conf import settings
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.db.models import Count
 from django.utils import timezone
 
@@ -41,6 +41,7 @@ C, S = Market.Category, Market.Status
 SESSIONS = {"8PM": dt.time(20), "10PM": dt.time(22)}
 MATCHES = 5  # matches in a session
 STARTS_AT = dt.time(10)  # local time markets are made from
+MAKE_AHEAD_DAYS = 14  # how far ahead staff can make a day's markets
 FRAGGERS = 8  # players in a top fragger market
 KILL_TEAMS = 4  # teams with a kills over/under each match (the most kills lately)
 STAR_PLAYERS = 5  # players with a kills over/under each match
@@ -209,6 +210,9 @@ class Run:
                 )  # fmt: skip
                 transition(m, S.OPEN, actor=self.actor)
                 AutoMarket.objects.create(key=key, market=m)
+        except IntegrityError:
+            # The hourly task and a staff "make now" ran at once and the other made it first.
+            return
         except MarketError as exc:
             note = f"{Market.Category(category).label}: not made. {exc}"
             if note not in self.notes:  # once, not once a match
@@ -378,17 +382,35 @@ def rebuild_session(fixture: Fixture, actor) -> dict:
             "made": [],
             "notes": ["This session has started, so its markets were left as they are."],
         }
-    prefix = f"{fixture.date.isoformat()}:{fixture.session}:"
-    for row in AutoMarket.objects.filter(key__startswith=prefix).select_related("market"):
-        m = row.market
-        if m is None:
-            continue  # staff deleted it: stays deleted
-        if m.status in (S.SETTLED, S.VOID) or m.bets.exists() or m.legs.exists():
-            continue
-        with transaction.atomic():
-            row.delete()
-            m.delete()  # its choices, odds history and status log go with it
     job = Run(fixture.date, actor)
-    if job.season is not None:
-        job.session(fixture.session)
-    return {"date": fixture.date.isoformat(), "made": job.made, "notes": job.notes}
+    report = {"date": fixture.date.isoformat(), "made": job.made, "notes": job.notes}
+    if job.season is None:
+        job.notes.append("There's no season yet, so the markets were left as they are.")
+        return report
+    prefix = f"{fixture.date.isoformat()}:{fixture.session}:"
+    # All or nothing: the old markets go only if the new lobby makes some in their place, so a
+    # failed remake never leaves the session with no markets.
+    try:
+        with transaction.atomic():
+            removed = 0
+            rows = AutoMarket.objects.filter(key__startswith=prefix).select_related("market")
+            for row in rows:
+                m = row.market
+                if m is None:
+                    continue  # staff deleted it: stays deleted
+                if m.status in (S.SETTLED, S.VOID) or m.bets.exists() or m.legs.exists():
+                    continue
+                row.delete()
+                m.delete()  # its choices, odds history and status log go with it
+                removed += 1
+            job.session(fixture.session)
+            if removed and not job.made:
+                raise _NothingMade
+    except _NothingMade:
+        job.made.clear()
+        job.notes.append("No markets could be made for this lobby, so the old ones were kept.")
+    return report
+
+
+class _NothingMade(Exception):
+    """Undoes a lobby rebuild that made nothing in place of what it removed."""

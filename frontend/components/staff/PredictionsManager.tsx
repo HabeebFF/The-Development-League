@@ -167,6 +167,7 @@ type Auto = {
   last_run_at: string | null;
   last_report: Partial<AutoReport>;
   today: string;
+  latest_day: string;
   predictions_on: boolean;
 };
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -282,6 +283,7 @@ function AutoPanel({ onRan }: { onRan: () => void }) {
           <input
             type="date"
             min={conf.today}
+            max={conf.latest_day}
             value={day || conf.today}
             onChange={(e) => setDay(e.target.value === conf.today ? "" : e.target.value)}
             className="input w-auto py-1"
@@ -520,8 +522,13 @@ function Lobby({ fixture, teams, onSaved }: { fixture: StaffFixture; teams: Team
   async function save() {
     setNote(null);
     try {
-      await api(`/admin/predictions/fixtures/${fixture.id}`, { method: "PATCH", body: { teams: picked } });
-      setNote("Saved.");
+      const res = await api<{ markets?: { made: number; notes: string[] } }>(`/admin/predictions/fixtures/${fixture.id}`, {
+        method: "PATCH",
+        body: { teams: picked },
+      });
+      // Say what the new lobby did to the session's markets, not just "Saved."
+      const m = res?.markets;
+      setNote(m ? ["Saved.", m.made ? `${m.made} markets remade for the new lobby.` : "", ...m.notes].filter(Boolean).join(" ") : "Saved.");
       setOpen(false);
       onSaved();
     } catch (e) {
@@ -542,7 +549,7 @@ function Lobby({ fixture, teams, onSaved }: { fixture: StaffFixture; teams: Team
         <button type="button" className="text-accent hover:underline" onClick={() => setOpen(!open)}>
           {open ? "Close" : "Change"}
         </button>
-        {note && <span className={`ml-2 ${note === "Saved." ? "text-ok" : "text-bad"}`}>{note}</span>}
+        {note && <span className={`ml-2 ${note.startsWith("Saved.") ? "text-ok" : "text-bad"}`}>{note}</span>}
       </p>
       {open && (
         <div className="mt-2 flex flex-wrap gap-1">

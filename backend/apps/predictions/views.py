@@ -662,9 +662,18 @@ class FixtureAdminViewSet(viewsets.ModelViewSet):
         before = set(serializer.instance.teams.values_list("pk", flat=True))
         fixture = serializer.save()
         after = set(fixture.teams.values_list("pk", flat=True))
+        self.rebuilt = None
         if fixture.match_number is None and after != before and len(after) >= 2:
             # The automatic markets of this session follow the new lobby.
-            auto.rebuild_session(fixture, self.request.user)
+            self.rebuilt = auto.rebuild_session(fixture, self.request.user)
+
+    def update(self, request, *args, **kwargs):
+        response = super().update(request, *args, **kwargs)
+        rebuilt = getattr(self, "rebuilt", None)
+        if rebuilt is not None:
+            # Tell staff what the lobby change did to the session's markets.
+            response.data["markets"] = {"made": len(rebuilt["made"]), "notes": rebuilt["notes"]}
+        return response
 
     def perform_destroy(self, fixture):
         if fixture.markets.exists():
@@ -1126,8 +1135,14 @@ class AutoSettingsView(APIView):
 
     def get(self, request):
         data = AutoSettingsSerializer(AutoSettings.get()).data
+        today = auto.today()
         return Response(
-            {**data, "today": auto.today(), "predictions_on": settings.PREDICTIONS_ENABLED}
+            {
+                **data,
+                "today": today,
+                "latest_day": today + dt.timedelta(days=auto.MAKE_AHEAD_DAYS),
+                "predictions_on": settings.PREDICTIONS_ENABLED,
+            }
         )
 
     def patch(self, request):
@@ -1151,4 +1166,10 @@ class AutoRunView(APIView):
             raise ValidationError({"date": "Dates look like 2026-11-02."}) from exc
         if date < auto.today():
             raise ValidationError({"date": "That date has passed."})
+        if date > auto.today() + dt.timedelta(days=auto.MAKE_AHEAD_DAYS):
+            # Markets open for predictions as soon as they're made, so a mistyped year would
+            # open a far-off day's markets for months.
+            raise ValidationError(
+                {"date": f"Markets can be made up to {auto.MAKE_AHEAD_DAYS} days ahead."}
+            )
         return Response(auto.run(date, force=True, actor=request.user))
