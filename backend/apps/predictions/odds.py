@@ -44,7 +44,7 @@ DEFAULT_LOBBY = 12
 DEFAULT_SESSION = 6
 DEFAULT_MATCHES_LEFT = 10
 MAX_MATCHES_LEFT = 60
-MAX_SUGGESTED = Decimal("100")  # long shots stop here; staff can type more by hand
+MAX_SUGGESTED = Decimal("25")  # long shots stop here; staff can type more by hand
 # Markets where exactly one listed choice (or someone not listed) wins.
 ONE_WINNER = (
     C.BOOYAH,
