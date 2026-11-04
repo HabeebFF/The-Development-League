@@ -102,10 +102,10 @@ def overround(result) -> float:
         (0.3, "3.05"),  # 3.086 rounded down to a 0.05 step
         (0.12, "7.7"),  # 7.716 rounded down to a 0.1 step
         (0.06, "15.0"),  # 15.43 rounded down to a 0.5 step
-        (0.02, "46"),  # 46.29 rounded down to a whole number
+        (0.05, "18.5"),  # 18.51 rounded down to a 0.5 step
         (0.99, "1.01"),  # never below the minimum
-        (0.0001, "100"),  # never above 100
-        (0.0, "100"),
+        (0.02, "25"),  # 46.29, but never above 25
+        (0.0, "25"),
     ],
 )
 def test_price_rounds_down_to_a_tidy_step(chance, odds):
@@ -143,7 +143,8 @@ def test_booyah_favours_the_stronger_team(league):
 def test_booyah_chances_for_the_whole_lobby_add_up_to_one(league):
     result = suggest(league, C.BOOYAH, teams=ids(league, *range(1, 13)))
     assert sum(result["chances"].values()) == pytest.approx(1, abs=0.001)
-    assert overround(result) == pytest.approx(1 + MARGIN, abs=0.06)
+    # The usual margin, plus a little more where long shots stop at the cap.
+    assert 1 + MARGIN - 0.06 <= overround(result) <= 1.3
     assert not any("aren't listed" in n for n in result["notes"])
 
 
@@ -177,7 +178,7 @@ def test_team_kills_line(league):
     assert low["odds"]["yes"] == "1.01"
     assert any("minimum" in n for n in low["notes"])
     high = suggest(league, C.TEAM_KILLS, fixture, team=team, line=40)
-    assert Decimal(high["odds"]["yes"]) >= 100
+    assert high["odds"]["yes"] == "25.00"  # the most the site suggests
 
 
 def test_a_new_team_leans_on_league_averages(league):
@@ -238,7 +239,7 @@ def test_overall_markets_start_from_the_current_table(league):
     )
     assert close["chances"][f"team:{leader}"] > 0.95
     assert close["chances"][f"team:{last}"] == 0
-    assert close["odds"][f"team:{last}"] == "100.00"
+    assert close["odds"][f"team:{last}"] == "25.00"
     assert close["matches_left"] == 1
     default = suggest(league, C.OVERALL_TOP_N, team=ids(league, 7)[0], n=5)
     assert default["matches_left"] == DEFAULT_MATCHES_LEFT

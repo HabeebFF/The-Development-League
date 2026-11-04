@@ -416,7 +416,7 @@ def test_suggested_odds_cover_every_new_market(game, staff, category, params):
         season=game["season"], category=category, params=params, fixture=game["fixture"]
     )
     assert set(got["odds"]) == {s["code"] for s in outcome_specs(category, params)}
-    assert all(1 <= float(o) <= 100 for o in got["odds"].values())
+    assert all(1 <= float(o) <= 25 for o in got["odds"].values())
 
 
 def test_odds_reflect_history(game, staff):
