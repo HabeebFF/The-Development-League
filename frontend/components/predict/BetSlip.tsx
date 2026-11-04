@@ -243,7 +243,7 @@ export default function BetSlip() {
 
       {review && (
         <div
-          className="fixed inset-0 z-40 flex items-end justify-center bg-black/70 p-4 sm:items-center"
+          className="fixed inset-0 z-[60] flex items-end justify-center bg-black/70 p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:items-center"
           role="dialog"
           aria-modal="true"
           aria-label="Confirm prediction"
