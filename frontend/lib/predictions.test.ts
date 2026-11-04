@@ -15,12 +15,12 @@ test("return and profit match the server's rounding down", () => {
 
 test("stake checks", () => {
   assert.equal(stakeProblem("100", 1000), null);
-  assert.equal(stakeProblem("", 1000), "Enter a whole number of coins.");
-  assert.equal(stakeProblem("10.5", 1000), "Enter a whole number of coins.");
-  assert.equal(stakeProblem("-5", 1000), "Enter a whole number of coins.");
-  assert.equal(stakeProblem("9", 1000), "The smallest stake is 10 coins.");
-  assert.equal(stakeProblem("501", 1000), "The biggest stake is 500 coins.");
-  assert.equal(stakeProblem("300", 200), "You only have 200 coins.");
+  assert.equal(stakeProblem("", 1000), "Enter a whole number of DC.");
+  assert.equal(stakeProblem("10.5", 1000), "Enter a whole number of DC.");
+  assert.equal(stakeProblem("-5", 1000), "Enter a whole number of DC.");
+  assert.equal(stakeProblem("9", 1000), "The smallest stake is 10 DC.");
+  assert.equal(stakeProblem("501", 1000), "The biggest stake is 500 DC.");
+  assert.equal(stakeProblem("300", 200), "You only have 200 DC.");
   assert.equal(stakeProblem("300", null), null);
 });
 
@@ -34,8 +34,8 @@ test("closing countdown", () => {
 });
 
 test("numbers read plainly", () => {
-  assert.equal(coins(1), "1 coin");
-  assert.equal(coins(1500), "1,500 coins");
+  assert.equal(coins(1), "1 DC");
+  assert.equal(coins(1500), "1,500 DC");
   assert.equal(signedCoins(250), "+250");
   assert.equal(signedCoins(-100), "−100");
   assert.equal(percent(0.6667), "66.7%");
@@ -53,6 +53,36 @@ test("markets group under their fixture", () => {
       ["F8", [4]],
     ],
   );
+});
+
+test("open markets split by session, then match, winner markets first", async () => {
+  const { bySession } = await import("./predictions.ts");
+  const m = (id: number, session: string, match: number | null, category = "TOP_N", date = "2026-11-04") =>
+    ({
+      id,
+      category,
+      closes_at: "2026-11-04T19:00:00Z",
+      season: { id: 1, name: "S1" },
+      fixture: { id: 0, title: "", date, session, match_number: match, scheduled_at: `${date}T${session === "8PM" ? "19" : "21"}:00:00Z` },
+    }) as Market;
+  const got = bySession([m(1, "10PM", 1), m(2, "8PM", null, "SESSION_WINNER"), m(3, "8PM", 2), m(4, "8PM", 1), m(5, "8PM", 1, "BOOYAH")]);
+  assert.deepEqual(
+    got.map((s) => [s.label, s.matches.map((x) => [x.label, x.markets.map((y) => y.id)])]),
+    [
+      [
+        "8PM",
+        [
+          ["M1", [5, 4]],
+          ["M2", [3]],
+          ["Whole session", [2]],
+        ],
+      ],
+      ["10PM", [["M1", [1]]]],
+    ],
+  );
+  // The same hour on two days gets its date.
+  const two = bySession([m(1, "8PM", 1), m(2, "8PM", 1, "TOP_N", "2026-11-05")]);
+  assert.notEqual(two[0].label, two[1].label);
 });
 
 test("staff: outcome codes, titles and checks", async () => {

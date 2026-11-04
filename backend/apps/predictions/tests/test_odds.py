@@ -104,8 +104,8 @@ def overround(result) -> float:
         (0.06, "15.0"),  # 15.43 rounded down to a 0.5 step
         (0.02, "46"),  # 46.29 rounded down to a whole number
         (0.99, "1.01"),  # never below the minimum
-        (0.0001, "500"),  # never above 500
-        (0.0, "500"),
+        (0.0001, "100"),  # never above 100
+        (0.0, "100"),
     ],
 )
 def test_price_rounds_down_to_a_tidy_step(chance, odds):
@@ -238,7 +238,7 @@ def test_overall_markets_start_from_the_current_table(league):
     )
     assert close["chances"][f"team:{leader}"] > 0.95
     assert close["chances"][f"team:{last}"] == 0
-    assert close["odds"][f"team:{last}"] == "500.00"
+    assert close["odds"][f"team:{last}"] == "100.00"
     assert close["matches_left"] == 1
     default = suggest(league, C.OVERALL_TOP_N, team=ids(league, 7)[0], n=5)
     assert default["matches_left"] == DEFAULT_MATCHES_LEFT

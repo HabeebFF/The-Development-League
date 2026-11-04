@@ -68,7 +68,7 @@ def post_entry(
             return existing, False
         after = locked.balance + amount
         if after < 0:
-            raise NotEnoughCoins(f"Not enough coins: you have {locked.balance}.")
+            raise NotEnoughCoins(f"Not enough DC: you have {locked.balance} DC.")
         entry = LedgerEntry.objects.create(
             wallet=locked,
             seq=locked.entry_count + 1,

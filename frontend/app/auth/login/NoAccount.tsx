@@ -15,7 +15,7 @@ export default function NoAccount() {
           <Link href="/auth/signup" className="font-semibold text-accent hover:underline">
             Sign up
           </Link>{" "}
-          to play predictions with free coins.
+          to play predictions with free DC (Development Coins).
         </p>
       )}
       <p className="mt-1">

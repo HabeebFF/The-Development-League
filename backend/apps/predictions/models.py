@@ -43,7 +43,7 @@ class LedgerEntry(models.Model):
     """One coin movement. Never edited or deleted; mistakes are fixed with a new entry."""
 
     class Kind(models.TextChoices):
-        INITIAL = "INITIAL", "Starting coins"
+        INITIAL = "INITIAL", "Starting DC"
         STAKE = "STAKE", "Stake"
         PAYOUT = "PAYOUT", "Winning payout"
         REFUND = "REFUND", "Refund (void)"

@@ -416,7 +416,7 @@ def test_suggested_odds_cover_every_new_market(game, staff, category, params):
         season=game["season"], category=category, params=params, fixture=game["fixture"]
     )
     assert set(got["odds"]) == {s["code"] for s in outcome_specs(category, params)}
-    assert all(1 <= float(o) <= 500 for o in got["odds"].values())
+    assert all(1 <= float(o) <= 100 for o in got["odds"].values())
 
 
 def test_odds_reflect_history(game, staff):
@@ -433,6 +433,18 @@ def test_odds_reflect_history(game, staff):
     )  # fmt: skip
     assert blood["chances"][f"team:{t['Bravo'].pk}"] > blood["chances"][f"team:{t['Charlie'].pk}"]
     assert [x["name"] for x in h2h["players"]] == ["Bea", "Dee"]
+
+
+def test_first_blood_chances_never_add_up_to_more_than_one(game, staff):
+    publish(game)
+    teams = [team.pk for team in game["teams"].values()]
+    blood = suggest_odds(
+        season=game["season"], category=C.FIRST_BLOOD, params={"teams": teams},
+        fixture=game["fixture"],
+    )  # fmt: skip
+    assert sum(blood["chances"].values()) <= 1.0001
+    # So the house keeps about the usual margin, not more.
+    assert sum(1 / float(o) for o in blood["odds"].values()) < 1.15
 
 
 def test_api_shows_the_player_on_each_choice(game, staff, fans):
