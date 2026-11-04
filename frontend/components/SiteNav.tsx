@@ -79,14 +79,25 @@ export default function SiteNav() {
                 Sign out
               </button>
             ) : (
-              <Link
-                href={`/auth/login?next=${encodeURIComponent(path)}`}
-                className="btn btn-primary ml-2 px-4 py-1.5 text-sm"
-              >
-                Sign in
-              </Link>
+              <>
+                <Link href={`/auth/login?next=${encodeURIComponent(path)}`} className={`btn ml-2 px-4 py-1.5 text-sm ${site.signup ? "" : "btn-primary"}`}>
+                  Sign in
+                </Link>
+                {site.signup && (
+                  <Link href="/auth/signup" className="btn btn-primary ml-2 px-4 py-1.5 text-sm">
+                    Sign up
+                  </Link>
+                )}
+              </>
             )}
           </div>
+          {status === "out" && site.signup && (
+            <span className="ml-auto shrink-0 md:hidden">
+              <Link href="/auth/signup" className="btn btn-primary px-3 py-1.5 text-sm">
+                Sign up
+              </Link>
+            </span>
+          )}
         </nav>
       </header>
 
@@ -130,9 +141,16 @@ export default function SiteNav() {
                   Sign out
                 </button>
               ) : (
-                <Link href={`/auth/login?next=${encodeURIComponent(path)}`} className="btn btn-primary px-4 py-2 text-sm">
-                  Sign in
-                </Link>
+                <>
+                  {site.signup && (
+                    <Link href="/auth/signup" className="btn btn-primary px-4 py-2 text-sm">
+                      Sign up
+                    </Link>
+                  )}
+                  <Link href={`/auth/login?next=${encodeURIComponent(path)}`} className={`btn px-4 py-2 text-sm ${site.signup ? "" : "btn-primary"}`}>
+                    Sign in
+                  </Link>
+                </>
               )}
             </div>
           </div>
