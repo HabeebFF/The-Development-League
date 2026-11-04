@@ -191,6 +191,23 @@ def test_changing_the_lobby_remakes_markets_nobody_predicted_on(lg, staff):
     assert made(date, "10PM").filter(category=C.BOOYAH).count() == 5
 
 
+def test_a_lobby_change_after_the_session_starts_keeps_its_markets(lg, staff, monkeypatch):
+    date = next_weekday(2)
+    auto.run(date)
+    before = sorted(made(date, "8PM").values_list("pk", flat=True))
+    whole = Fixture.objects.get(date=date, session="8PM", match_number=None)
+    # The session is under way.
+    started = timezone.now() - dt.timedelta(minutes=5)
+    monkeypatch.setattr(auto, "session_start", lambda *_: started)
+    new = [lg["teams"][n].pk for n in ("Alpha", "Bravo")]
+    res = as_user(staff).patch(
+        f"/api/v1/admin/predictions/fixtures/{whole.pk}", {"teams": new}, format="json"
+    )
+    assert res.status_code == 200, res.content
+    assert sorted(made(date, "8PM").values_list("pk", flat=True)) == before
+    assert sorted(whole.teams.values_list("pk", flat=True)) == sorted(new)
+
+
 def test_switch_days_and_nights_off(lg, settings):
     date = next_weekday(2)
     conf = AutoSettings.get()

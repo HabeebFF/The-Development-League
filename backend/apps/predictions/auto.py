@@ -367,6 +367,17 @@ def run(date: dt.date | None = None, *, force: bool = False, actor=None) -> dict
 def rebuild_session(fixture: Fixture, actor) -> dict:
     """After staff change a session's lobby: remake its automatic markets that nobody has
     predicted on yet, with the new teams. Markets with predictions are left as they are."""
+    if (
+        fixture.session not in SESSIONS
+        or session_start(fixture.date, fixture.session) <= timezone.now()
+    ):
+        # Once the session has started its markets are closed and can't be made again, so
+        # removing them would only empty the page. The new lobby still decides who can't play.
+        return {
+            "date": fixture.date.isoformat(),
+            "made": [],
+            "notes": ["This session has started, so its markets were left as they are."],
+        }
     prefix = f"{fixture.date.isoformat()}:{fixture.session}:"
     for row in AutoMarket.objects.filter(key__startswith=prefix).select_related("market"):
         m = row.market
