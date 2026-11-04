@@ -1355,7 +1355,7 @@ function CorrectForm({ market, onDone }: { market: StaffMarket; onDone: () => vo
             {r.voids.length > 0 && `, refunded: ${r.voids.map((w) => w.label).join(", ")}`}
             {r.dead_heat > 1 && `, ${r.dead_heat} teams share the win`} · {r.by} · {when(r.created_at)}
             {r.reason && <span className="text-muted"> · {r.reason}</span>}
-            {r.summary.coins_unrecovered ? <span className="text-bad"> · {r.summary.coins_unrecovered} coins could not be taken back</span> : null}
+            {r.summary.coins_unrecovered ? <span className="text-bad"> · {r.summary.coins_unrecovered} DC could not be taken back</span> : null}
           </li>
         ))}
       </ul>
@@ -1547,7 +1547,7 @@ function WalletDetail({ wallet, canAdjust, onAdjusted }: { wallet: StaffWallet; 
               <th className="text-left">#</th>
               <th className="text-left">When</th>
               <th className="text-left">What</th>
-              <th className="text-right">Coins</th>
+              <th className="text-right">DC</th>
               <th className="text-right">Before → after</th>
             </tr>
           </thead>
@@ -1583,7 +1583,7 @@ function WalletDetail({ wallet, canAdjust, onAdjusted }: { wallet: StaffWallet; 
             disabled={!/^-?\d+$/.test(amount) || Number(amount) === 0 || reason.trim().length < 5}
             onClick={adjust}
           >
-            Adjust coins
+            Adjust DC
           </button>
           {note && <p className="w-full text-bad">{note}</p>}
         </div>

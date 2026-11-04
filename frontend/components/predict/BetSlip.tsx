@@ -98,9 +98,7 @@ export default function BetSlip() {
         if (data.code === "odds_changed" && data.odds && market !== undefined) slip.setOdds(market, data.odds);
         setFlagged(data.markets ?? (market !== undefined ? [market] : []));
       }
-      setError(
-        data?.detail ?? (e instanceof ApiError ? e.message : "No connection. Your coins weren't touched if this didn't go through; check My predictions."),
-      );
+      setError(data?.detail ?? (e instanceof ApiError ? e.message : "No connection. Your DC weren't touched if this didn't go through; check My predictions."));
     } finally {
       setBusy(false);
     }
@@ -190,7 +188,7 @@ export default function BetSlip() {
                     <>
                       <label className="block">
                         <span className="text-muted">
-                          Stake ({MIN_STAKE} to {MAX_STAKE} coins)
+                          Stake ({MIN_STAKE} to {MAX_STAKE} DC)
                         </span>
                         <input className="input mt-1" inputMode="numeric" value={stake} onChange={(e) => setStake(e.target.value)} aria-invalid={!!stakeNote} />
                       </label>
@@ -211,7 +209,7 @@ export default function BetSlip() {
                           <dd className="text-right font-semibold">{coins(returns)}</dd>
                           <dt className="text-muted">Profit</dt>
                           <dd className="text-right font-semibold text-ok">{coins(returns - amount)}</dd>
-                          <dt className="text-muted">Your coins</dt>
+                          <dt className="text-muted">Your DC</dt>
                           <dd className="text-right">{balance !== null ? coins(balance) : "–"}</dd>
                         </dl>
                       )}
@@ -234,7 +232,7 @@ export default function BetSlip() {
                     <button type="button" className="text-muted hover:text-bad" onClick={() => slip.clear()}>
                       Clear slip
                     </button>
-                    <span className="text-muted">Play coins only</span>
+                    <span className="text-muted">DC: play coins only</span>
                   </div>
                 </>
               )}
@@ -279,7 +277,7 @@ export default function BetSlip() {
                   ),
                 )}
               </dd>
-              <dt className="text-muted">Coins after</dt>
+              <dt className="text-muted">DC after</dt>
               <dd className="text-right">{balance !== null ? coins(balance - review.stake) : "–"}</dd>
             </dl>
             <p className="mt-3 text-xs text-muted">

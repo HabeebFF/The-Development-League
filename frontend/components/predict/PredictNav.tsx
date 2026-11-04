@@ -11,7 +11,7 @@ import type { WalletState } from "./useWallet";
 const LINKS = [
   { href: "/predict", label: "Markets" },
   { href: "/predict/mine", label: "My predictions" },
-  { href: "/predict/wallet", label: "Coins" },
+  { href: "/predict/wallet", label: "DC" },
   { href: "/predict/leaderboard", label: "Leaderboard" },
 ];
 
@@ -19,18 +19,18 @@ const LINKS = [
 export default function PredictNav({ wallet }: { wallet: WalletState }) {
   const path = usePathname();
   return (
-    <div className="flex flex-wrap items-center gap-2">
-      <nav className="flex flex-wrap gap-1" aria-label="Predictions">
+    <div className="flex flex-col gap-2 md:flex-row md:items-center">
+      <nav className="-mx-4 flex gap-1 overflow-x-auto px-4 md:mx-0 md:px-0" aria-label="Predictions">
         {LINKS.map((l) => {
           const on = l.href === "/predict" ? path === "/predict" || path.startsWith("/predict/markets") : path.startsWith(l.href);
           return (
-            <Link key={l.href} href={l.href} className={`btn px-3 py-1.5 text-xs uppercase ${on ? "border-accent text-white" : "text-muted"}`}>
+            <Link key={l.href} href={l.href} className={`btn shrink-0 px-3 py-1.5 text-xs uppercase ${on ? "border-accent text-white" : "text-muted"}`}>
               {l.label}
             </Link>
           );
         })}
       </nav>
-      <span className="ml-auto flex items-center gap-3">
+      <span className="flex items-center justify-between gap-3 md:ml-auto md:justify-end">
         <OddsSwitch />
         <Balance wallet={wallet} />
       </span>
@@ -67,7 +67,7 @@ function OddsSwitch() {
 export function Balance({ wallet }: { wallet: WalletState }) {
   if (wallet.kind === "ok")
     return (
-      <span className="font-display text-2xl text-accent-2" aria-label="Your coins">
+      <span className="border border-accent-2/40 bg-accent-2/10 px-3 py-0.5 font-display text-xl text-accent-2" aria-label="Your Development Coins (DC)">
         {coins(wallet.wallet.balance)}
       </span>
     );
@@ -91,4 +91,4 @@ export function NotOpen() {
   return <p className="text-muted">Predictions aren&apos;t open yet. Check back soon.</p>;
 }
 
-export const NOTE = "Play coins only: they can't be bought, cashed out or sent to anyone, and have no money value.";
+export const NOTE = "DC (Development Coin) are play coins: they can't be bought, cashed out or sent to anyone, and have no money value.";

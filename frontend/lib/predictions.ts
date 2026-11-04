@@ -213,16 +213,16 @@ export function profit(stake: number, odds: string): number {
 
 /** Why a stake can't be used, or null when it can. */
 export function stakeProblem(text: string, balance: number | null): string | null {
-  if (!/^\d+$/.test(text.trim())) return "Enter a whole number of coins.";
+  if (!/^\d+$/.test(text.trim())) return "Enter a whole number of DC.";
   const stake = Number(text);
-  if (stake < MIN_STAKE) return `The smallest stake is ${MIN_STAKE} coins.`;
-  if (stake > MAX_STAKE) return `The biggest stake is ${MAX_STAKE} coins.`;
+  if (stake < MIN_STAKE) return `The smallest stake is ${MIN_STAKE} DC.`;
+  if (stake > MAX_STAKE) return `The biggest stake is ${MAX_STAKE} DC.`;
   if (balance !== null && stake > balance) return `You only have ${coins(balance)}.`;
   return null;
 }
 
 export function coins(n: number): string {
-  return `${n.toLocaleString("en-GB")} ${Math.abs(n) === 1 ? "coin" : "coins"}`;
+  return `${n.toLocaleString("en-GB")} DC`;
 }
 
 export function signedCoins(n: number): string {
@@ -264,7 +264,7 @@ export function percent(accuracy: number | null): string {
 
 /** What each leaderboard tab measures, shown on the page. */
 export const METRICS: { key: Metric; label: string; explain: (min: number) => string }[] = [
-  { key: "balance", label: "Coins", explain: () => "Coins held now. Everyone started with the same amount, so this is total profit." },
+  { key: "balance", label: "DC", explain: () => "DC held now. Everyone started with the same amount, so this is total profit." },
   {
     key: "accuracy",
     label: "Accuracy",
@@ -666,4 +666,92 @@ export function toLocalInput(iso: string): string {
   const d = new Date(iso);
   const p = (n: number) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
+// -- the Markets page: sessions, matches and kinds -------------------------------------------------
+
+/** The chips under the match tabs, and which markets each one holds. */
+export const KINDS: { key: string; label: string; categories: string[] }[] = [
+  { key: "winner", label: "Winner", categories: ["BOOYAH", "SESSION_WINNER", "MOST_BOOYAHS", "OVERALL_WINNER", "RANGE_WINNER"] },
+  { key: "top", label: "Top 3", categories: ["TOP_N", "OVERALL_TOP_N", "RANGE_TOP_N"] },
+  { key: "finish", label: "Finish", categories: ["FINISH_BAND", "H2H_PLACEMENT", "H2H_POINTS", "SESSION_H2H", "POINTS_HANDICAP"] },
+  { key: "kills", label: "Kills", categories: ["TOTAL_KILLS", "TEAM_KILLS", "KILLS_HANDICAP", "H2H_KILLS", "SESSION_KILLS"] },
+  {
+    key: "players",
+    label: "Players",
+    categories: ["TOP_FRAGGER", "PLAYER_KILLS", "PLAYER_H2H", "PLAYER_DAMAGE", "SESSION_FRAGGER", "SEASON_FRAGGER", "RANGE_FRAGGER", "FIRST_DEATH"],
+  },
+  { key: "firsts", label: "Firsts", categories: ["FIRST_BLOOD", "FIRST_OUT"] },
+];
+
+export function kindOf(category: string): string {
+  return KINDS.find((k) => k.categories.includes(category))?.key ?? "other";
+}
+
+/** Markets where only one listed choice can win; when nobody listed wins, every pick loses. */
+export const ONE_WINNER = new Set([
+  "BOOYAH",
+  "SESSION_WINNER",
+  "MOST_BOOYAHS",
+  "OVERALL_WINNER",
+  "RANGE_WINNER",
+  "FIRST_OUT",
+  "FIRST_BLOOD",
+  "TOP_FRAGGER",
+  "FIRST_DEATH",
+  "SESSION_FRAGGER",
+  "SEASON_FRAGGER",
+  "RANGE_FRAGGER",
+]);
+
+/** One session (8PM on a date), or the season's longer markets. */
+export type SessionGroup = {
+  key: string;
+  label: string;
+  /** "M1".."M5", then "Session" for markets on the whole session. */
+  matches: { key: string; label: string; startsAt: string; markets: Market[] }[];
+};
+
+/** Open markets split by session, then by match, in the order they're played. */
+export function bySession(markets: Market[]): SessionGroup[] {
+  const sessions = new Map<string, SessionGroup & { sortAt: string }>();
+  for (const m of markets) {
+    const f = m.fixture;
+    const key = f ? `${f.date} ${f.session}` : "season";
+    if (!sessions.has(key)) {
+      sessions.set(key, { key, label: f ? f.session || f.title : "Season", matches: [], sortAt: f ? f.scheduled_at : "~" });
+    }
+    const s = sessions.get(key)!;
+    const mk = f?.match_number ? `m${f.match_number}` : f ? "session" : "season";
+    let match = s.matches.find((x) => x.key === mk);
+    if (!match) {
+      const label = f?.match_number ? `M${f.match_number}` : f ? "Whole session" : "Season";
+      match = { key: mk, label, startsAt: f ? f.scheduled_at : m.closes_at, markets: [] };
+      s.matches.push(match);
+    }
+    if (f && f.scheduled_at < s.sortAt) s.sortAt = f.scheduled_at;
+    match.markets.push(m);
+  }
+  const list = [...sessions.values()].sort((a, b) => a.sortAt.localeCompare(b.sortAt));
+  // Two sessions at the same hour on different days need the date to tell them apart.
+  const hours = new Map<string, number>();
+  for (const s of list) hours.set(s.label, (hours.get(s.label) ?? 0) + 1);
+  for (const s of list) {
+    if (s.key !== "season" && (hours.get(s.label) ?? 0) > 1) s.label = `${shortDate(s.key.split(" ")[0])} ${s.label}`;
+    // Matches in play order, whole-session markets last.
+    s.matches.sort((a, b) => (a.key === "session" ? 1 : b.key === "session" ? -1 : a.key.localeCompare(b.key, "en", { numeric: true })));
+    for (const x of s.matches) x.markets.sort((a, b) => order(a) - order(b));
+  }
+  return list.map((s) => ({ key: s.key, label: s.label, matches: s.matches }));
+}
+
+/** Booyah and other winner markets first, then by kind in chip order, then by title. */
+function order(m: Market): number {
+  const k = KINDS.findIndex((x) => x.categories.includes(m.category));
+  return (k < 0 ? KINDS.length : k) * 100 + Math.max(0, KINDS[k]?.categories.indexOf(m.category) ?? 0);
+}
+
+/** A market with two choices (Yes/No, Over/Under, one team or the other) fits on one line. */
+export function isTwoWay(m: Market): boolean {
+  return m.outcomes.length === 2;
 }

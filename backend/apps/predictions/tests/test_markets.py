@@ -227,7 +227,7 @@ def test_cannot_stake_more_than_balance(league, staff, fan):
     for _ in range(2):
         bet(fan, market, stake=500)
     assert balance(fan) == 0
-    with pytest.raises(MarketError, match="Not enough coins"):
+    with pytest.raises(MarketError, match="Not enough DC"):
         bet(fan, market, stake=10)
     assert Bet.objects.filter(user=fan).count() == 2
 

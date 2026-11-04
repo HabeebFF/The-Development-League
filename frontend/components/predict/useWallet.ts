@@ -33,7 +33,7 @@ export function useWallet(): { state: WalletState; reload: () => void; setBalanc
         if (e instanceof ApiError && e.status === 403) setState({ kind: "staff" });
         else if (e instanceof ApiError && e.status === 404) setState({ kind: "off" });
         else if (e instanceof ApiError && e.status === 401) setState({ kind: "out" });
-        else setState({ kind: "error", message: e instanceof Error ? e.message : "Couldn't load your coins." });
+        else setState({ kind: "error", message: e instanceof Error ? e.message : "Couldn't load your DC." });
       });
     return () => {
       live = false;

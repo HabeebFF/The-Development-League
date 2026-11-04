@@ -44,7 +44,22 @@ DEFAULT_LOBBY = 12
 DEFAULT_SESSION = 6
 DEFAULT_MATCHES_LEFT = 10
 MAX_MATCHES_LEFT = 60
-MAX_SUGGESTED = Decimal("500")
+MAX_SUGGESTED = Decimal("100")  # long shots stop here; staff can type more by hand
+# Markets where exactly one listed choice (or someone not listed) wins.
+ONE_WINNER = (
+    C.BOOYAH,
+    C.SESSION_WINNER,
+    C.MOST_BOOYAHS,
+    C.OVERALL_WINNER,
+    C.FIRST_OUT,
+    C.FIRST_BLOOD,
+    C.TOP_FRAGGER,
+    C.FIRST_DEATH,
+    C.RANGE_WINNER,
+    C.SESSION_FRAGGER,
+    C.RANGE_FRAGGER,
+    C.SEASON_FRAGGER,
+)
 STEPS = [(2, "0.01"), (5, "0.05"), (10, "0.1"), (20, "0.5")]
 
 
@@ -531,6 +546,10 @@ def suggest_odds(
         info.update(matches=1, simulations=SIMS)
 
     margin = settings.PREDICTIONS_ODDS_MARGIN
+    if category in ONE_WINNER and sum(chances.values()) > 1:
+        # Only one choice can win, so the chances can't add up to more than all of it.
+        total = sum(chances.values())
+        chances = {code: c / total for code, c in chances.items()}
     listed = params.get("teams") or ([params["team"]] if params.get("team") else [])
     names = dict(Team.objects.filter(pk__in=listed).values_list("pk", "name"))
     teams = [{"id": t, "name": names[t], "matches": len(history.own.get(t, []))} for t in listed]
@@ -554,20 +573,7 @@ def suggest_odds(
             f"{names} {'has' if len(thin) == 1 else 'have'} fewer than {PRIOR} published "
             "matches, so the odds lean on league averages."
         )
-    if category in (
-        C.BOOYAH,
-        C.SESSION_WINNER,
-        C.MOST_BOOYAHS,
-        C.OVERALL_WINNER,
-        C.FIRST_OUT,
-        C.FIRST_BLOOD,
-        C.TOP_FRAGGER,
-        C.FIRST_DEATH,
-        C.RANGE_WINNER,
-        C.SESSION_FRAGGER,
-        C.RANGE_FRAGGER,
-        C.SEASON_FRAGGER,
-    ):
+    if category in ONE_WINNER:
         if sum(chances.values()) < 0.99:
             notes.append("Choices that aren't listed can win too, so the chances add up to less.")
     if any(c * (1 + margin) >= 1 / float(MIN_ODDS) for c in chances.values()):

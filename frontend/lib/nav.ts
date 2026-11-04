@@ -52,7 +52,7 @@ export const GROUPS: NavGroup[] = [
   { href: "/results", label: "Results", blurb: "Every match day, map by map, with replays", icon: ICON.results },
   { href: "/players", label: "Players", blurb: "Kills, ratings, cards and awards", icon: ICON.players, items: PLAYER_PAGES },
   { href: "/teams", label: "Teams", blurb: "Teams and Protection Points", icon: ICON.teams, items: TEAM_PAGES },
-  { href: "/predict", label: "Predict", blurb: "Bet free coins on matches, no real money", icon: ICON.predict, flag: "predictions" },
+  { href: "/predict", label: "Predict", blurb: "Bet free DC on matches, no real money", icon: ICON.predict, flag: "predictions" },
 ];
 
 export const MENU_ICON = ICON.menu;

@@ -23,7 +23,7 @@ export default function WalletView() {
       <p className="mt-4 text-xs text-muted">{NOTE}</p>
       <div className="mt-4">
         {state.kind === "out" ? (
-          <p className="text-muted">Sign in to see your coins.</p>
+          <p className="text-muted">Sign in to see your DC.</p>
         ) : state.kind === "staff" ? (
           <p className="text-muted">League staff can&apos;t play.</p>
         ) : !entries.data ? (
@@ -35,7 +35,7 @@ export default function WalletView() {
                 <tr>
                   <th className="text-left">When</th>
                   <th className="text-left">What</th>
-                  <th className="text-right">Coins</th>
+                  <th className="text-right">DC</th>
                   <th className="text-right">Balance</th>
                 </tr>
               </thead>
