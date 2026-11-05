@@ -2,6 +2,7 @@
 
 import CardPlayers from "@/components/staff/CardPlayers";
 import CardSettings from "@/components/staff/CardSettings";
+import PhotoRequests from "@/components/staff/PhotoRequests";
 
 export default function StaffCards() {
   return (
@@ -15,6 +16,7 @@ export default function StaffCards() {
         the site&apos;s suggestion), and set how much each stat counts towards
         the overall rating.
       </p>
+      <PhotoRequests />
       <CardPlayers />
       <CardSettings />
     </section>

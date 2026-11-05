@@ -276,6 +276,44 @@ class Player(TimeStampedModel):
         return f"{self.display_name} ({self.game_uid})"
 
 
+class PhotoRequest(models.Model):
+    """A player asking to change the photo on their own card. Staff approve it before it
+    shows anywhere; the picture waits outside the public photo folder until then."""
+
+    class Status(models.TextChoices):
+        PENDING = "PENDING", "Waiting for staff"
+        APPROVED = "APPROVED", "Approved"
+        REJECTED = "REJECTED", "Rejected"
+        WITHDRAWN = "WITHDRAWN", "Withdrawn"
+
+    player = models.ForeignKey(Player, on_delete=models.CASCADE, related_name="photo_requests")
+    requested_by = models.ForeignKey(
+        "accounts.User", on_delete=models.SET_NULL, null=True, related_name="+"
+    )
+    # Not under players/photos/, which the web server hands out to anyone.
+    photo = models.FileField(upload_to="photo-requests/", blank=True)
+    status = models.CharField(max_length=10, choices=Status.choices, default=Status.PENDING)
+    reason = models.CharField(max_length=200, blank=True, help_text="Why staff said no")
+    reviewed_by = models.ForeignKey(
+        "accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["player"],
+                condition=models.Q(status="PENDING"),
+                name="one_pending_photo_request_per_player",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.player} photo ({self.status})"
+
+
 class PlayerAlias(TimeStampedModel):
     """Another game UID of the same person (a second account, or one recovered by name):
     uploads with it land on ``player``. Made when staff merge two players."""

@@ -1,7 +1,7 @@
 from django.urls import path
 from rest_framework.routers import SimpleRouter
 
-from . import views
+from . import photo_requests, views
 
 router = SimpleRouter(trailing_slash=False)
 router.register("teams", views.PublicTeamViewSet, basename="team")
@@ -37,4 +37,21 @@ urlpatterns = [
     path("teams/<slug:slug>/igl", views.TeamIglView.as_view(), name="team-igl"),
     path("teams/<slug:slug>/day-cards", views.TeamDayCardsView.as_view(), name="team-day-cards"),
     path("admin/cards", views.CardAdminView.as_view(), name="admin-cards"),
+    path("me/card", photo_requests.MyCardView.as_view(), name="my-card"),
+    path("me/card/photo", photo_requests.MyPhotoView.as_view(), name="my-card-photo"),
+    path(
+        "photo-requests/<int:pk>/image",
+        photo_requests.PhotoRequestImageView.as_view(),
+        name="photo-request-image",
+    ),
+    path(
+        "admin/photo-requests",
+        photo_requests.PhotoRequestAdminView.as_view(),
+        name="admin-photo-requests",
+    ),
+    path(
+        "admin/photo-requests/<int:pk>/<str:verdict>",
+        photo_requests.PhotoRequestReviewView.as_view(),
+        name="admin-photo-request-review",
+    ),
 ]

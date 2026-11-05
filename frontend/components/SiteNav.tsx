@@ -13,6 +13,8 @@ const MORE = [
   { href: "/staff", label: "Staff" },
 ];
 
+const MY_CARD = { href: "/my-card", label: "My card" };
+
 function Icon({ d, className = "h-5 w-5" }: { d: string; className?: string }) {
   return (
     <svg viewBox="0 0 24 24" className={className} fill="currentColor" aria-hidden>
@@ -24,13 +26,14 @@ function Icon({ d, className = "h-5 w-5" }: { d: string; className?: string }) {
 /** The top bar (grouped links on desktop) and, on phones, a bottom tab bar whose Menu opens every page with a line on each. */
 export default function SiteNav() {
   const path = usePathname();
-  const { status, publicSite, site, signOut } = useAuth();
+  const { me, status, publicSite, site, signOut } = useAuth();
   // Links behind a switch (e.g. Predict) only show once the server has it on.
   const groups = GROUPS.filter((g) => !g.flag || site[g.flag]);
   const signedIn = status === "in";
   // Visitors see the league pages too while the site is public.
   const shown = signedIn || publicSite === true;
-  const more = signedIn ? MORE : [];
+  // Players linked to their game UID get a link to manage their own card.
+  const more = signedIn ? [...(me?.player ? [MY_CARD] : []), ...MORE] : [];
   const [open, setOpen] = useState(false);
   // Close the phone menu whenever the page changes.
   const [openedOn, setOpenedOn] = useState(path);

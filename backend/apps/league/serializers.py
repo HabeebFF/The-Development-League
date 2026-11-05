@@ -231,23 +231,27 @@ class PlayerAdminSerializer(serializers.ModelSerializer):
         return player
 
     def validate_photo(self, value):
-        """A JPEG, PNG or WebP picture of at most 5 MB (or empty, to remove it)."""
-        if not value:
-            return value
-        if value.size > PHOTO_MAX_BYTES:
-            raise serializers.ValidationError("Photos can be at most 5 MB.")
-        from PIL import Image, UnidentifiedImageError
+        return check_photo(value)
 
-        try:
-            with Image.open(value) as img:
-                kind = img.format
-                img.verify()
-        except (UnidentifiedImageError, OSError, SyntaxError) as exc:
-            raise serializers.ValidationError("This isn't a picture we can read.") from exc
-        if kind not in {"JPEG", "PNG", "WEBP"}:
-            raise serializers.ValidationError("Use a JPEG, PNG or WebP picture.")
-        value.seek(0)
+
+def check_photo(value):
+    """A JPEG, PNG or WebP picture of at most 5 MB (or empty, to remove it)."""
+    if not value:
         return value
+    if value.size > PHOTO_MAX_BYTES:
+        raise serializers.ValidationError("Photos can be at most 5 MB.")
+    from PIL import Image, UnidentifiedImageError
+
+    try:
+        with Image.open(value) as img:
+            kind = img.format
+            img.verify()
+    except (UnidentifiedImageError, OSError, SyntaxError) as exc:
+        raise serializers.ValidationError("This isn't a picture we can read.") from exc
+    if kind not in {"JPEG", "PNG", "WEBP"}:
+        raise serializers.ValidationError("Use a JPEG, PNG or WebP picture.")
+    value.seek(0)
+    return value
 
 
 # -- seasons, stages, groups, match days, matches ---------------------------------------------

@@ -87,6 +87,9 @@ export type Me = {
   staff_role: "SUPER_ADMIN" | "STAFF" | "ANALYST" | null;
   features: string[];
   memberships: Membership[];
+  /** The league player this account is linked to (by game UID), if any. */
+  player?: { game_uid: string; display_name: string } | null;
+  pending_uid_claim?: string | null;
 };
 
 export type Role = "MANAGER" | "PLAYER";
