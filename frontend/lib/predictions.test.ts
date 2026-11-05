@@ -209,7 +209,7 @@ test("staff: session, date-range and season kinds", async () => {
 });
 
 test("bet slip: multiples add up like the server", async () => {
-  const { combinedOdds, multipleReturn, slipClash, slipProblem, MAX_RETURN } = await import("./predictions.ts");
+  const { combinedOdds, isBuilder, multipleReturn, sameMatch, slipClash, slipProblem, MAX_RETURN } = await import("./predictions.ts");
   assert.equal(combinedOdds(["2.00", "3.00", "4.00"]), "24.00");
   assert.equal(combinedOdds(["1.55", "2.10"]), "3.25"); // 3.255 rounded down
   assert.equal(combinedOdds(["2.50"]), "2.50");
@@ -226,14 +226,21 @@ test("bet slip: multiples add up like the server", async () => {
     label: "A",
     odds: "2.00",
   });
-  assert.ok(slipClash(pick(1, f(1)), pick(2, f(1))));
+  assert.ok(!slipClash(pick(1, f(1)), pick(2, f(1)))); // same match: a bet builder
+  assert.ok(sameMatch(pick(1, f(1)), pick(2, f(1))));
+  assert.ok(!sameMatch(pick(1, f(1)), pick(2, f(2))));
+  assert.ok(!sameMatch(pick(1, f(null)), pick(2, f(null))));
+  assert.ok(isBuilder([pick(1, f(2)), pick(2, f(1)), pick(3, f(1))]));
+  assert.ok(!isBuilder([pick(1, f(1)), pick(2, f(2))]));
+  assert.equal(slipProblem([1, 2, 3, 4].map((i) => pick(i, f(1)))), null);
+  assert.match(slipProblem([1, 2, 3, 4, 5].map((i) => pick(i, f(1)))) ?? "", /At most 4 picks/);
   assert.ok(!slipClash(pick(1, f(1)), pick(2, f(2))));
   assert.ok(slipClash(pick(1, f(null)), pick(2, f(2))));
   assert.ok(!slipClash(pick(1, f(null)), pick(2, f(null, "2026-10-24"))));
   assert.ok(!slipClash(pick(1, f(1)), pick(2, null)));
   assert.equal(slipProblem([]), "Tap odds to add picks.");
   assert.equal(slipProblem([pick(1, f(1)), pick(2, f(2))]), null);
-  assert.match(slipProblem([pick(1, f(1)), pick(2, f(null))]) ?? "", /same match/);
+  assert.match(slipProblem([pick(1, f(1)), pick(2, f(null))]) ?? "", /same session/);
   assert.match(slipProblem(Array.from({ length: 9 }, (_, i) => pick(i, null))) ?? "", /at most 8/);
 });
 

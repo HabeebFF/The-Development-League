@@ -157,7 +157,7 @@ def test_return_is_capped(lg, staff, fan, settings):
 @pytest.mark.parametrize(
     ("first", "second", "clashes"),
     [
-        ("m1", "m1", True),  # two markets on the same match
+        ("m1", "m1", False),  # two markets on the same match: a bet builder
         ("m1", "m2", False),  # two matches of one session
         ("m1", "session", True),  # a match and its whole session
         ("session", "sat", False),  # different sessions
@@ -169,7 +169,7 @@ def test_same_match_rule(lg, staff, fan, first, second, clashes):
     b = market(lg, staff, second, category=C.FIRST_OUT if first == second else None)
     assert clash(a, b) is clashes
     if clashes:
-        with pytest.raises(MarketError, match="same match") as err:
+        with pytest.raises(MarketError, match="same session") as err:
             place(fan, [pick(a, "Alpha"), pick(b, "Bravo")])
         assert err.value.code == "same_match"
         assert balance(fan) == 1000
@@ -373,7 +373,7 @@ def test_api_place_resend_list_and_detail(lg, staff, fan):
 
 
 def test_api_refusal_says_which_pick(lg, staff, fan):
-    a, b = market(lg, staff, "m1"), market(lg, staff, "m1", category=C.FIRST_OUT)
+    a, b = market(lg, staff, "m1"), market(lg, staff, "session")
     body = {
         "picks": [pick(a, "Alpha"), pick(b, "Bravo")],
         "stake": 50,

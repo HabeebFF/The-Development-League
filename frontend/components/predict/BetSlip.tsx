@@ -1,13 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 
 import { api, ApiError } from "@/lib/api";
 import {
   coins,
   combinedOdds,
+  isBuilder,
+  MAX_PER_MATCH,
   MAX_PICKS,
   MAX_RETURN,
   MAX_STAKE,
@@ -20,6 +22,7 @@ import {
   type Bet,
   type Multiple,
   type OddsFormat,
+  type Quote,
   type SlipPick,
 } from "@/lib/predictions";
 
@@ -33,6 +36,10 @@ const QUICK = [10, 50, 100, 250, 500];
 type Review = { picks: SlipPick[]; stake: number; key: string };
 type Placed = { kind: "single"; bet: Bet } | { kind: "multiple"; multiple: Multiple };
 type Refusal = { code?: string; detail?: string; market?: number; odds?: string; markets?: number[] };
+/** The server's price for the slip as it was when asked (``sig``), or why it refused. */
+type Priced = { sig: string; quote?: Quote; error?: string; markets?: number[] };
+
+const signature = (picks: SlipPick[]) => picks.map((p) => `${p.market}:${p.outcome}:${p.odds}`).join(",");
 
 /** The bet slip: a bar along the bottom of every prediction page that opens into the slip.
  * One pick is placed as a single, two or more as a multiple. */
@@ -48,15 +55,40 @@ export default function BetSlip() {
   const [placed, setPlaced] = useState<Placed | null>(null);
 
   const { picks } = slip;
+  const builder = picks.length > 1 && isBuilder(picks);
+  const sig = signature(picks);
+  const [priced, setPriced] = useState<Priced | null>(null);
+  // Picks on the same match: the server works out what each counts for. Asked again whenever
+  // the picks or their odds change; an answer for an older slip is ignored.
+  useEffect(() => {
+    if (!builder) return;
+    let live = true;
+    api<Quote>("/predictions/multiples/quote", { method: "POST", body: { picks: slip.picks.map((p) => ({ market: p.market, outcome: p.outcome })) } })
+      .then((quote) => live && setPriced({ sig, quote }))
+      .catch((e) => {
+        const data = e instanceof ApiError ? (e.data as Refusal | null) : null;
+        if (live) setPriced({ sig, error: data?.detail ?? "Couldn't work out the bet builder odds. Try again.", markets: data?.markets });
+      });
+    return () => {
+      live = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- sig stands for the picks
+  }, [sig, builder]);
+
   // Nothing on the server render: the picks are only known in the browser.
   if ((picks.length === 0 && !placed) || typeof document === "undefined") return null;
 
   const balance = wallet.kind === "ok" ? wallet.wallet.balance : null;
-  const odds = picks.map((p) => p.odds);
+  const price = builder && priced?.sig === sig ? priced : null;
+  const counted = new Map((price?.quote?.picks ?? []).map((q) => [q.market, q]));
+  const odds = picks.map((p) => counted.get(p.market)?.counted ?? p.odds);
   const multiple = picks.length > 1;
-  const shown = showOdds(multiple ? combinedOdds(odds) : (odds[0] ?? "1.00"), format);
+  const pricing = builder && !price;
+  const shown = pricing ? "…" : showOdds(multiple ? combinedOdds(odds) : (odds[0] ?? "1.00"), format);
+  const kind = builder ? "Bet builder" : multiple ? "Multiple" : "Single";
   const stakeNote = stakeProblem(stake, balance);
-  const picksNote = slipProblem(picks);
+  const picksNote = slipProblem(picks) ?? price?.error ?? null;
+  const marked = [...flagged, ...(price?.markets ?? [])];
   const amount = stakeNote ? 0 : Number(stake);
   const returns = multipleReturn(amount, odds);
 
@@ -118,7 +150,7 @@ export default function BetSlip() {
           >
             <span className="font-display text-lg uppercase">Bet slip</span>
             {picks.length > 0 && <span className="chip text-accent-2">{picks.length}</span>}
-            <span className="ml-auto text-sm text-muted">{picks.length === 0 ? "Placed" : multiple ? `Multiple @ ${shown}` : `Single @ ${shown}`}</span>
+            <span className="ml-auto text-sm text-muted">{picks.length === 0 ? "Placed" : `${kind} @ ${shown}`}</span>
             <span aria-hidden className="text-muted">
               {slip.open ? "▾" : "▴"}
             </span>
@@ -131,39 +163,53 @@ export default function BetSlip() {
               ) : (
                 <>
                   <ul className="space-y-1.5">
-                    {picks.map((p) => (
-                      <li
-                        key={p.market}
-                        className={`flex items-start gap-2 border bg-panel-2 px-2 py-1.5 ${flagged.includes(p.market) ? "border-bad" : "border-line"}`}
-                      >
-                        <span className="min-w-0 flex-1">
-                          <span className="block truncate font-semibold">{p.label}</span>
-                          <Link href={`/predict/markets/${p.market}`} className="block truncate text-xs text-muted hover:text-accent">
-                            {p.marketTitle}
-                            {p.fixture ? ` · ${p.fixture.title}` : ""}
-                          </Link>
-                        </span>
-                        <span className="font-display text-lg text-accent">{showOdds(p.odds, format)}</span>
-                        <button
-                          type="button"
-                          className="px-1 text-muted hover:text-bad"
-                          aria-label={`Remove ${p.label}`}
-                          onClick={() => {
-                            slip.remove(p.market);
-                            setFlagged(flagged.filter((m) => m !== p.market));
-                            setError(null);
-                          }}
+                    {picks.map((p) => {
+                      const q = counted.get(p.market);
+                      const cut = q && q.counted !== p.odds;
+                      return (
+                        <li
+                          key={p.market}
+                          className={`flex items-start gap-2 border bg-panel-2 px-2 py-1.5 ${marked.includes(p.market) ? "border-bad" : "border-line"}`}
                         >
-                          ×
-                        </button>
-                      </li>
-                    ))}
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate font-semibold">{p.label}</span>
+                            <Link href={`/predict/markets/${p.market}`} className="block truncate text-xs text-muted hover:text-accent">
+                              {p.marketTitle}
+                              {p.fixture ? ` · ${p.fixture.title}` : ""}
+                            </Link>
+                            {q?.note && <span className="block text-xs text-accent-2">{q.note}</span>}
+                          </span>
+                          <span className="text-right">
+                            {cut && <s className="block text-xs text-muted">{showOdds(p.odds, format)}</s>}
+                            <span className="font-display text-lg text-accent">{showOdds(q?.counted ?? p.odds, format)}</span>
+                          </span>
+                          <button
+                            type="button"
+                            className="px-1 text-muted hover:text-bad"
+                            aria-label={`Remove ${p.label}`}
+                            onClick={() => {
+                              slip.remove(p.market);
+                              setFlagged(flagged.filter((m) => m !== p.market));
+                              setError(null);
+                            }}
+                          >
+                            ×
+                          </button>
+                        </li>
+                      );
+                    })}
                   </ul>
-                  {multiple && (
+                  {builder ? (
                     <p className="text-xs text-muted">
-                      Multiple: the odds multiply and every pick has to win. A refunded pick drops out and the rest still count. Up to {MAX_PICKS} picks, never
-                      on the same match.
+                      Bet builder: picks in the same match go together, so their odds are cut before they multiply. Every pick has to win. Up to {MAX_PER_MATCH}{" "}
+                      picks per match and {MAX_PICKS} in all.
                     </p>
+                  ) : (
+                    multiple && (
+                      <p className="text-xs text-muted">
+                        Multiple: the odds multiply and every pick has to win. A refunded pick drops out and the rest still count. Up to {MAX_PICKS} picks.
+                      </p>
+                    )
                   )}
                   {picksNote ? (
                     <p className="text-bad">{picksNote}</p>
@@ -217,13 +263,15 @@ export default function BetSlip() {
                       <button
                         type="button"
                         className="btn btn-primary w-full"
-                        disabled={!!stakeNote}
+                        disabled={!!stakeNote || pricing}
                         onClick={() => {
                           setError(null);
                           setReview({ picks, stake: amount, key: newKey() });
                         }}
                       >
-                        Review {multiple ? `${picks.length}-pick multiple` : "prediction"}
+                        {pricing
+                          ? "Working out the odds..."
+                          : `Review ${builder ? `${picks.length}-pick bet builder` : multiple ? `${picks.length}-pick multiple` : "prediction"}`}
                       </button>
                     </>
                   )}
@@ -250,7 +298,7 @@ export default function BetSlip() {
         >
           <div className="card page-enter max-h-[90vh] w-full max-w-sm overflow-y-auto p-5">
             <h3 className="font-display text-2xl uppercase">
-              {review.picks.length > 1 ? `Confirm ${review.picks.length}-pick multiple` : "Confirm prediction"}
+              {review.picks.length > 1 ? `Confirm ${review.picks.length}-pick ${builder ? "bet builder" : "multiple"}` : "Confirm prediction"}
             </h3>
             <ul className="mt-3 space-y-1 text-sm">
               {review.picks.map((p) => (
@@ -259,7 +307,7 @@ export default function BetSlip() {
                     <b>{p.label}</b>
                     <span className="block truncate text-xs text-muted">{p.marketTitle}</span>
                   </span>
-                  <span className="text-accent">{showOdds(p.odds, format)}</span>
+                  <span className="text-accent">{showOdds(counted.get(p.market)?.counted ?? p.odds, format)}</span>
                 </li>
               ))}
             </ul>
@@ -267,16 +315,9 @@ export default function BetSlip() {
               <dt className="text-muted">Stake</dt>
               <dd className="text-right">{coins(review.stake)}</dd>
               <dt className="text-muted">Odds</dt>
-              <dd className="text-right">{showOdds(combinedOdds(review.picks.map((p) => p.odds)), format)}</dd>
+              <dd className="text-right">{shown}</dd>
               <dt className="text-muted">Returns if it wins</dt>
-              <dd className="text-right font-semibold">
-                {coins(
-                  multipleReturn(
-                    review.stake,
-                    review.picks.map((p) => p.odds),
-                  ),
-                )}
-              </dd>
+              <dd className="text-right font-semibold">{coins(multipleReturn(review.stake, odds))}</dd>
               <dt className="text-muted">DC after</dt>
               <dd className="text-right">{balance !== null ? coins(balance - review.stake) : "–"}</dd>
             </dl>

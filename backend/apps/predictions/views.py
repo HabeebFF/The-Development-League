@@ -58,7 +58,7 @@ from .models import (
     Settlement,
     Wallet,
 )
-from .multiples import max_picks, max_return, place_multiple
+from .multiples import max_picks, max_return, place_multiple, quote
 from .odds import MAX_MATCHES_LEFT, suggest_odds
 from .services import CoinError, Kind, can_play, initial_coins, post_entry, wallet_for
 
@@ -540,6 +540,7 @@ def multiple_data(m: Multiple) -> dict:
                 },
                 "outcome": {"id": leg.outcome_id, "label": leg.outcome.label},
                 "odds_accepted": str(leg.odds_accepted),
+                "odds_counted": str(leg.counts_for),
                 "status": leg.status,
                 "dead_heat": leg.dead_heat,
             }
@@ -588,6 +589,19 @@ class MultiplesView(APIView):
             {**multiple_data(multiple), "balance": balance},
             status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
         )
+
+
+class MultipleQuoteView(APIView):
+    """POST picks: what they'd count for as one multiple (a bet builder cuts the odds of
+    picks on the same match), or why they can't go together. Places nothing."""
+
+    permission_classes = [PredictionsOn, PublicRead]
+
+    def post(self, request):
+        try:
+            return Response(quote(request.user, request.data.get("picks")))
+        except MarketError as exc:
+            return _refused(exc)
 
 
 class MultipleDetailView(APIView):

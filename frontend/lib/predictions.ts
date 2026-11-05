@@ -70,6 +70,8 @@ export type MultiplePick = {
   market: { id: number; title: string; status: MarketStatus; fixture: Fixture | null };
   outcome: { id: number; label: string };
   odds_accepted: string;
+  /** What the pick counts for: lower than its odds when it's in a bet builder. */
+  odds_counted: string;
   status: BetStatus;
   dead_heat: number;
 };
@@ -184,24 +186,49 @@ export type SlipPick = {
   odds: string;
 };
 
-/** True when two picks can't be in one multiple: the same match, or a whole-session
- * market and anything in that session. The server checks this again. */
-export function slipClash(a: SlipPick, b: SlipPick): boolean {
+/** Most picks from one match in a bet builder. */
+export const MAX_PER_MATCH = 4;
+
+function sameSession(a: SlipPick, b: SlipPick): boolean {
   const x = a.fixture;
   const y = b.fixture;
-  if (!x || !y || a.season !== b.season || x.date !== y.date || x.session !== y.session) return false;
-  return x.match_number === null || y.match_number === null || x.match_number === y.match_number;
+  return !!x && !!y && a.season === b.season && x.date === y.date && x.session === y.session;
+}
+
+/** True when two picks are on the same single match (a bet builder). */
+export function sameMatch(a: SlipPick, b: SlipPick): boolean {
+  return sameSession(a, b) && a.fixture!.match_number !== null && a.fixture!.match_number === b.fixture!.match_number;
+}
+
+/** True when two picks can't be in one multiple: a whole-session market and anything in
+ * that session. Picks on the same match can (a bet builder). The server checks this again. */
+export function slipClash(a: SlipPick, b: SlipPick): boolean {
+  return sameSession(a, b) && (a.fixture!.match_number === null || b.fixture!.match_number === null);
+}
+
+/** True when two or more picks share a match, so the server cuts their odds. */
+export function isBuilder(picks: SlipPick[]): boolean {
+  return picks.some((p, i) => picks.slice(i + 1).some((q) => sameMatch(p, q)));
 }
 
 /** Why the slip can't be placed as it is (beyond the stake), or null. */
 export function slipProblem(picks: SlipPick[]): string | null {
   if (picks.length === 0) return "Tap odds to add picks.";
   if (picks.length > MAX_PICKS) return `A multiple can have at most ${MAX_PICKS} picks.`;
-  for (let i = 0; i < picks.length; i++)
+  for (let i = 0; i < picks.length; i++) {
+    if (picks.filter((q) => sameMatch(picks[i], q)).length > MAX_PER_MATCH) return `At most ${MAX_PER_MATCH} picks can come from one match.`;
     for (const other of picks.slice(i + 1))
-      if (slipClash(picks[i], other)) return `${picks[i].marketTitle} and ${other.marketTitle} are on the same match, so they can't go in one multiple.`;
+      if (slipClash(picks[i], other)) return `${picks[i].marketTitle} and ${other.marketTitle} are in the same session, so they can't go in one multiple.`;
+  }
   return null;
 }
+
+/** The server's pricing of a slip: what each pick counts for, and why when it's cut. */
+export type Quote = {
+  picks: { market: number; outcome: number; odds: string; counted: string; note: string }[];
+  odds: string;
+  builder: boolean;
+};
 
 /** The slip pick for a choice on a market. */
 export function toPick(m: Market, o: Outcome): SlipPick {

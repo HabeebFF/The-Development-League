@@ -423,10 +423,22 @@ class Leg(models.Model):
     market = models.ForeignKey(Market, on_delete=models.PROTECT, related_name="legs")
     outcome = models.ForeignKey(Outcome, on_delete=models.PROTECT, related_name="legs")
     odds_accepted = models.DecimalField(max_digits=7, decimal_places=2)
+    odds_counted = models.DecimalField(
+        max_digits=7,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="What the pick counts for in the multiple: lower than the odds when another "
+        "pick is on the same match (bet builder). Empty means the odds taken.",
+    )
     status = models.CharField(max_length=8, choices=Bet.Status.choices, default=Bet.Status.PENDING)
     dead_heat = models.PositiveSmallIntegerField(
         default=1, help_text="A won pick counts at odds / this number"
     )
+
+    @property
+    def counts_for(self):
+        return self.odds_counted if self.odds_counted is not None else self.odds_accepted
 
     class Meta:
         ordering = ["pk"]
