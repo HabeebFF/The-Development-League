@@ -46,6 +46,11 @@ urlpatterns = [
     path("predictions/bets/<uuid:pk>", views.BetDetailView.as_view(), name="predictions-bet"),
     path("predictions/multiples", views.MultiplesView.as_view(), name="predictions-multiples"),
     path(
+        "predictions/multiples/quote",
+        views.MultipleQuoteView.as_view(),
+        name="predictions-multiples-quote",
+    ),
+    path(
         "predictions/multiples/<uuid:pk>",
         views.MultipleDetailView.as_view(),
         name="predictions-multiple",

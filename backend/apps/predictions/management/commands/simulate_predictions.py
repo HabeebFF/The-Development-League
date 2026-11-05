@@ -446,7 +446,8 @@ class Command(BaseCommand):
             ):
                 voids += 1
             elif latest.winning_outcomes.filter(pk=leg.outcome_id).exists():
-                total *= Fraction(leg.odds_accepted) / latest.dead_heat
+                # A bet builder pick counts at its cut odds.
+                total *= Fraction(leg.counts_for) / latest.dead_heat
             else:
                 return 0
         if voids == len(legs):

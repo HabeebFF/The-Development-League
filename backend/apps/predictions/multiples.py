@@ -3,9 +3,10 @@
 The rules, all worked out here on the server:
 
 - Every pick must be open for predictions when it is placed, at the odds it has then.
-- Picks can't come from the same match: one market's result says a lot about another's
-  on the same match (or a whole-session market on that session), so their odds would
-  overpay. Season-long and date-range markets combine with anything.
+- Picks on the same match make a bet builder (see ``builder``): picks that can't both win
+  are refused and the others' odds are cut, since one result says a lot about another.
+  A whole-session market still can't go with that session's matches. Season-long and
+  date-range markets combine with anything.
 - A losing pick loses the whole multiple, as soon as its market settles.
 - A refunded pick counts as odds 1, so the others still stand; a won pick in a dead heat
   counts at its odds divided by the number tied. With every pick refunded the stake comes
@@ -27,6 +28,7 @@ from django.conf import settings
 from django.db import IntegrityError, transaction
 from django.utils import timezone
 
+from .builder import price
 from .markets import (
     MarketError,
     PlayerRules,
@@ -76,14 +78,63 @@ def _event(market: Market) -> tuple | None:
 
 
 def clash(a: Market, b: Market) -> bool:
-    """True when two markets can't be in one multiple: the same match, or a whole-session
-    market and anything in that session."""
+    """True when two markets can't be in one multiple: a whole-session market and anything
+    in that session. Two markets on the same match can (a bet builder, priced apart)."""
     x, y = _event(a), _event(b)
     if x is None or y is None:
         return False
     if x[:3] != y[:3]:
         return False
-    return x[3] is None or y[3] is None or x[3] == y[3]
+    return x[3] is None or y[3] is None
+
+
+def check_session_clash(markets: list[Market]) -> None:
+    for i, a in enumerate(markets):
+        for b in markets[i + 1 :]:
+            if clash(a, b):
+                raise MarketError(
+                    f"{a.title} and {b.title} are in the same session, so they can't be in "
+                    "one multiple.",
+                    "same_match",
+                    markets=[a.pk, b.pk],
+                )
+
+
+def quote(user, picks) -> dict:
+    """What a slip of picks would count for, without placing it: each pick's counted odds,
+    a note when cut, and the combined odds. Refusals raise ``MarketError`` like placing."""
+    picks = _clean_picks(picks)
+    markets = Market.objects.select_related("fixture").in_bulk([p["market"] for p in picks])
+    rules = PlayerRules(user) if user and user.is_authenticated else None
+    legs = []
+    for p in picks:
+        market = markets.get(p["market"])
+        if market is None or market.status == S.DRAFT:
+            raise MarketError("A pick's market doesn't exist.", "not_found")
+        outcome = Outcome.objects.filter(pk=p["outcome"], market=market).first()
+        if outcome is None:
+            raise MarketError(
+                f"That choice isn't part of {market.title}.", "outcome", market=market.pk
+            )
+        if rules is not None:
+            rules.check(market, outcome)
+        legs.append((market, outcome))
+    check_session_clash([m for m, _ in legs])
+    priced = price(legs)
+    return {
+        "picks": [
+            {
+                "market": p.market.pk,
+                "outcome": p.outcome.pk,
+                "odds": str(p.outcome.odds),
+                "counted": str(p.counted),
+                "note": p.note,
+            }
+            for p in priced
+        ],
+        "odds": str(combined_odds([p.counted for p in priced])),
+        "builder": any(p.counted != p.outcome.odds for p in priced),
+    }
 
 
 def _clean_picks(picks) -> list[dict]:
@@ -173,16 +224,9 @@ def place_multiple(user, *, picks, stake, client_key: uuid.UUID) -> tuple[Multip
                         odds=str(outcome.odds),
                     )
                 legs.append((market, outcome))
-            for i, (a, _) in enumerate(legs):
-                for b, _ in legs[i + 1 :]:
-                    if clash(a, b):
-                        raise MarketError(
-                            f"{a.title} and {b.title} are on the same match, so they can't "
-                            "be in one multiple.",
-                            "same_match",
-                            markets=[a.pk, b.pk],
-                        )
-            odds = [o.odds for _, o in legs]
+            check_session_clash([m for m, _ in legs])
+            priced = price(legs)
+            odds = [p.counted for p in priced]
             multiple = Multiple.objects.create(
                 user=user,
                 stake=stake,
@@ -191,7 +235,14 @@ def place_multiple(user, *, picks, stake, client_key: uuid.UUID) -> tuple[Multip
                 client_key=client_key,
             )
             Leg.objects.bulk_create(
-                Leg(multiple=multiple, market=m, outcome=o, odds_accepted=o.odds) for m, o in legs
+                Leg(
+                    multiple=multiple,
+                    market=p.market,
+                    outcome=p.outcome,
+                    odds_accepted=p.outcome.odds,
+                    odds_counted=p.counted,
+                )
+                for p in priced
             )
             post_entry(
                 wallet, Kind.STAKE, -stake, f"stake:multiple:{multiple.pk}", multiple=multiple
@@ -220,7 +271,7 @@ def outcome_of(multiple: Multiple, legs: list[Leg]) -> tuple[str, int | None]:
     if all(s == B.VOID for s in statuses):
         return B.VOID, multiple.stake
     factors = [
-        Fraction(leg.odds_accepted) / leg.dead_heat if leg.status == B.WON else 1 for leg in legs
+        Fraction(leg.counts_for) / leg.dead_heat if leg.status == B.WON else 1 for leg in legs
     ]
     return B.WON, multiple_return(multiple.stake, factors)
 

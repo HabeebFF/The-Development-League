@@ -151,7 +151,7 @@ function MultipleItem({ m, format }: { m: Multiple; format: OddsFormat }) {
     <li className="card p-3 text-sm">
       <div className="flex flex-wrap items-baseline gap-x-3">
         <span className="font-semibold">
-          {m.picks.length}-pick multiple @ {showOdds(m.odds, format)}
+          {m.picks.length}-pick {m.picks.some((p) => p.odds_counted !== p.odds_accepted) ? "bet builder" : "multiple"} @ {showOdds(m.odds, format)}
         </span>
         <span className="text-xs text-muted">{when(m.placed_at)}</span>
         <span className={`ml-auto font-display text-lg uppercase ${BET_STATUS[m.status].tone}`}>{BET_STATUS[m.status].label}</span>
@@ -167,7 +167,10 @@ function MultipleItem({ m, format }: { m: Multiple; format: OddsFormat }) {
               </Link>
               {p.dead_heat > 1 && <span className="text-xs text-muted"> · shared by {p.dead_heat}</span>}
             </span>
-            <span className="text-accent">{showOdds(p.odds_accepted, format)}</span>
+            <span className="text-accent">
+              {p.odds_counted !== p.odds_accepted && <s className="mr-1 text-xs text-muted">{showOdds(p.odds_accepted, format)}</s>}
+              {showOdds(p.odds_counted ?? p.odds_accepted, format)}
+            </span>
           </li>
         ))}
       </ul>
