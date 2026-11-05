@@ -90,11 +90,16 @@ export type Me = {
   features: string[];
   memberships: Membership[];
   /** The league player this account is linked to (by game UID), if any. */
+<<<<<<< HEAD
   player: { game_uid: string; display_name: string } | null;
   /** A game UID waiting for staff (another account had it). */
   pending_uid_claim: string | null;
   /** Live replays are for league teams: staff, managers, and team players with a linked UID. */
   can_watch_replays: boolean;
+=======
+  player?: { game_uid: string; display_name: string } | null;
+  pending_uid_claim?: string | null;
+>>>>>>> d8e0de0 (Let players send a new photo for their own card, approved by staff)
 };
 
 /** GET /me/link-uid?uid=: who a game UID is, and what linking to it would do. */
