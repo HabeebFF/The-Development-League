@@ -651,3 +651,26 @@ def test_fixtures_are_staff_only_and_unique(league, staff, fan):
         "/api/v1/admin/predictions/fixtures", body | {"match_number": None}, format="json"
     )
     assert again.status_code == 400
+
+
+def test_staff_wallets_show_each_persons_record_and_bets(league, staff, fan):
+    market = booyah(league, staff)
+    bet(fan, market, stake=100)
+    other = make_user("quiet@tdl.test", display_name="Quiet")
+    wallet_for(other)
+    client = as_user(staff)
+    rows = client.get("/api/v1/admin/predictions/wallets?sort=recent").json()["results"]
+    assert rows[0]["email"] == "fan@tdl.test"
+    assert (rows[0]["pending"], rows[0]["won"], rows[0]["lost"]) == (1, 0, 0)
+    assert rows[0]["last_active"] is not None and rows[1]["last_active"] is None
+    names = client.get("/api/v1/admin/predictions/wallets?sort=name").json()["results"]
+    assert [r["display_name"] for r in names] == sorted(r["display_name"] for r in names)
+    assert client.get("/api/v1/admin/predictions/wallets?sort=x").status_code == 400
+
+    summary = client.get("/api/v1/admin/predictions/wallets/summary").json()
+    assert summary == {"wallets": 2, "held": 1900, "riding": 100}
+
+    wallet = rows[0]["id"]
+    mine = client.get(f"/api/v1/admin/predictions/wallets/{wallet}/bets").json()
+    assert [b["stake"] for b in mine["singles"]] == [100] and mine["multiples"] == []
+    assert as_user(fan).get(f"/api/v1/admin/predictions/wallets/{wallet}/bets").status_code == 403
