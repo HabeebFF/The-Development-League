@@ -200,7 +200,7 @@ def test_refusals(lg, staff, fan):
     transition(b, S.SUSPENDED, actor=staff)
     refused([pick(a, "Alpha"), pick(b, "Alpha")], "closed")
     Membership.objects.create(user=fan, team=lg["teams"]["Charlie"])
-    refused([pick(a, "Alpha"), pick(c, "Bravo")], "not_allowed")
+    refused([pick(a, "Alpha"), pick(c, "Charlie")], "not_allowed")
     refused([pick(a, "Alpha"), pick(c, "Bravo")], "not_allowed", user=staff)
     assert balance(fan) == 1000
     assert not Multiple.objects.exists() and not Leg.objects.exists()

@@ -3,7 +3,7 @@
 import { useState } from "react";
 
 /** "Do you play in the league?" Players give their game UID, which links them to their player
- * straight away; they then can't predict on a match or session their team plays in. */
+ * straight away; they then can't predict on themselves, their team or team-mates. */
 export default function PlaysFields({ error }: { error?: string }) {
   const [plays, setPlays] = useState(false);
   return (
@@ -22,7 +22,7 @@ export default function PlaysFields({ error }: { error?: string }) {
           <span className="text-muted">Your Free Fire UID</span>
           <input name="game_uid" required inputMode="numeric" pattern="[0-9]*" maxLength={20} className="input mt-1" />
           <span className="mt-1 block text-xs text-muted">
-            This links you to your player and team. You can&apos;t make predictions on a match or session your team plays in.
+            This links you to your player and team. You can predict on your matches, but not on yourself, your team or your team-mates.
           </span>
         </label>
       )}

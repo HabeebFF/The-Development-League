@@ -400,8 +400,8 @@ def test_correction_stops_at_zero_and_records_shortfall(league, staff, fans):
     assert coins(fans[0]) == 1600
     # The fan spends most of it on another market.
     other = make_market(league, staff)
-    for _ in range(3):
-        bet(fans[0], other, outcome(other, t["Charlie"]), stake=500)
+    for name in ("Alpha", "Bravo", "Charlie"):
+        bet(fans[0], other, outcome(other, t[name]), stake=500)
     assert coins(fans[0]) == 100
     correct(
         market, actor=staff, kind="SETTLE", winners=[bravo.pk], reason="Fix", key=str(uuid.uuid4())

@@ -159,7 +159,7 @@ def place_multiple(user, *, picks, stake, client_key: uuid.UUID) -> tuple[Multip
                     raise MarketError(
                         f"{outcome.label} is no longer available.", "outcome", market=market.pk
                     )
-                rules.check(market)
+                rules.check(market, outcome)
                 if (
                     p["expected_odds"] is not None
                     and clean_odds(p["expected_odds"]) != outcome.odds
