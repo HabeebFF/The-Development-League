@@ -9,7 +9,7 @@ export default function StaffHome() {
   const cards = [
     { href: "/staff/upload", title: "Upload matches", text: "Send a match day's log files and build the results, rotations and replays." },
     { href: "/staff/matches", title: "Plot rotations", text: "Check each team's auto route, fix it and confirm." },
-    { href: "/staff/uid", title: "Game UID requests", text: "Approve the game UIDs people give when they sign up, so they're linked to their player." },
+    { href: "/staff/uid", title: "Game UIDs", text: "Who is linked to which player. UIDs link automatically at sign-up; unlink one that isn't theirs." },
     { href: "/staff/teams", title: "Teams", text: "Name teams, add logos, merge spellings of the same team and invite managers." },
     { href: "/staff/seasons", title: "Seasons", text: "Set up the season and its stages, and move match days into it." },
     { href: "/staff/pp", title: "Protection Points", text: "Each day's tasks, starting PP and adjustments. Teams' PP is worked out from the logs." },

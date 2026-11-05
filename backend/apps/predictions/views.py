@@ -20,7 +20,7 @@ from django.db.models import (
     Sum,
     Value,
 )
-from django.db.models.functions import Coalesce
+from django.db.models.functions import Coalesce, Greatest
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import mixins, serializers, status, viewsets
@@ -131,10 +131,26 @@ class WalletEntriesView(APIView):
 class StaffWalletSerializer(serializers.ModelSerializer):
     email = serializers.EmailField(source="user.email", read_only=True)
     display_name = serializers.CharField(source="user.display_name", read_only=True)
+    won = serializers.IntegerField(read_only=True)
+    lost = serializers.IntegerField(read_only=True)
+    pending = serializers.IntegerField(read_only=True)
+    last_active = serializers.DateTimeField(read_only=True, help_text="Last prediction placed")
 
     class Meta:
         model = Wallet
-        fields = ["id", "email", "display_name", "balance", "entry_count", "created_at"]
+        fields = [
+            *["id", "email", "display_name", "balance", "entry_count", "created_at"],
+            *["won", "lost", "pending", "last_active"],
+        ]
+
+
+WALLET_SORTS = {
+    "balance": ("-balance", "pk"),
+    "recent": (F("last_active").desc(nulls_last=True), "pk"),
+    "active": ("-entry_count", "pk"),
+    "new": ("-created_at", "pk"),
+    "name": ("user__display_name", "pk"),
+}
 
 
 class StaffEntrySerializer(EntrySerializer):
@@ -162,13 +178,52 @@ class WalletAdminViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
     serializer_class = StaffWalletSerializer
 
     def get_queryset(self):
-        qs = Wallet.objects.select_related("user").order_by("-balance", "pk")
+        """``?search=`` name or email, ``?sort=`` balance (default), recent, active, new, name."""
+        # Last prediction placed (singles or multiples); Postgres GREATEST skips a missing one.
+        last_bet = Bet.objects.filter(user=OuterRef("user")).order_by("-placed_at")
+        last_multi = Multiple.objects.filter(user=OuterRef("user")).order_by("-placed_at")
+        qs = Wallet.objects.select_related("user").annotate(
+            won=_settled(Bet, Bet.Status.WON) + _settled(Multiple, Bet.Status.WON),
+            lost=_settled(Bet, Bet.Status.LOST) + _settled(Multiple, Bet.Status.LOST),
+            pending=_settled(Bet, Bet.Status.PENDING) + _settled(Multiple, Bet.Status.PENDING),
+            last_active=Greatest(
+                Subquery(last_bet.values("placed_at")[:1]),
+                Subquery(last_multi.values("placed_at")[:1]),
+            ),
+        )
         search = self.request.query_params.get("search", "").strip()
         if search:
             qs = qs.filter(
                 Q(user__email__icontains=search) | Q(user__display_name__icontains=search)
             )
-        return qs
+        sort = self.request.query_params.get("sort", "balance")
+        if sort not in WALLET_SORTS:
+            raise ValidationError({"sort": f"Use one of: {', '.join(WALLET_SORTS)}."})
+        return qs.order_by(*WALLET_SORTS[sort])
+
+    @action(detail=False, methods=["get"])
+    def summary(self, request):
+        """How many people have DC, how much they hold, and how much is riding on open bets."""
+        totals = Wallet.objects.aggregate(wallets=Count("pk"), held=Sum("balance"))
+        riding = (
+            Bet.objects.filter(status=Bet.Status.PENDING).aggregate(n=Sum("stake"))["n"] or 0
+        ) + (Multiple.objects.filter(status=Bet.Status.PENDING).aggregate(n=Sum("stake"))["n"] or 0)
+        return Response(
+            {"wallets": totals["wallets"], "held": totals["held"] or 0, "riding": riding}
+        )
+
+    @action(detail=True, methods=["get"])
+    def bets(self, request, pk=None):
+        """This person's latest predictions, singles and multiples, newest first."""
+        wallet = get_object_or_404(Wallet, pk=pk)
+        singles = _bets().filter(user=wallet.user_id).order_by("-placed_at")[:100]
+        multiples = _multiples().filter(user=wallet.user_id).order_by("-placed_at")[:50]
+        return Response(
+            {
+                "singles": [bet_data(b) for b in singles],
+                "multiples": [multiple_data(m) for m in multiples],
+            }
+        )
 
     @action(detail=True, methods=["get"])
     def entries(self, request, pk=None):

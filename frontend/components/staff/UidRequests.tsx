@@ -17,6 +17,7 @@ type Claim = {
 };
 
 const TABS = [
+  { key: "APPROVED", label: "Linked" },
   { key: "PENDING", label: "Waiting" },
   { key: "", label: "All" },
 ] as const;
@@ -25,9 +26,10 @@ function when(iso: string) {
   return new Date(iso).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 }
 
-/** Staff: approve or reject the game UIDs people gave when they signed up. */
+/** Staff: the game UIDs people gave. Most link automatically; staff decide the ones another
+ * account already had, and can unlink a UID someone gave that isn't theirs. */
 export default function UidRequests() {
-  const [tab, setTab] = useState<string>("PENDING");
+  const [tab, setTab] = useState<string>("APPROVED");
   const [rows, setRows] = useState<Claim[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<number | null>(null);
@@ -45,7 +47,7 @@ export default function UidRequests() {
     };
   }, [tab, version]);
 
-  async function review(claim: Claim, action: "approve" | "reject") {
+  async function review(claim: Claim, action: "approve" | "reject" | "unlink") {
     setBusy(claim.id);
     setError(null);
     try {
@@ -77,7 +79,7 @@ export default function UidRequests() {
       {!rows ? (
         <p className="mt-4 text-sm text-muted">Loading...</p>
       ) : rows.length === 0 ? (
-        <p className="mt-4 text-muted">{tab === "PENDING" ? "Nobody is waiting." : "No requests yet."}</p>
+        <p className="mt-4 text-muted">{tab === "PENDING" ? "Nobody is waiting." : tab === "APPROVED" ? "Nobody is linked yet." : "No UIDs given yet."}</p>
       ) : (
         <div className="mt-4 grid gap-2">
           {rows.map((c) => (
@@ -111,10 +113,20 @@ export default function UidRequests() {
                     Reject
                   </button>
                 </div>
+              ) : c.status === "APPROVED" ? (
+                <div className="flex shrink-0 items-center gap-2">
+                  <span className="chip text-ok">Linked</span>
+                  <button
+                    type="button"
+                    className="btn"
+                    disabled={busy === c.id}
+                    onClick={() => window.confirm(`Unlink ${c.user_name || c.user} from UID ${c.game_uid}?`) && review(c, "unlink")}
+                  >
+                    Unlink
+                  </button>
+                </div>
               ) : (
-                <span className={`chip shrink-0 ${c.status === "APPROVED" ? "text-ok" : "text-muted"}`}>
-                  {c.status === "APPROVED" ? "Approved" : "Rejected"}
-                </span>
+                <span className="chip shrink-0 text-muted">Rejected</span>
               )}
             </div>
           ))}

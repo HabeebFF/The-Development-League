@@ -3,11 +3,10 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
-import { useStaff } from "@/app/staff/StaffGate";
+import StaffWallets from "@/components/staff/StaffWallets";
 import { api, ApiError, type Paged, type TeamRef } from "@/lib/api";
 import {
   categoriesFor,
-  coins,
   datesProblem,
   defaultTitle,
   lineProblem,
@@ -17,12 +16,10 @@ import {
   outcomeCodes,
   playersProblem,
   SHARED_WIN,
-  signedCoins,
   spec,
   teamsProblem,
   toLocalInput,
   type Category,
-  type Entry,
   type Fixture,
   type Market,
   type Scope,
@@ -104,13 +101,6 @@ type History = {
   reason?: string;
   outcome?: string;
 }[];
-type StaffWallet = {
-  id: number;
-  email: string;
-  display_name: string;
-  balance: number;
-  entry_count: number;
-};
 
 function message(e: unknown) {
   return e instanceof ApiError ? e.message : "Something went wrong. Try again.";
@@ -152,7 +142,7 @@ export default function PredictionsManager() {
           See the public page
         </Link>
       </div>
-      {tab === "markets" ? <Markets /> : <Wallets />}
+      {tab === "markets" ? <Markets /> : <StaffWallets />}
     </div>
   );
 }
@@ -1485,129 +1475,3 @@ function MarketHistory({ id }: { id: number }) {
 }
 
 // -- wallets -------------------------------------------------------------------------------------
-
-function Wallets() {
-  const me = useStaff();
-  const [search, setSearch] = useState("");
-  const [rows, setRows] = useState<StaffWallet[] | null>(null);
-  const [open, setOpen] = useState<number | null>(null);
-
-  const load = useCallback(() => {
-    api<Paged<StaffWallet>>(`/admin/predictions/wallets?page_size=100&search=${encodeURIComponent(search)}`)
-      .then((p) => setRows(p.results))
-      .catch(() => setRows([]));
-  }, [search]);
-  useEffect(load, [load]);
-
-  return (
-    <div className="mt-6">
-      <input className="input max-w-sm" placeholder="Search by email or name" value={search} onChange={(e) => setSearch(e.target.value)} />
-      {!rows ? (
-        <p className="mt-4 text-muted">Loading...</p>
-      ) : rows.length === 0 ? (
-        <p className="mt-4 text-muted">No wallets yet.</p>
-      ) : (
-        <ul className="mt-4 space-y-2">
-          {rows.map((w) => (
-            <li key={w.id} className="card p-3 text-sm">
-              <button type="button" className="flex w-full items-center gap-3 text-left" onClick={() => setOpen(open === w.id ? null : w.id)}>
-                <span className="min-w-0 flex-1">
-                  <b>{w.display_name || "No name"}</b> <span className="text-muted">{w.email}</span>
-                </span>
-                <span className="font-display text-lg text-accent-2">{coins(w.balance)}</span>
-              </button>
-              {open === w.id && <WalletDetail wallet={w} canAdjust={me.is_super_admin} onAdjusted={load} />}
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
-  );
-}
-
-type StaffEntry = Entry & { idempotency_key: string; actor: string | null };
-
-function WalletDetail({ wallet, canAdjust, onAdjusted }: { wallet: StaffWallet; canAdjust: boolean; onAdjusted: () => void }) {
-  const [entries, setEntries] = useState<StaffEntry[] | null>(null);
-  const [amount, setAmount] = useState("");
-  const [reason, setReason] = useState("");
-  const [key, setKey] = useState(newKey);
-  const [note, setNote] = useState<string | null>(null);
-
-  const load = useCallback(() => {
-    api<Paged<StaffEntry>>(`/admin/predictions/wallets/${wallet.id}/entries?page_size=100`)
-      .then((p) => setEntries(p.results))
-      .catch(() => setEntries([]));
-  }, [wallet.id]);
-  useEffect(load, [load]);
-
-  async function adjust() {
-    setNote(null);
-    try {
-      await api(`/admin/predictions/wallets/${wallet.id}/adjust`, {
-        method: "POST",
-        body: { amount: Number(amount), reason, key },
-      });
-      setAmount("");
-      setReason("");
-      setKey(newKey());
-      load();
-      onAdjusted();
-    } catch (e) {
-      setNote(message(e));
-    }
-  }
-
-  return (
-    <div className="mt-3 border-t border-line pt-3">
-      <div className="overflow-x-auto">
-        <table className="table w-full min-w-[34rem] text-xs">
-          <thead>
-            <tr>
-              <th className="text-left">#</th>
-              <th className="text-left">When</th>
-              <th className="text-left">What</th>
-              <th className="text-right">DC</th>
-              <th className="text-right">Before → after</th>
-            </tr>
-          </thead>
-          <tbody>
-            {entries?.map((e) => (
-              <tr key={e.id}>
-                <td>{e.seq}</td>
-                <td className="whitespace-nowrap">{when(e.created_at)}</td>
-                <td>
-                  {e.kind_label}
-                  <span className="block break-all text-muted">
-                    {e.idempotency_key}
-                    {e.actor ? ` · by ${e.actor}` : ""}
-                    {e.reason ? ` · ${e.reason}` : ""}
-                  </span>
-                </td>
-                <td className={`text-right ${e.amount > 0 ? "text-ok" : "text-bad"}`}>{signedCoins(e.amount)}</td>
-                <td className="whitespace-nowrap text-right">
-                  {e.balance_before} → {e.balance_after}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      {canAdjust && (
-        <div className="mt-3 flex flex-wrap gap-2">
-          <input className="input w-28" inputMode="numeric" placeholder="+50 or -50" value={amount} onChange={(e) => setAmount(e.target.value)} />
-          <input className="input flex-1" placeholder="Reason (required)" value={reason} onChange={(e) => setReason(e.target.value)} />
-          <button
-            type="button"
-            className="btn btn-primary"
-            disabled={!/^-?\d+$/.test(amount) || Number(amount) === 0 || reason.trim().length < 5}
-            onClick={adjust}
-          >
-            Adjust DC
-          </button>
-          {note && <p className="w-full text-bad">{note}</p>}
-        </div>
-      )}
-    </div>
-  );
-}
