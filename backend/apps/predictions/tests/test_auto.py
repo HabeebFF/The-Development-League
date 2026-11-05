@@ -116,8 +116,12 @@ def test_a_scrim_day_gets_both_sessions_with_open_markets(lg):
             assert cats.count(cat) == 5 * each, cat
         assert markets.count() == 5 * 24 + 5
         start = auto.session_start(date, session)
+        closes = start - dt.timedelta(minutes=1)  # 7:59 for 8PM, 9:59 for 10PM
+        hour = auto.SESSIONS[session].hour - 1
+        assert timezone.localtime(closes, auto.local_tz()).strftime("%H:%M") == f"{hour}:59"
+        assert Fixture.objects.get(date=date, session=session, match_number=1).scheduled_at == start
         for m in markets:
-            assert m.status == S.OPEN and m.closes_at == start
+            assert m.status == S.OPEN and m.closes_at == closes
             assert m.created_by.email == auto.SYSTEM_EMAIL
         booyah = markets.filter(category=C.BOOYAH).first()
         assert sorted(booyah.outcomes.values_list("team__name", flat=True)) == names
@@ -206,6 +210,22 @@ def test_a_lobby_change_after_the_session_starts_keeps_its_markets(lg, staff, mo
     assert res.status_code == 200, res.content
     assert sorted(made(date, "8PM").values_list("pk", flat=True)) == before
     assert sorted(whole.teams.values_list("pk", flat=True)) == sorted(new)
+
+
+def test_a_lobby_change_in_the_last_minute_keeps_its_markets(lg, staff, monkeypatch):
+    date = next_weekday(2)
+    auto.run(date)
+    before = sorted(made(date, "8PM").values_list("pk", flat=True))
+    whole = Fixture.objects.get(date=date, session="8PM", match_number=None)
+    # 7:59:30: predictions have closed though the session hasn't started.
+    soon = timezone.now() + dt.timedelta(seconds=30)
+    monkeypatch.setattr(auto, "session_start", lambda *_: soon)
+    new = [lg["teams"][n].pk for n in ("Alpha", "Bravo")]
+    res = as_user(staff).patch(
+        f"/api/v1/admin/predictions/fixtures/{whole.pk}", {"teams": new}, format="json"
+    )
+    assert res.status_code == 200, res.content
+    assert sorted(made(date, "8PM").values_list("pk", flat=True)) == before
 
 
 def test_switch_days_and_nights_off(lg, settings):
@@ -371,3 +391,22 @@ def test_markets_can_be_made_only_two_weeks_ahead(lg, staff):
         "/api/v1/admin/predictions/auto/run", {"date": latest.isoformat()}, format="json"
     )
     assert edge.status_code == 200, edge.content
+
+
+def test_open_markets_made_before_the_change_close_at_759(lg):
+    import importlib
+
+    from django.apps import apps
+
+    date = next_weekday(2)
+    auto.run(date)
+    start = auto.session_start(date, "8PM")
+    made(date, "8PM").update(closes_at=start)  # as made before closing a minute early
+    settled = made(date, "8PM").first()
+    Market.objects.filter(pk=settled.pk).update(status=S.SETTLED)
+    importlib.import_module("apps.predictions.migrations.0011_close_a_minute_early").forwards(
+        apps, None
+    )
+    closes = start - dt.timedelta(minutes=1)
+    assert not made(date, "8PM").exclude(pk=settled.pk).exclude(closes_at=closes).exists()
+    assert Market.objects.get(pk=settled.pk).closes_at == start  # finished ones untouched
