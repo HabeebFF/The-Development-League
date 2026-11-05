@@ -243,6 +243,7 @@ class LinkUidSerializer(serializers.Serializer):
 
 class PlayerClaimSerializer(serializers.ModelSerializer):
     user = serializers.EmailField(source="user.email", read_only=True)
+    user_name = serializers.CharField(source="user.display_name", read_only=True)
     game_uid = serializers.CharField(read_only=True)
     player_name = serializers.SerializerMethodField()
     reviewed_by = serializers.StringRelatedField()
@@ -252,6 +253,7 @@ class PlayerClaimSerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "user",
+            "user_name",
             "game_uid",
             "player_name",
             "status",
