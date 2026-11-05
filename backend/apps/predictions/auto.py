@@ -39,6 +39,7 @@ from .odds import suggest_odds
 C, S = Market.Category, Market.Status
 
 SESSIONS = {"8PM": dt.time(20), "10PM": dt.time(22)}
+CLOSE_BEFORE = dt.timedelta(minutes=1)  # predictions close at 7:59 for 8PM, 9:59 for 10PM
 MATCHES = 5  # matches in a session
 STARTS_AT = dt.time(10)  # local time markets are made from
 MAKE_AHEAD_DAYS = 14  # how far ahead staff can make a day's markets
@@ -62,6 +63,11 @@ def today() -> dt.date:
 
 def session_start(date: dt.date, session: str) -> dt.datetime:
     return dt.datetime.combine(date, SESSIONS[session], tzinfo=local_tz())
+
+
+def session_close(date: dt.date, session: str) -> dt.datetime:
+    """When a session's markets stop taking predictions: a minute before it starts."""
+    return session_start(date, session) - CLOSE_BEFORE
 
 
 def system_user() -> User:
@@ -221,12 +227,13 @@ class Run:
         self.made.append(title)
 
     def session(self, session: str) -> None:
-        closes = session_start(self.date, session)
+        starts = session_start(self.date, session)
+        closes = session_close(self.date, session)
         if closes <= self.now:
             return
         common = {"season": self.season, "date": self.date, "session": session}
         whole, _ = Fixture.objects.get_or_create(
-            **common, match_number=None, defaults={"scheduled_at": closes}
+            **common, match_number=None, defaults={"scheduled_at": starts}
         )
         teams = sorted(whole.teams.values_list("pk", flat=True))
         if not teams:
@@ -240,7 +247,7 @@ class Run:
             whole.teams.set(teams)
         matches = [
             Fixture.objects.get_or_create(
-                **common, match_number=n, defaults={"scheduled_at": closes}
+                **common, match_number=n, defaults={"scheduled_at": starts}
             )[0]
             for n in range(1, MATCHES + 1)
         ]
@@ -319,7 +326,7 @@ class Run:
         """Mondays: most points from today to Sunday, between the teams in form."""
         if self.date.weekday() != 0:
             return
-        closes = session_start(self.date, "8PM")
+        closes = session_close(self.date, "8PM")
         if closes <= self.now:
             return
         since = self.date - dt.timedelta(days=14)
@@ -373,7 +380,7 @@ def rebuild_session(fixture: Fixture, actor) -> dict:
     predicted on yet, with the new teams. Markets with predictions are left as they are."""
     if (
         fixture.session not in SESSIONS
-        or session_start(fixture.date, fixture.session) <= timezone.now()
+        or session_close(fixture.date, fixture.session) <= timezone.now()
     ):
         # Once the session has started its markets are closed and can't be made again, so
         # removing them would only empty the page. The new lobby still decides who can't play.
