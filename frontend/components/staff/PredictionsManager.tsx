@@ -38,7 +38,7 @@ type StaffFixture = Fixture & {
   season: number;
   display_title: string;
   match_day: number | null;
-  /** Teams in the lobby; league players in them can't predict on it. Empty: see Lobby. */
+  /** Teams in the lobby (the automatic markets and first out use it). Empty: see Lobby. */
   teams: number[];
 };
 type StaffOutcome = Market["outcomes"][number] & {
@@ -500,8 +500,7 @@ function FixturePanel({ fixture, seasonId, teams, onChanged }: { fixture: StaffF
   );
 }
 
-/** Which teams play this fixture. League players can't predict on a match or session their
- * team plays in, so this decides who is kept out. */
+/** Which teams play this fixture: the automatic markets are made for these teams. */
 function Lobby({ fixture, teams, onSaved }: { fixture: StaffFixture; teams: TeamRef[]; onSaved: () => void }) {
   const [picked, setPicked] = useState<number[]>(fixture.teams ?? []);
   const [open, setOpen] = useState(false);
@@ -535,7 +534,7 @@ function Lobby({ fixture, teams, onSaved }: { fixture: StaffFixture; teams: Team
           : fixture.match_number === null
             ? "not set, so every league team counts as playing"
             : "not set, so the session's lobby is used (or every league team)"}
-        . Players and members of these teams can&apos;t predict on it.{" "}
+        .{" "}
         <button type="button" className="text-accent hover:underline" onClick={() => setOpen(!open)}>
           {open ? "Close" : "Change"}
         </button>

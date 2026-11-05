@@ -1,5 +1,7 @@
-"""League players can't predict on any match or session their team plays in, nor on anything
-else that lists them, their team or a team-mate. A game UID waiting for staff blocks all bets."""
+"""League players can predict on matches and sessions their team plays in, but not on anything
+about them, their team or a team-mate: in a market with a choice per team or player only
+those choices are closed; other markets about them are closed whole. A game UID waiting for
+staff blocks all bets."""
 
 import datetime as dt
 import uuid
@@ -87,11 +89,12 @@ def booyah(lg, staff, fixture=1, teams=("Alpha", "Bravo", "Charlie")):
     return market(lg, staff, C.BOOYAH, fixture, teams=list(teams))
 
 
-def bet(user, m):
+def bet(user, m, choice=None, stake=50):
+    """A bet on the choice labelled ``choice`` (a team or player name), else the first."""
+    outcome = m.outcomes.get(label=choice) if choice else m.outcomes.first()
     return place_bet(
-        user, market_id=m.pk, outcome_id=m.outcomes.first().pk, stake=50,
-        client_key=uuid.uuid4(),
-    )[0]  # fmt: skip
+        user, market_id=m.pk, outcome_id=outcome.pk, stake=stake, client_key=uuid.uuid4()
+    )[0]
 
 
 def member(email, lg, team):
@@ -100,61 +103,67 @@ def member(email, lg, team):
     return user
 
 
-def refused(user, m, match="your team plays in it", code="not_allowed"):
+def refused(user, m, match="your own team or a team-mate", code="not_allowed", choice=None):
     with pytest.raises(MarketError, match=match) as err:
-        bet(user, m)
+        bet(user, m, choice)
     assert err.value.code == code
     return err.value
 
 
-def test_no_lobby_set_means_every_league_team_plays(lg, staff):
-    m = booyah(lg, staff)
-    # Echo isn't one of the choices, but nobody said which teams are in the lobby.
-    refused(member("echo@tdl.test", lg, "Echo"), m)
-    assert bet(make_user("fan@tdl.test"), m).stake == 50
-    # A team that isn't in the league isn't assumed to play.
-    assert bet(member("guest@tdl.test", lg, "Guest"), m).stake == 50
-
-
-def test_the_lobby_staff_set_decides(lg, staff):
+def test_players_can_predict_on_their_own_match_but_not_their_team(lg, staff):
     lg["fixtures"][1].teams.set([lg["teams"][n] for n in ("Alpha", "Bravo", "Charlie")])
-    m = booyah(lg, staff, teams=("Alpha", "Bravo"))
-    assert bet(member("echo@tdl.test", lg, "Echo"), m).stake == 50
-    # Charlie plays in the match even though this market doesn't list them.
-    refused(member("charlie@tdl.test", lg, "Charlie"), m)
-    refused(member("alpha@tdl.test", lg, "Alpha"), m)
-
-
-def test_a_match_without_a_lobby_uses_its_session_lobby(lg, staff):
-    lg["fixtures"]["session"].teams.set([lg["teams"]["Alpha"], lg["teams"]["Bravo"]])
-    echo, delta = member("echo@tdl.test", lg, "Echo"), member("delta@tdl.test", lg, "Delta")
+    m = booyah(lg, staff)
     alpha = member("alpha@tdl.test", lg, "Alpha")
-    m2 = booyah(lg, staff, fixture=2, teams=("Alpha", "Bravo"))
+    assert bet(alpha, m, "Bravo").stake == 50
+    assert bet(alpha, m, "Charlie").stake == 50
+    refused(alpha, m, choice="Alpha")
+    assert bet(make_user("fan@tdl.test"), m, "Alpha").stake == 50
+
+
+def test_the_whole_session_too(lg, staff):
     whole = market(lg, staff, C.SESSION_WINNER, "session", teams=["Alpha", "Bravo"])
-    for m in (m2, whole):
-        assert bet(echo, m).stake == 50
-        assert bet(delta, m).stake == 50
-        refused(alpha, m)
+    alpha = member("alpha@tdl.test", lg, "Alpha")
+    assert bet(alpha, whole, "Bravo").stake == 50
+    refused(alpha, whole, choice="Alpha")
+
+
+def test_markets_about_their_team_are_closed_whole(lg, staff):
+    alpha = member("alpha@tdl.test", lg, "Alpha")
+    top3 = market(lg, staff, C.TOP_N, 1, team=lg["teams"]["Alpha"].pk, n=3)
+    refused(alpha, top3, match="about your team", choice="Yes, Alpha top 3")
+    h2h = market(lg, staff, C.H2H_PLACEMENT, 1, teams=["Alpha", "Bravo"])
+    # Not even the other side of a head-to-head with their own team.
+    refused(alpha, h2h, match="about your team", choice="Bravo")
+    other = market(lg, staff, C.H2H_PLACEMENT, 1, teams=["Charlie", "Delta"])
+    assert bet(alpha, other, "Charlie").stake == 50
 
 
 def test_a_linked_player_without_a_membership_is_still_blocked(lg, staff):
     user = make_user("ace@tdl.test")
     Player.objects.filter(pk=lg["players"]["Ace"].pk).update(user=user)
-    refused(user, booyah(lg, staff, teams=("Bravo", "Charlie")))
+    m = booyah(lg, staff, teams=("Alpha", "Bravo"))
+    refused(user, m, choice="Alpha")
+    assert bet(user, m, "Bravo").stake == 50
 
 
 def test_season_markets_block_only_those_they_list(lg, staff):
     winner = market(lg, staff, C.OVERALL_WINNER, teams=["Alpha", "Bravo"])
-    refused(member("alpha@tdl.test", lg, "Alpha"), winner, match="about your team")
+    alpha = member("alpha@tdl.test", lg, "Alpha")
+    refused(alpha, winner, choice="Alpha")
+    assert bet(alpha, winner, "Bravo").stake == 50
     assert bet(member("echo@tdl.test", lg, "Echo"), winner).stake == 50
 
     frag = market(lg, staff, C.SEASON_FRAGGER, players=["Ash", "Free"])
-    # Ash's team-mate can't; Free has no team, but it's still about them.
-    refused(member("alpha2@tdl.test", lg, "Alpha"), frag, match="about your team")
+    # Ash's team-mate can't pick Ash, but can pick Free; Free can't pick themselves.
+    mate = member("alpha2@tdl.test", lg, "Alpha")
+    refused(mate, frag, choice="Ash")
+    assert bet(mate, frag, "Free").stake == 50
     free = make_user("free@tdl.test")
     Player.objects.filter(pk=lg["players"]["Free"].pk).update(user=free)
-    refused(free, frag, match="about you")
-    assert bet(member("bravo@tdl.test", lg, "Bravo"), frag).stake == 50
+    refused(free, frag, match="pick yourself", choice="Free")
+    assert bet(free, frag, "Ash").stake == 50
+    kills = market(lg, staff, C.PLAYER_KILLS, 1, player=lg["players"]["Ash"].pk, line=3)
+    refused(mate, kills, match="about your team")
 
 
 def test_a_uid_waiting_for_staff_blocks_every_bet(lg, staff):
@@ -180,7 +189,12 @@ def test_markets_say_why_a_player_cant_predict(lg, staff):
     m = booyah(lg, staff)
     alpha = member("alpha@tdl.test", lg, "Alpha")
     rows = as_user(alpha).get("/api/v1/predictions/markets").json()["results"]
-    assert rows[0]["blocked"] == f"You can't predict on {m.title}: your team plays in it."
+    assert rows[0]["blocked"] is None
+    assert rows[0]["blocked_outcomes"] == [m.outcomes.get(label="Alpha").pk]
+    top3 = market(lg, staff, C.TOP_N, 1, team=lg["teams"]["Alpha"].pk, n=3)
+    res = as_user(alpha).get(f"/api/v1/predictions/markets/{top3.pk}").json()
+    assert res["blocked"] == f"You can't predict on {top3.title}: it's about your team."
+    assert res["blocked_outcomes"] == []
     rows = as_user(make_user("fan@tdl.test")).get("/api/v1/predictions/markets").json()
     assert rows["results"][0]["blocked"] is None
 
@@ -190,7 +204,7 @@ def test_multiples_follow_the_same_rules(lg, staff):
     m1 = booyah(lg, staff, teams=("Alpha", "Bravo"))
     season = market(lg, staff, C.OVERALL_WINNER, teams=["Charlie", "Delta"])
     picks = [{"market": m.pk, "outcome": m.outcomes.first().pk} for m in (m1, season)]
-    with pytest.raises(MarketError, match="your team plays in it") as err:
+    with pytest.raises(MarketError, match="your own team") as err:
         place_multiple(
             member("alpha@tdl.test", lg, "Alpha"), picks=picks, stake=50, client_key=uuid.uuid4()
         )
@@ -209,3 +223,27 @@ def test_staff_set_a_fixture_lobby(lg, staff):
     )
     assert res.status_code == 200, res.content
     assert sorted(res.json()["teams"]) == sorted(ids)
+
+
+def test_repeat_predictions_on_one_choice_are_capped_in_total(lg, staff, settings):
+    settings.PREDICTIONS_MAX_STAKE = 500
+    m = booyah(lg, staff)
+    fan = make_user("fan@tdl.test")
+    assert bet(fan, m, "Bravo", stake=300).stake == 300
+    assert bet(fan, m, "Bravo", stake=200).stake == 200
+    with pytest.raises(MarketError, match="already have 500 coins on Bravo") as err:
+        bet(fan, m, "Bravo", stake=10)
+    assert err.value.code == "stake"
+    # Other choices, and other people, have their own limit.
+    assert bet(fan, m, "Charlie", stake=500).stake == 500
+    assert bet(make_user("fan2@tdl.test"), m, "Bravo", stake=500).stake == 500
+
+
+def test_the_cap_says_how_much_more_fits(lg, staff, settings):
+    settings.PREDICTIONS_MAX_STAKE = 500
+    m = booyah(lg, staff)
+    fan = make_user("fan@tdl.test")
+    bet(fan, m, "Bravo", stake=450)
+    with pytest.raises(MarketError, match="add up to 50 more"):
+        bet(fan, m, "Bravo", stake=100)
+    assert bet(fan, m, "Bravo", stake=50).stake == 50

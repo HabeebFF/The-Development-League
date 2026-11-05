@@ -224,11 +224,11 @@ def test_api_rejects_bad_stake_and_ids_without_charging(league, staff, fan):
 
 def test_cannot_stake_more_than_balance(league, staff, fan):
     market = booyah(league, staff)
-    for _ in range(2):
-        bet(fan, market, stake=500)
+    for n in range(2):
+        bet(fan, market, n=n, stake=500)
     assert balance(fan) == 0
     with pytest.raises(MarketError, match="Not enough DC"):
-        bet(fan, market, stake=10)
+        bet(fan, market, n=2, stake=10)
     assert Bet.objects.filter(user=fan).count() == 2
 
 
@@ -361,11 +361,12 @@ def _at_once(n: int, work) -> list:
 def test_simultaneous_bets_cannot_overspend(league, staff, fan):
     market = booyah(league, staff)
     wallet_for(fan)
-    results = _at_once(8, lambda i: bet(fan, market, stake=300))
+    # Spread over the 3 choices so the 500-per-choice limit doesn't decide it first.
+    results = _at_once(8, lambda i: bet(fan, market, n=i % 3, stake=250))
     ok = [r for r in results if isinstance(r, tuple)]
-    assert len(ok) == 3, results
-    assert balance(fan) == 100
-    assert Bet.objects.filter(user=fan).count() == 3
+    assert len(ok) == 4, results
+    assert balance(fan) == 0
+    assert Bet.objects.filter(user=fan).count() == 4
     assert check_wallets() == []
 
 
@@ -396,9 +397,14 @@ def test_player_cannot_bet_on_own_team(league, staff):
     player = make_user("player@tdl.test")
     Membership.objects.create(user=player, team=teams[1])
     market = booyah(league, staff)
-    with pytest.raises(MarketError, match="your team"):
-        bet(player, market)
+    order = market.outcomes.order_by("sort").values_list("team_id", flat=True)
+    own = list(order).index(teams[1].pk)
+    with pytest.raises(MarketError, match="your own team"):
+        bet(player, market, n=own)
     assert balance(player) == 1000
+    # Another team in the same match is fine.
+    bet(player, market, n=(own + 1) % 3)
+    assert balance(player) == 900
 
 
 def test_signed_out_visitors_cannot_bet(league, staff):

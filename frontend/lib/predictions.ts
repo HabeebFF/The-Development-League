@@ -38,9 +38,19 @@ export type Market = {
   /** Predictions on it so far: single bets and multiple picks. */
   predictions: number;
   outcomes: Outcome[];
-  /** Why the signed-in person can't predict on it (their team plays in it, say), else null. */
+  /** Why the signed-in person can't predict on it (it's about their team, say), else null. */
   blocked?: string | null;
+  /** Choices closed to the signed-in person: their own team, themselves or a team-mate. */
+  blocked_outcomes?: number[];
 };
+
+/** Whether the signed-in person can't pick this choice (the whole market or just this one). */
+export function pickBlocked(market: Market, outcome: Outcome): boolean {
+  return !!market.blocked || !!market.blocked_outcomes?.includes(outcome.id);
+}
+
+/** The line shown under a market when some of its choices are closed to the person. */
+export const OWN_CHOICES = "Choices for your own team or team-mates are closed to you.";
 
 export type Bet = {
   id: string;

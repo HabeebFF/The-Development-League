@@ -407,8 +407,14 @@ class MarketListView(APIView):
         page = paginator.paginate_queryset(qs, request, view=self)
         rules = PlayerRules(request.user)
         return paginator.get_paginated_response(
-            [{**market_data(m, now), "blocked": rules.reason(m)} for m in page]
+            [{**market_data(m, now), **_blocks(rules, m)} for m in page]
         )
+
+
+def _blocks(rules: PlayerRules, market: Market) -> dict:
+    """What this user can't pick: the whole market, or some of its choices."""
+    why = rules.reason(market)
+    return {"blocked": why, "blocked_outcomes": [] if why else rules.blocked_outcomes(market)}
 
 
 class MarketDetailView(APIView):
@@ -416,9 +422,7 @@ class MarketDetailView(APIView):
 
     def get(self, request, pk: int):
         market = get_object_or_404(_markets().exclude(status=S.DRAFT), pk=pk)
-        return Response(
-            {**market_data(market), "blocked": PlayerRules(request.user).reason(market)}
-        )
+        return Response({**market_data(market), **_blocks(PlayerRules(request.user), market)})
 
 
 class PlaceBetSerializer(serializers.Serializer):

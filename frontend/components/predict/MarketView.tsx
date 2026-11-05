@@ -2,7 +2,7 @@
 
 import Loading from "@/components/league/Loading";
 import { TeamMark } from "@/components/league/TeamBadge";
-import { closesIn, MARKET_STATUS, RULES, SHARED_WIN, showOdds, toPick, type Market } from "@/lib/predictions";
+import { closesIn, MARKET_STATUS, OWN_CHOICES, pickBlocked, RULES, SHARED_WIN, showOdds, toPick, type Market } from "@/lib/predictions";
 import { useApi } from "@/lib/useApi";
 
 import PredictNav, { NOTE, NotOpen } from "./PredictNav";
@@ -44,6 +44,7 @@ export default function MarketView({ id }: { id: number }) {
           )}
 
           {m.blocked && m.accepting && <p className="mt-4 border border-line bg-panel-2 p-3 text-sm">{m.blocked}</p>}
+          {!m.blocked && !!m.blocked_outcomes?.length && m.accepting && <p className="mt-4 border border-line bg-panel-2 p-3 text-sm">{OWN_CHOICES}</p>}
           <div className="mt-5 grid gap-2 sm:grid-cols-2">
             {m.outcomes.map((o) => {
               const on = slip.has(o.id);
@@ -51,7 +52,7 @@ export default function MarketView({ id }: { id: number }) {
                 <button
                   key={o.id}
                   type="button"
-                  disabled={!o.is_active || !canPick}
+                  disabled={!o.is_active || !canPick || pickBlocked(m, o)}
                   onClick={() => {
                     slip.toggle(toPick(m, o));
                     if (!on) slip.setOpen(true);

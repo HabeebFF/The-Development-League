@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 
 import { TeamMark } from "@/components/league/TeamBadge";
-import { closesIn, MARKET_STATUS, ONE_WINNER, showOdds, toPick, type Market, type Outcome } from "@/lib/predictions";
+import { closesIn, MARKET_STATUS, ONE_WINNER, OWN_CHOICES, pickBlocked, showOdds, toPick, type Market, type Outcome } from "@/lib/predictions";
 
 import { useOddsFormat } from "./oddsFormat";
 import { useSlip } from "./slip";
@@ -43,6 +43,7 @@ export default function MarketCard({ market, now, fold = true }: { market: Marke
         <p className="mt-2 text-xs text-muted">If someone not listed wins it, every pick on this market loses.</p>
       )}
       {market.blocked && open && <p className="mt-2 text-xs text-muted">{market.blocked}</p>}
+      {!market.blocked && !!market.blocked_outcomes?.length && open && <p className="mt-2 text-xs text-muted">{OWN_CHOICES}</p>}
       {market.predictions > 0 && (
         <p className="mt-2 text-xs text-muted">
           {market.predictions} prediction{market.predictions === 1 ? "" : "s"}
@@ -58,7 +59,7 @@ function Choice({ market, outcome: o }: { market: Market; outcome: Outcome }) {
   const [format] = useOddsFormat();
   const on = slip.has(o.id);
   const won = market.winners.includes(o.id);
-  const can = market.accepting && o.is_active && !market.blocked;
+  const can = market.accepting && o.is_active && !pickBlocked(market, o);
   return (
     <button
       type="button"
@@ -109,7 +110,7 @@ function RowChoice({ market, outcome: o }: { market: Market; outcome: Outcome })
   const [format] = useOddsFormat();
   const on = slip.has(o.id);
   const won = market.winners.includes(o.id);
-  const can = market.accepting && o.is_active && !market.blocked;
+  const can = market.accepting && o.is_active && !pickBlocked(market, o);
   return (
     <button
       type="button"

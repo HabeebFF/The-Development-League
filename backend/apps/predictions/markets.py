@@ -8,6 +8,7 @@ from decimal import ROUND_FLOOR, Decimal, InvalidOperation
 
 from django.conf import settings
 from django.db import IntegrityError, transaction
+from django.db.models import Sum
 from django.utils import timezone
 
 from apps.league.models import Player, Team
@@ -464,12 +465,37 @@ def market_player_ids(market: Market) -> set[int]:
     )
 
 
-class PlayerRules:
-    """What keeps a league player out of a market, worked out once per user.
+# Markets with one choice per team or player in the field (who gets Booyah, who's top
+# fragger): a player may pick any other team or player in them. Other markets about a team
+# or player (top 3, kills, head-to-heads, handicaps) are closed whole to those involved.
+FIELD = frozenset(
+    {
+        C.BOOYAH,
+        C.SESSION_WINNER,
+        C.MOST_BOOYAHS,
+        C.OVERALL_WINNER,
+        C.RANGE_WINNER,
+        C.FIRST_OUT,
+        C.FIRST_BLOOD,
+        C.TOP_FRAGGER,
+        C.FIRST_DEATH,
+        C.SESSION_FRAGGER,
+        C.RANGE_FRAGGER,
+        C.SEASON_FRAGGER,
+    }
+)
 
-    A player (or team member) can't predict on any match or session their team plays in,
-    nor on any other market that lists them, their team or a team-mate. Someone whose game
-    UID is still waiting for staff can't predict at all, since we don't know their team yet.
+
+class PlayerRules:
+    """What keeps a league player out of a market or one of its choices, worked out once per
+    user.
+
+    A player (or team member) can predict on matches and sessions their team plays in, but
+    not on anything about them, their team or a team-mate: a market that is about them
+    (their team's top 3, their kills, a head-to-head with their team) is closed to them
+    whole, and in a market with a choice per team or player (Booyah, first blood, top
+    fragger) only their own team's and team-mates' choices are. Someone whose game UID is
+    still waiting for staff can't predict at all, since we don't know their team yet.
     """
 
     def __init__(self, user):
@@ -479,33 +505,46 @@ class PlayerRules:
         self.uid_pending = bool(
             user and user.is_authenticated and user.player_claims.filter(status="PENDING").exists()
         )
-        self._lobbies: dict[int, set[int]] = {}
 
     def reason(self, market: Market) -> str | None:
-        """Why this user can't predict on ``market``, or None when they can."""
+        """Why this user can't predict on ``market`` at all, or None when they can (some of
+        its choices may still be closed to them: see ``outcome_reason``)."""
         if self.uid_pending:
             return "You can predict once staff confirm your game UID."
         if not self.teams and self.player is None:
             return None
-        if market.fixture_id and self.teams:
-            if market.fixture_id not in self._lobbies:
-                self._lobbies[market.fixture_id] = lobby_team_ids(market.fixture)
-            if self._lobbies[market.fixture_id] & self.teams:
-                return f"You can't predict on {market.title}: your team plays in it."
-        if self.player is not None and self.player in market_player_ids(market):
+        if market.category in FIELD:
+            return None  # only their own choices are closed: see outcome_reason
+        p = market.params or {}
+        listed = {int(x) for x in p.get("players") or []} | (
+            {int(p["player"])} if p.get("player") else set()
+        )
+        if self.player is not None and self.player in listed:
             return f"You can't predict on {market.title}: it's about you."
-        listed = market_team_ids(market) | {
-            t
-            for row in market.outcomes.values_list("team_id", "player__current_team_id")
-            for t in row
-            if t is not None
-        }
-        if listed & self.teams:
+        if market_team_ids(market) & self.teams:
             return f"You can't predict on {market.title}: it's about your team."
         return None
 
-    def check(self, market: Market) -> None:
-        if why := self.reason(market):
+    def outcome_reason(self, outcome: Outcome) -> str | None:
+        """Why this user can't pick ``outcome`` (their own team or a team-mate), or None."""
+        if self.player is not None and outcome.player_id == self.player:
+            return "You can't pick yourself."
+        team = outcome.player.current_team_id if outcome.player_id else outcome.team_id
+        if team is not None and team in self.teams:
+            return "You can't pick your own team or a team-mate."
+        return None
+
+    def blocked_outcomes(self, market: Market) -> list[int]:
+        """The choices in ``market`` closed to this user (when the market itself isn't)."""
+        if not self.teams and self.player is None:
+            return []
+        return [o.pk for o in market.outcomes.all() if self.outcome_reason(o)]
+
+    def check(self, market: Market, outcome: Outcome | None = None) -> None:
+        why = self.reason(market)
+        if why is None and outcome is not None and (why := self.outcome_reason(outcome)):
+            why = f"{why} ({outcome.label} in {market.title})"
+        if why:
             code = "uid_pending" if self.uid_pending else "not_allowed"
             raise MarketError(why, code, market=market.pk)
 
@@ -520,6 +559,22 @@ def clean_stake(stake) -> int:
     if not lo <= stake <= hi:
         raise MarketError(f"The stake must be between {lo} and {hi} coins.", "stake")
     return stake
+
+
+def check_pick_total(user, outcome: Outcome, stake: int) -> None:
+    """Repeat predictions on the same choice are fine, but one person's single predictions
+    on one choice can't add up to more than the most one prediction can take."""
+    cap = settings.PREDICTIONS_MAX_STAKE
+    before = Bet.objects.filter(user=user, outcome=outcome).exclude(status=Bet.Status.VOID)
+    before = before.aggregate(total=Sum("stake"))["total"] or 0
+    if before + stake > cap:
+        room = max(cap - before, 0)
+        more = f"you can add up to {room} more" if room else "you can't add more"
+        raise MarketError(
+            f"You already have {before} coins on {outcome.label}. One choice can take at most "
+            f"{cap} coins from you in total, so {more}.",
+            "stake",
+        )
 
 
 def place_bet(
@@ -556,7 +611,8 @@ def place_bet(
                 raise MarketError("This market isn't taking predictions now.", "closed")
             if not outcome.is_active:
                 raise MarketError("That choice is no longer available.", "outcome")
-            PlayerRules(user).check(market)
+            PlayerRules(user).check(market, outcome)
+            check_pick_total(user, outcome, stake)
             if expected_odds is not None and clean_odds(expected_odds) != outcome.odds:
                 raise MarketError(
                     f"The odds changed to {outcome.odds}. Check and confirm again.",
