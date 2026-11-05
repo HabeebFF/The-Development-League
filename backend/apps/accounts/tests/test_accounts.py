@@ -325,7 +325,7 @@ def test_members_list_and_last_manager_guard(team, manager, staff):
 # -- game UID claims --------------------------------------------------------------------------
 
 
-def test_uid_claim_approved_by_staff(staff, team):
+def test_uid_links_straight_away(staff, team):
     Player.objects.create(
         game_uid=2063288734,
         current_name_raw="NBㅤVALSI",
@@ -335,28 +335,57 @@ def test_uid_claim_approved_by_staff(staff, team):
     user = make_user("valsi@tdl.test")
     resp = as_user(user).post("/api/v1/me/link-uid", {"game_uid": "2063288734"}, format="json")
     assert resp.status_code == 201
-    assert as_user(user).get("/api/v1/me").json()["pending_uid_claim"] == "2063288734"
-    assert as_user(user).get("/api/v1/admin/player-claims").status_code == 403
-
-    claims = as_user(staff).get("/api/v1/admin/player-claims?status=PENDING").json()["results"]
-    assert claims[0]["player_name"] == "NB VALSI"
-    approve = as_user(staff).post(f"/api/v1/admin/player-claims/{claims[0]['id']}/approve")
-    assert approve.status_code == 200
+    assert resp.json()["status"] == "APPROVED" and resp.json()["reviewed_by"] is None
     me = as_user(user).get("/api/v1/me").json()
     assert me["player"] == {"game_uid": "2063288734", "display_name": "NB VALSI"}
+    assert me["pending_uid_claim"] is None
+    assert as_user(user).get("/api/v1/admin/player-claims").status_code == 403
+
+    linked = as_user(staff).get("/api/v1/admin/player-claims?status=APPROVED").json()["results"]
+    assert linked[0]["player_name"] == "NB VALSI"
 
     thief = make_user("thief@tdl.test")
     taken = as_user(thief).post("/api/v1/me/link-uid", {"game_uid": "2063288734"}, format="json")
     assert taken.status_code == 400
 
 
-def test_uid_claim_for_unknown_player_creates_one(staff):
+def test_uid_for_unknown_player_creates_one():
     user = make_user("new@tdl.test", display_name="Newbie")
     as_user(user).post("/api/v1/me/link-uid", {"game_uid": "123456789"}, format="json")
-    claim = PlayerClaim.objects.get()
-    as_user(staff).post(f"/api/v1/admin/player-claims/{claim.pk}/approve")
     assert Player.objects.get(game_uid=123456789).user == user
-    assert as_user(staff).post(f"/api/v1/admin/player-claims/{claim.pk}/reject").status_code == 400
+    assert PlayerClaim.objects.get().status == PlayerClaim.Status.APPROVED
+
+
+def test_staff_unlink_a_uid_that_isnt_theirs(staff):
+    user = make_user("faker@tdl.test")
+    as_user(user).post("/api/v1/me/link-uid", {"game_uid": "555000111"}, format="json")
+    claim = PlayerClaim.objects.get()
+    assert as_user(user).post(f"/api/v1/admin/player-claims/{claim.pk}/unlink").status_code == 403
+    resp = as_user(staff).post(f"/api/v1/admin/player-claims/{claim.pk}/unlink")
+    assert resp.status_code == 200, resp.content
+    assert Player.objects.get(game_uid=555000111).user is None
+    claim.refresh_from_db()
+    assert claim.status == PlayerClaim.Status.REJECTED and claim.reviewed_by == staff
+    # The real owner can now link it.
+    owner = make_user("owner@tdl.test")
+    ok = as_user(owner).post("/api/v1/me/link-uid", {"game_uid": "555000111"}, format="json")
+    assert ok.json()["status"] == "APPROVED"
+    assert as_user(staff).post(f"/api/v1/admin/player-claims/{claim.pk}/unlink").status_code == 400
+
+
+def test_a_claim_on_a_taken_uid_waits_for_staff(staff):
+    first, second = make_user("a@tdl.test"), make_user("b@tdl.test")
+    as_user(first).post("/api/v1/me/link-uid", {"game_uid": "777"}, format="json")
+    # Both asked at once: the second claim arrived before the first was linked.
+    claim = PlayerClaim.objects.create(user=second, game_uid=777)
+    from apps.accounts.views import link_claim
+
+    assert link_claim(claim) is False
+    claim.refresh_from_db()
+    assert claim.status == PlayerClaim.Status.PENDING
+    resp = as_user(staff).post(f"/api/v1/admin/player-claims/{claim.pk}/approve")
+    assert resp.status_code == 400
+    assert as_user(staff).post(f"/api/v1/admin/player-claims/{claim.pk}/reject").status_code == 200
 
 
 # -- staff management -------------------------------------------------------------------------
@@ -417,7 +446,7 @@ def open_signup(settings):
     }
 
 
-def test_signup_with_a_game_uid_asks_staff_to_confirm_it(open_signup):
+def test_signup_with_a_game_uid_links_the_player(open_signup):
     client, csrf = csrf_client()
     body = {"email": "p1@tdl.test", "password": PASSWORD, "display_name": "Viper"}
     bad = client.post(
@@ -430,8 +459,10 @@ def test_signup_with_a_game_uid_asks_staff_to_confirm_it(open_signup):
     )  # fmt: skip
     assert ok.status_code == 201, ok.content
     claim = PlayerClaim.objects.get(user__email="p1@tdl.test")
-    assert (claim.game_uid, claim.status) == (5550001, PlayerClaim.Status.PENDING)
-    assert client.get("/api/v1/me").json()["pending_uid_claim"]
+    assert (claim.game_uid, claim.status) == (5550001, PlayerClaim.Status.APPROVED)
+    me = client.get("/api/v1/me").json()
+    assert me["pending_uid_claim"] is None
+    assert me["player"] == {"game_uid": "5550001", "display_name": "Viper"}
 
 
 def test_signup_refuses_a_uid_someone_already_has(open_signup):
@@ -559,3 +590,20 @@ def test_google_refuses_switched_off_accounts(google_ok):
     make_user("gamer@gmail.com", is_active=False)
     client, csrf = csrf_client()
     assert _google(client, csrf).status_code == 403
+
+
+def test_waiting_uids_link_when_this_ships():
+    import importlib
+
+    from django.apps import apps
+
+    waiting = make_user("waiting@tdl.test", display_name="Waiter")
+    PlayerClaim.objects.create(user=waiting, game_uid=4242)
+    owner, late = make_user("owner2@tdl.test"), make_user("late@tdl.test")
+    Player.objects.create(
+        game_uid=99, current_name_raw="X", display_name="X", search_name="x", user=owner
+    )
+    PlayerClaim.objects.create(user=late, game_uid=99)
+    importlib.import_module("apps.accounts.migrations.0004_link_waiting_uids").forwards(apps, None)
+    assert Player.objects.get(game_uid=4242).user == waiting
+    assert PlayerClaim.objects.get(user=late).status == PlayerClaim.Status.PENDING

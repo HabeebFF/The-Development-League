@@ -166,7 +166,7 @@ class SignupView(APIView):
                     email=v["email"], password=v["password"], display_name=v["display_name"]
                 )
                 if v.get("game_uid"):
-                    PlayerClaim.objects.create(user=user, game_uid=v["game_uid"])
+                    link_claim(PlayerClaim.objects.create(user=user, game_uid=v["game_uid"]))
         except IntegrityError as exc:  # the same email sent twice at once
             raise ValidationError(
                 {"email": ["An account with this email already exists."]}
@@ -222,7 +222,7 @@ class GoogleView(APIView):
                         email=who["email"], password=None, display_name=v["display_name"]
                     )
                     if v.get("game_uid"):
-                        PlayerClaim.objects.create(user=user, game_uid=v["game_uid"])
+                        link_claim(PlayerClaim.objects.create(user=user, game_uid=v["game_uid"]))
             except IntegrityError as exc:  # the same sign-up sent twice at once
                 raise ValidationError(
                     {"email": ["An account with this email already exists."]}
@@ -351,7 +351,8 @@ class MeView(generics.RetrieveUpdateAPIView):
 
 
 class LinkUidView(APIView):
-    """Ask to link this account to a game UID. Staff approve it."""
+    """Link this account to a game UID: straight away, or for staff to decide when another
+    account already has it."""
 
     permission_classes = [IsAuthenticated]
 
@@ -365,6 +366,7 @@ class LinkUidView(APIView):
             claim = PlayerClaim.objects.create(
                 user=request.user, game_uid=data.validated_data["game_uid"]
             )
+            link_claim(claim)  # automatic unless another account has this UID
         return Response(PlayerClaimSerializer(claim).data, status=status.HTTP_201_CREATED)
 
 
@@ -529,6 +531,32 @@ class TeamMemberViewSet(
         membership.save(update_fields=["is_active"])
 
 
+def link_claim(claim: PlayerClaim, reviewer: User | None = None) -> bool:
+    """Link the claim's account to the player with that game UID (made if new) and mark the
+    claim approved. Returns False, changing nothing, when another account has that UID: staff
+    then decide. ``reviewer`` is None when it happened automatically at sign-up."""
+    with transaction.atomic():
+        player = Player.objects.select_for_update().filter(game_uid=claim.game_uid).first()
+        if player and player.user_id and player.user_id != claim.user_id:
+            return False
+        Player.objects.filter(user=claim.user).exclude(game_uid=claim.game_uid).update(user=None)
+        if player is None:
+            name = claim.user.display_name or claim.user.email.split("@")[0]
+            player = Player(
+                game_uid=claim.game_uid,
+                current_name_raw=name,
+                display_name=name,
+                search_name=name.casefold(),
+            )
+        player.user = claim.user
+        player.save()
+        claim.status = PlayerClaim.Status.APPROVED
+        claim.reviewed_by = reviewer
+        claim.reviewed_at = timezone.now()
+        claim.save(update_fields=["status", "reviewed_by", "reviewed_at"])
+    return True
+
+
 # -- staff: UID claims and the staff list ---------------------------------------------
 
 
@@ -546,26 +574,13 @@ class PlayerClaimViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
             raise ValidationError("This claim was already reviewed.")
         with transaction.atomic():
             if approved:
-                player = Player.objects.select_for_update().filter(game_uid=claim.game_uid).first()
-                if player and player.user_id and player.user_id != claim.user_id:
+                if not link_claim(claim, self.request.user):
                     raise ValidationError("This UID is already linked to another account.")
-                Player.objects.filter(user=claim.user).exclude(game_uid=claim.game_uid).update(
-                    user=None
-                )
-                if player is None:
-                    name = claim.user.display_name or claim.user.email.split("@")[0]
-                    player = Player(
-                        game_uid=claim.game_uid,
-                        current_name_raw=name,
-                        display_name=name,
-                        search_name=name.casefold(),
-                    )
-                player.user = claim.user
-                player.save()
-            claim.status = PlayerClaim.Status.APPROVED if approved else PlayerClaim.Status.REJECTED
-            claim.reviewed_by = self.request.user
-            claim.reviewed_at = timezone.now()
-            claim.save(update_fields=["status", "reviewed_by", "reviewed_at"])
+            else:
+                claim.status = PlayerClaim.Status.REJECTED
+                claim.reviewed_by = self.request.user
+                claim.reviewed_at = timezone.now()
+                claim.save(update_fields=["status", "reviewed_by", "reviewed_at"])
         return Response(PlayerClaimSerializer(claim).data)
 
     @action(detail=True, methods=["post"])
@@ -575,6 +590,20 @@ class PlayerClaimViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
     @action(detail=True, methods=["post"])
     def reject(self, request, pk=None):
         return self._review(self.get_object(), approved=False)
+
+    @action(detail=True, methods=["post"])
+    def unlink(self, request, pk=None):
+        """Undo an approval (automatic or not): the account is no longer that player."""
+        claim = self.get_object()
+        if claim.status != PlayerClaim.Status.APPROVED:
+            raise ValidationError("Only an approved UID can be unlinked.")
+        with transaction.atomic():
+            Player.objects.filter(user=claim.user, game_uid=claim.game_uid).update(user=None)
+            claim.status = PlayerClaim.Status.REJECTED
+            claim.reviewed_by = request.user
+            claim.reviewed_at = timezone.now()
+            claim.save(update_fields=["status", "reviewed_by", "reviewed_at"])
+        return Response(PlayerClaimSerializer(claim).data)
 
 
 class StaffViewSet(
