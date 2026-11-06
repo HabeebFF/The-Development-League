@@ -165,3 +165,21 @@ def test_quote_shows_the_cut_before_placing(lg, staff, fan):
     )
     assert placed["odds"] == "3.00"
     assert [p["odds_counted"] for p in placed["picks"]] == ["2.00", "1.50"]
+
+
+def test_signed_out_visitors_see_the_price_while_the_site_is_public(lg, staff, settings):
+    a, b = market(lg, staff, "m1"), kills(lg, staff, "Alpha")
+    body = {"picks": [pick(a, "Alpha", odds=False), code(b, "yes")]}
+    r = as_user(None).post("/api/v1/predictions/multiples/quote", body, format="json")
+    assert r.status_code == 200, r.content
+    assert r.json()["builder"] is True
+    # They still can't place it.
+    r = as_user(None).post(
+        "/api/v1/predictions/multiples",
+        {**body, "stake": 50, "client_key": str(uuid.uuid4())},
+        format="json",
+    )
+    assert r.status_code in (401, 403)
+    settings.PUBLIC_SITE = False
+    r = as_user(None).post("/api/v1/predictions/multiples/quote", body, format="json")
+    assert r.status_code in (401, 403)
