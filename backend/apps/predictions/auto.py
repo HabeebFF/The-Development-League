@@ -199,15 +199,21 @@ class Run:
         self.now = timezone.now()
 
     def market(self, key: str, category: str, title: str, params: dict, closes_at, fixture=None):
-        """Make one market with suggested odds and open it, unless ``key`` was made before."""
+        """Make one market with suggested odds and open it, unless ``key`` was made before.
+        One that was voided (refunded) is made again; one staff deleted is not."""
         key = f"{self.date.isoformat()}:{key}"
-        if AutoMarket.objects.filter(key=key).exists():
+        before = AutoMarket.objects.filter(key=key).select_related("market").first()
+        if before is not None and (before.market is None or before.market.status != S.VOID):
             return
         try:
             odds = suggest_odds(
                 season=self.season, category=category, params=params, fixture=fixture
             )["odds"]
             with transaction.atomic():
+                if before is not None:
+                    # The refunded market stays as it was (its predictions were refunded); the
+                    # key moves to the new one.
+                    AutoMarket.objects.filter(pk=before.pk, market=before.market).delete()
                 m = create_market(
                     actor=self.actor, category=category, title=title, season=self.season,
                     fixture=fixture, params=params, odds=odds, opens_at=self.now,
