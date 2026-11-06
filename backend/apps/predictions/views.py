@@ -72,6 +72,14 @@ class PredictionsOn(BasePermission):
         return True
 
 
+class PricesAreReads(BasePermission):
+    """Pricing a slip only reads (it's a POST to carry the picks), so it's open to whoever
+    can read the markets: anyone while the site is public, else signed-in users."""
+
+    def has_permission(self, request, view) -> bool:
+        return settings.PUBLIC_SITE or request.user.is_authenticated
+
+
 class CanPlay(BasePermission):
     message = "League staff can't play predictions."
 
@@ -595,7 +603,7 @@ class MultipleQuoteView(APIView):
     """POST picks: what they'd count for as one multiple (a bet builder cuts the odds of
     picks on the same match), or why they can't go together. Places nothing."""
 
-    permission_classes = [PredictionsOn, PublicRead]
+    permission_classes = [PredictionsOn, PricesAreReads]
 
     def post(self, request):
         try:
