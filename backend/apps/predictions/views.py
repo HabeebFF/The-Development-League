@@ -756,6 +756,21 @@ class FixtureAdminViewSet(viewsets.ModelViewSet):
             response.data["markets"] = {"made": len(rebuilt["made"]), "notes": rebuilt["notes"]}
         return response
 
+    @action(detail=True, methods=["get", "post"])
+    def refund(self, request, pk=None):
+        """GET: what refunding this session (or match) would do. POST {reason}: void every
+        market in it that isn't settled yet, giving every stake back."""
+        fixture = self.get_object()
+        if request.method == "GET":
+            return Response(settlement.session_refund_plan(fixture))
+        try:
+            done = settlement.refund_session(
+                fixture, actor=request.user, reason=str(request.data.get("reason") or "")
+            )
+        except MarketError as exc:
+            return _refused(exc)
+        return Response(done)
+
     def perform_destroy(self, fixture):
         if fixture.markets.exists():
             raise ValidationError({"detail": "This fixture has markets; void them instead."})

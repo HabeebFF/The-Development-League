@@ -483,6 +483,13 @@ function FixturePanel({ fixture, seasonId, teams, onChanged }: { fixture: StaffF
           </p>
           {fixture.match_number === null ? <LinkDay fixture={fixture} onLinked={onChanged} /> : <LinkMatch fixture={fixture} onLinked={onChanged} />}
           <Lobby fixture={fixture} teams={teams} onSaved={onChanged} />
+          <RefundAll
+            fixture={fixture}
+            onDone={() => {
+              load();
+              onChanged();
+            }}
+          />
         </div>
       ) : (
         <div>
@@ -497,6 +504,90 @@ function FixturePanel({ fixture, seasonId, teams, onChanged }: { fixture: StaffF
         <MarketPanel key={m.id} market={m} onChanged={load} />
       ))}
     </section>
+  );
+}
+
+type RefundPlan = { markets: number; bets: number; multiples: number; settled: number; already_void: number; voided?: number };
+
+/** Refund a whole session (or one match) in one go: every market in it that isn't settled is
+ * voided and every stake goes back. Shows what it will do before staff confirm. */
+function RefundAll({ fixture, onDone }: { fixture: StaffFixture; onDone: () => void }) {
+  const [plan, setPlan] = useState<RefundPlan | null>(null);
+  const [reason, setReason] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
+  const what = fixture.match_number === null ? "session" : "match";
+  const url = `/admin/predictions/fixtures/${fixture.id}/refund`;
+
+  async function open() {
+    setNote(null);
+    try {
+      setPlan(await api<RefundPlan>(url));
+    } catch (e) {
+      setNote(message(e));
+    }
+  }
+
+  async function confirm() {
+    setBusy(true);
+    setNote(null);
+    try {
+      const done = await api<RefundPlan>(url, { method: "POST", body: { reason } });
+      setPlan(null);
+      setReason("");
+      setNote(`Refunded: ${done.voided ?? 0} market${done.voided === 1 ? "" : "s"} voided and every stake on them given back.`);
+      onDone();
+    } catch (e) {
+      setNote(message(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="mt-3 text-sm">
+      {!plan && (
+        <button type="button" className="text-bad hover:underline" onClick={open}>
+          Refund the whole {what}
+        </button>
+      )}
+      {note && <p className={note.startsWith("Refunded") ? "text-ok" : "text-bad"}>{note}</p>}
+      {plan && (
+        <div className="mt-2 space-y-2 border border-bad/60 bg-panel-2 p-3">
+          <p className="font-semibold">Refund the whole {what}?</p>
+          {plan.markets === 0 ? (
+            <p className="text-muted">Nothing to refund: every market here is already settled or void.</p>
+          ) : (
+            <p>
+              {plan.markets} market{plan.markets === 1 ? "" : "s"} will be voided. {plan.bets} prediction{plan.bets === 1 ? "" : "s"} get their stake back, and{" "}
+              {plan.multiples} multiple{plan.multiples === 1 ? " drops" : "s drop"} those picks (the rest of each still counts).
+            </p>
+          )}
+          {plan.settled > 0 && (
+            <p className="text-xs text-muted">
+              {plan.settled} settled market{plan.settled === 1 ? " is" : "s are"} left as {plan.settled === 1 ? "it is" : "they are"}. Correct those one by one
+              if they need changing.
+            </p>
+          )}
+          {plan.markets > 0 && (
+            <label className="block">
+              <span className="text-muted">Reason (kept in the market history)</span>
+              <input className="input mt-1" value={reason} placeholder="Session cancelled" onChange={(e) => setReason(e.target.value)} />
+            </label>
+          )}
+          <div className="flex gap-2">
+            {plan.markets > 0 && (
+              <button type="button" className="btn btn-primary" disabled={busy || !reason.trim()} onClick={confirm}>
+                {busy ? "Refunding..." : `Refund ${plan.markets} market${plan.markets === 1 ? "" : "s"}`}
+              </button>
+            )}
+            <button type="button" className="btn" disabled={busy} onClick={() => setPlan(null)}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 

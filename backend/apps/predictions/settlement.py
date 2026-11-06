@@ -32,7 +32,7 @@ from .markets import (
     MarketError,
     dead_heat_return,
 )
-from .models import Bet, Market, MarketEvent, Outcome, Settlement, Wallet
+from .models import Bet, Fixture, Market, MarketEvent, Multiple, Outcome, Settlement, Wallet
 from .multiples import apply_legs
 from .services import Kind, post_entry
 
@@ -902,3 +902,47 @@ def settlement_data(s: Settlement) -> dict:
         "supersedes": s.supersedes.version if s.supersedes else None,
         "created_at": s.created_at,
     }
+
+
+# -- refunding a whole session -------------------------------------------------------------------
+
+
+def session_fixtures(fixture: Fixture) -> list[Fixture]:
+    """A session (8PM, 10PM) with all its matches; a single match is just itself."""
+    if fixture.match_number is not None:
+        return [fixture]
+    return list(
+        Fixture.objects.filter(
+            season_id=fixture.season_id, date=fixture.date, session=fixture.session
+        )
+    )
+
+
+def session_refund_plan(fixture: Fixture) -> dict:
+    """What refunding ``fixture`` (a whole session, or one match) would do."""
+    markets = Market.objects.filter(fixture__in=session_fixtures(fixture)).exclude(status=S.DRAFT)
+    open_ = markets.exclude(status__in=[S.SETTLED, S.VOID])
+    return {
+        "markets": open_.count(),
+        "bets": Bet.objects.filter(market__in=open_).count(),
+        "multiples": Multiple.objects.filter(legs__market__in=open_).distinct().count(),
+        "settled": markets.filter(status=S.SETTLED).count(),
+        "already_void": markets.filter(status=S.VOID).count(),
+    }
+
+
+def refund_session(fixture: Fixture, *, actor, reason: str) -> dict:
+    """Void every market of a session (or one match) that isn't settled or void yet: each
+    prediction on them gets its stake back, and a multiple's pick on them drops out.
+    Settled markets are left alone (correct them one by one). Safe to repeat."""
+    if not reason.strip():
+        raise MarketError("Give a reason for the refund.", "reason")
+    plan = session_refund_plan(fixture)
+    markets = Market.objects.filter(fixture__in=session_fixtures(fixture)).exclude(
+        status__in=[S.DRAFT, S.SETTLED, S.VOID]
+    )
+    voided = 0
+    for market in markets.order_by("pk"):
+        _, created = void(market, actor=actor, reason=reason)
+        voided += created
+    return {**plan, "voided": voided}
