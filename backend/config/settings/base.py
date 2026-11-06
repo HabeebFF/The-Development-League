@@ -138,6 +138,8 @@ FILE_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024
 PUBLIC_SITE = env_bool("PUBLIC_SITE", True)
 # Anyone can make an account at /auth/signup (otherwise accounts come from staff and invites).
 PUBLIC_SIGNUP = env_bool("PUBLIC_SIGNUP", False)
+# Extra words people can't use in their names (comma-separated), on top of common/names.py.
+BLOCKED_NAME_WORDS = os.environ.get("BLOCKED_NAME_WORDS", "")
 # "Continue with Google": the OAuth client ID from Google Cloud (it is public, not a secret).
 # Empty hides the Google button.
 GOOGLE_CLIENT_ID = env("GOOGLE_CLIENT_ID", "") or ""
