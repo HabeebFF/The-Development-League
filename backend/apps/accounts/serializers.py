@@ -5,6 +5,7 @@ from django.db.models.functions import Lower
 from rest_framework import serializers
 
 from apps.league.models import Player, Team
+from common.names import check_name
 
 from .models import Invite, Membership, PlayerClaim, StaffProfile, User
 
@@ -46,6 +47,11 @@ class MeSerializer(serializers.ModelSerializer):
             "pending_uid_claim",
         ]
         read_only_fields = ["id", "email"]
+
+    def validate_display_name(self, value: str) -> str:
+        name = " ".join(value.split())
+        check_name(name)
+        return name
 
     def get_staff_role(self, user: User) -> str | None:
         if user.is_superuser:
@@ -100,6 +106,7 @@ class SignupSerializer(serializers.Serializer):
 
     def validate_display_name(self, value: str) -> str:
         name = " ".join(value.split())
+        check_name(name)
         if User.objects.filter(display_name__iexact=name).exists():
             raise serializers.ValidationError("That name is taken. Pick another.")
         return name
@@ -190,6 +197,11 @@ class InviteAcceptSerializer(serializers.Serializer):
 
     password = serializers.CharField(required=False, trim_whitespace=False)
     display_name = serializers.CharField(required=False, max_length=80, allow_blank=True)
+
+    def validate_display_name(self, value: str) -> str:
+        name = " ".join(value.split())
+        check_name(name)
+        return name
 
 
 class MemberSerializer(serializers.ModelSerializer):
