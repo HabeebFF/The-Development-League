@@ -156,6 +156,27 @@ def test_running_again_makes_nothing_new_and_keeps_deleted_ones_deleted(lg, staf
     assert AutoMarket.objects.filter(market__isnull=True).count() == 1
 
 
+def test_a_refunded_session_can_be_made_again(lg, staff):
+    from apps.predictions import settlement
+
+    date = next_weekday(2)
+    auto.run(date)
+    first = list(made(date, "8PM").values_list("pk", flat=True))
+    whole = Fixture.objects.get(date=date, session="8PM", match_number__isnull=True)
+    done = settlement.refund_session(whole, actor=staff, reason="Cancelled")
+    assert done["voided"] == len(first)
+    again = auto.run(date)
+    assert len(again["made"]) == len(first)
+    fresh = made(date, "8PM").exclude(pk__in=first)
+    assert fresh.count() == len(first)
+    assert set(fresh.values_list("status", flat=True)) == {Market.Status.OPEN}
+    # The refunded ones stay as they were, and running again makes nothing more.
+    assert set(Market.objects.filter(pk__in=first).values_list("status", flat=True)) == {
+        Market.Status.VOID
+    }
+    assert auto.run(date)["made"] == []
+
+
 def test_staff_edits_and_their_own_lobby_are_kept(lg, staff):
     date = next_weekday(2)
     whole = Fixture.objects.create(
@@ -362,8 +383,11 @@ def test_making_the_same_market_twice_at_once_is_not_an_error(lg, monkeypatch):
             @staticmethod
             def filter(**kw):
                 class Q:
-                    def exists(self):
-                        return False
+                    def select_related(self, *_):
+                        return self
+
+                    def first(self):
+                        return None
 
                 return Q()
 
