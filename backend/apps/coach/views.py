@@ -14,10 +14,11 @@ from apps.maps.models import Map
 from apps.results.models import MatchEvent
 from common.permissions import HasFeature, IsStaff, IsTeamMemberOrStaff
 
-from . import counter, moments, players, progress, writer
+from . import ask, counter, moments, players, progress, writer
 from .engine import load_games, measure, team_profile
 from .models import (
     AiUsage,
+    CoachQuestion,
     CoachReport,
     CounterPlan,
     KnowledgeEntry,
@@ -298,6 +299,58 @@ class CounterPlanView(APIView):
                 team=team, opponent=rival, week_start=week, defaults=content
             )
         return Response(CounterPlanSerializer(plan).data)
+
+
+def _asked(q: CoachQuestion) -> dict:
+    return {
+        "id": q.id,
+        "question": q.question,
+        "asked_at": q.created_at,
+        "asked_by": q.asked_by.email.split("@")[0] if q.asked_by else None,
+        "writer": q.writer,
+        **q.answer,
+    }
+
+
+class TeamAskView(APIView):
+    """Ask the coach (``/coach/teams/<slug>/ask``). ``GET`` lists the team's recent questions
+    with their answers; ``POST {"question": "..."}`` answers a new one from the team's facts,
+    any opponents and map it names (see ``ask.py``)."""
+
+    permission_classes = [HasFeature(COACH), IsTeamMemberOrStaff]
+    HISTORY = 20
+
+    def get_team(self) -> Team:
+        return get_object_or_404(Team, slug=self.kwargs["slug"])
+
+    def get(self, request, slug: str):
+        team = self.get_team()
+        recent = CoachQuestion.objects.filter(team=team).select_related("asked_by")
+        return Response([_asked(q) for q in recent[: self.HISTORY]])
+
+    def post(self, request, slug: str):
+        team = self.get_team()
+        question = " ".join(str(request.data.get("question") or "").split())
+        if len(question) < ask.MIN_QUESTION:
+            return Response({"question": "Ask a question."}, status=status.HTTP_400_BAD_REQUEST)
+        if len(question) > ask.MAX_QUESTION:
+            return Response(
+                {"question": f"Keep it under {ask.MAX_QUESTION} characters."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        today = CoachQuestion.objects.filter(team=team, created_at__date=timezone.localdate())
+        if today.count() >= settings.COACH_ASK_PER_TEAM_DAILY:
+            return Response(
+                {"detail": f"Your team has asked {settings.COACH_ASK_PER_TEAM_DAILY} questions"
+                 " today. Ask again tomorrow."},
+                status=status.HTTP_429_TOO_MANY_REQUESTS,
+            )  # fmt: skip
+        out = ask.answer(question, team)
+        used = out.pop("writer")
+        q = CoachQuestion.objects.create(
+            team=team, asked_by=request.user, question=question, answer=out, writer=used
+        )
+        return Response(_asked(q), status=status.HTTP_201_CREATED)
 
 
 class RotationAdviceView(APIView):

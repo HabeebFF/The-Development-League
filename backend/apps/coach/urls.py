@@ -19,6 +19,7 @@ urlpatterns = [
         views.CounterPlanView.as_view(),
         name="coach-counter",
     ),
+    path("coach/teams/<slug:slug>/ask", views.TeamAskView.as_view(), name="coach-ask"),
     path("coach/maps/<slug:slug>/rotate", views.RotationAdviceView.as_view(), name="coach-rotate"),
     path("coach/ai-usage", views.AiUsageView.as_view(), name="coach-ai-usage"),
     path("coach/reports", views.ReportListView.as_view(), name="coach-report-list"),

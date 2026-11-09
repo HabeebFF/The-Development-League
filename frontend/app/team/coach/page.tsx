@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 
+import AskCoach from "@/components/coach/AskCoach";
 import CounterPlanView from "@/components/coach/CounterPlanView";
 import PlayerCards from "@/components/coach/PlayerCards";
 import ReportView from "@/components/coach/ReportView";
@@ -12,9 +13,10 @@ import { weekLabel, type CoachReport } from "@/lib/coach";
 
 import { useTeam } from "../TeamGate";
 
-type Tab = "review" | "players" | "report" | "counter" | "rotate";
+type Tab = "review" | "ask" | "players" | "report" | "counter" | "rotate";
 const TABS: { key: Tab; label: string }[] = [
   { key: "review", label: "After scrims" },
+  { key: "ask", label: "Ask the coach" },
   { key: "players", label: "Players" },
   { key: "report", label: "Weekly report" },
   { key: "counter", label: "Counter plan" },
@@ -84,6 +86,11 @@ export default function TeamCoach() {
             teamSlug={slug}
             replayBase={(id) => `/team/matches/${id}/replay`}
           />
+        </div>
+      )}
+      {slug && allowed && tab === "ask" && (
+        <div className="mt-6">
+          <AskCoach teamSlug={slug} matchHref={matchHref} />
         </div>
       )}
       {slug && allowed && tab === "players" && (

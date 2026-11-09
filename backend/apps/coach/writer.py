@@ -222,14 +222,14 @@ def knowledge_for(facts: Sequence[dict]) -> list[dict]:
 # -- Calling the model --------------------------------------------------------------------
 
 
-def _gemini(prompt: str) -> tuple[dict, int, int]:
+def _gemini(prompt: str, *, system: str = SYSTEM, schema: dict = SCHEMA) -> tuple[dict, int, int]:
     body = {
-        "systemInstruction": {"parts": [{"text": SYSTEM}]},
+        "systemInstruction": {"parts": [{"text": system}]},
         "contents": [{"role": "user", "parts": [{"text": prompt}]}],
         "generationConfig": {
             "temperature": 0.3,
             "responseMimeType": "application/json",
-            "responseSchema": SCHEMA,
+            "responseSchema": schema,
         },
     }
     req = urllib.request.Request(
