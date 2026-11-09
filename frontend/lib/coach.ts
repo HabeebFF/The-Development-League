@@ -169,6 +169,27 @@ export type CoachTask = {
   knowledge?: { id: string; title: string }[];
 };
 
+/** One question a team asked the coach (Ask the coach), with its answer. */
+export type CoachAnswer = {
+  id: number;
+  question: string;
+  asked_at: string;
+  asked_by: string | null;
+  writer: string;
+  opponents: { slug: string; name: string }[];
+  map: { slug: string; name: string } | null;
+  points: {
+    text: string;
+    why: string[];
+    facts: string[];
+    matches: number[];
+    knowledge?: { id: string; title: string }[];
+  }[];
+  /** What the recorded matches can't answer, in one sentence (empty when nothing). */
+  not_covered: string;
+  matches: { id: number; label: string; map: string }[];
+};
+
 /** Whether the AI writer wrote any of a report's or plan's text. */
 export const aiWritten = (writer: string) => writer.includes("gemini:");
 

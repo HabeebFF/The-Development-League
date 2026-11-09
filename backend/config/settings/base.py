@@ -161,6 +161,8 @@ GEMINI_MODEL = env("GEMINI_MODEL", "gemini-2.5-flash")
 # Stay inside the free tier: at most this many requests a day and per minute.
 COACH_AI_DAILY_REQUESTS = int(env("COACH_AI_DAILY_REQUESTS", "200"))
 COACH_AI_PER_MINUTE = int(env("COACH_AI_PER_MINUTE", "8"))
+# Questions one team can ask the coach a day (Ask the coach), AI or not.
+COACH_ASK_PER_TEAM_DAILY = int(env("COACH_ASK_PER_TEAM_DAILY", "30"))
 # Monthly spending cap in US dollars for paid models; 0 means only free models are used.
 COACH_AI_MONTHLY_CAP_USD = float(env("COACH_AI_MONTHLY_CAP_USD", "0"))
 

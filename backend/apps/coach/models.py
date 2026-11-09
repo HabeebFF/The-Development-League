@@ -183,6 +183,30 @@ class AiUsage(models.Model):
         return f"{self.created_at:%Y-%m-%d %H:%M} {self.feature} {self.model}"
 
 
+class CoachQuestion(models.Model):
+    """A question a team asked the coach, and the answer it got (kept so staff can see what
+    teams ask and how well the coach answers, and to cap questions per team per day)."""
+
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    team = models.ForeignKey(
+        "league.Team", on_delete=models.CASCADE, related_name="coach_questions"
+    )
+    asked_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+    question = models.CharField(max_length=300)
+    answer = models.JSONField(
+        default=dict, help_text="{opponents, map, points: [{text, facts, matches}], ...}"
+    )
+    writer = models.CharField(max_length=40, default="template")
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self) -> str:
+        return f"{self.team} {self.created_at:%Y-%m-%d %H:%M}: {self.question[:40]}"
+
+
 class MatchReview(models.Model):
     """A team's after-match review: the moments that cost it the most, with game times so
     the replay can open on them. Built after each upload (and again when ``rules`` is
