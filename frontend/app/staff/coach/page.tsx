@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 
+import AskCoach from "@/components/coach/AskCoach";
 import CounterPlanView from "@/components/coach/CounterPlanView";
 import RotateView from "@/components/coach/RotateView";
 import AreaEditor from "@/components/staff/coach/AreaEditor";
@@ -10,9 +11,10 @@ import ReportsAdmin from "@/components/staff/coach/ReportsAdmin";
 import WeaponTable from "@/components/staff/coach/WeaponTable";
 import { api, type GameMap, type Paged, type TeamRef } from "@/lib/api";
 
-type Tab = "reports" | "counter" | "rotate" | "knowledge" | "areas" | "weapons";
+type Tab = "reports" | "ask" | "counter" | "rotate" | "knowledge" | "areas" | "weapons";
 const TABS: { key: Tab; label: string }[] = [
   { key: "reports", label: "Weekly reports" },
+  { key: "ask", label: "Ask the coach" },
   { key: "counter", label: "Counter plans" },
   { key: "rotate", label: "When to rotate" },
   { key: "knowledge", label: "Knowledge" },
@@ -54,15 +56,27 @@ export default function StaffCoach() {
         {maps && tab === "areas" && <AreaEditor maps={maps} onChanged={() => setVersion((v) => v + 1)} />}
         {tab === "weapons" && <WeaponTable />}
         {tab === "reports" && <ReportsAdmin />}
-        {tab === "counter" && <StaffCounter />}
+        {tab === "ask" && (
+          <StaffTeam
+            hint="Ask as any team. Questions you ask count toward that team's daily limit and show in its history."
+            render={(team) => <AskCoach key={team} teamSlug={team} matchHref={(id) => `/matches/${id}/rotations`} />}
+          />
+        )}
+        {tab === "counter" && (
+          <StaffTeam
+            render={(team) => (
+              <CounterPlanView key={team} teamSlug={team} matchHref={(id) => `/matches/${id}/rotations`} />
+            )}
+          />
+        )}
         {tab === "rotate" && <RotateView matchHref={(id) => `/matches/${id}/rotations`} />}
       </div>
     </section>
   );
 }
 
-/** Staff see any team's counter plan: pick the team asking, then its opponent. */
-function StaffCounter() {
+/** Staff pick a team, then see that team's coach view (counter plan, Ask the coach). */
+function StaffTeam({ render, hint }: { render: (team: string) => React.ReactNode; hint?: string }) {
   const [teams, setTeams] = useState<TeamRef[] | null>(null);
   const [team, setTeam] = useState("");
   useEffect(() => {
@@ -83,11 +97,8 @@ function StaffCounter() {
           ))}
         </select>
       </label>
-      {team && (
-        <div className="mt-4">
-          <CounterPlanView key={team} teamSlug={team} matchHref={(id) => `/matches/${id}/rotations`} />
-        </div>
-      )}
+      {hint && <p className="mt-2 text-sm text-muted">{hint}</p>}
+      {team && <div className="mt-4">{render(team)}</div>}
     </div>
   );
 }
