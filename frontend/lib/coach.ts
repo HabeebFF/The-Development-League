@@ -183,6 +183,8 @@ export type CoachAnswer = {
     why: string[];
     facts: string[];
     matches: number[];
+    /** Older matches behind this point that aren't linked. */
+    more_matches?: number;
     knowledge?: { id: string; title: string }[];
   }[];
   /** What the recorded matches can't answer, in one sentence (empty when nothing). */
