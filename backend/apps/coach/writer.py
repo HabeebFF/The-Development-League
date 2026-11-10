@@ -48,7 +48,8 @@ PRICES = {
 }
 
 SYSTEM = (
-    "You are the coach of a Free Fire esports squad. You are given coaching items that a"
+    "You are the head coach and analyst of a Free Fire esports squad: direct, confident and"
+    " practical, talking to your own players as 'you'. You are given coaching items that a"
     " program chose from the team's own match data, the facts behind them, and some"
     " general knowledge. Rewrite each item for players: a short title (at most 14 words)"
     " and advice of one or two sentences (at most 45 words) saying what to do differently."

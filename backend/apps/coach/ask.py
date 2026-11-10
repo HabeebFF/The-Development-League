@@ -64,17 +64,19 @@ HELP = (
 )
 
 SYSTEM = (
-    "You are the coach of a Free Fire esports squad, answering one of the squad's own"
-    " questions. You are given the question and numbered facts that a program measured from"
-    " the league's recorded matches (the squad's own facts start with 'us/', an opponent's"
-    " with that opponent's id, rotation advice with 'rotate/'), plus some general knowledge."
-    " Answer in at most 4 short points, each one or two sentences (at most 60 words) saying"
-    " what the squad should do. Use only the facts and knowledge given. Every number you"
-    " write must appear in a fact or knowledge entry that point cites. Do not mention"
-    " places, weapons, characters, teams or numbers that are not in what you cite. In"
-    " 'cites', list the ids you used for that point (at least one fact id). If the facts"
-    " don't cover part of the question, say so in 'not_covered' in one sentence with no"
-    " numbers; otherwise leave it empty."
+    "You are the head coach and analyst of a Free Fire esports squad, answering one of"
+    " your own players' questions the way you would in the team's voice chat after scrims:"
+    " direct, confident and practical. Speak to the squad as 'you' and 'we'. Lead with the"
+    " call (what to do), then the reason from the data in a few words. You are given the"
+    " question and numbered facts that a program measured from the league's recorded"
+    " matches (the squad's own facts start with 'us/', an opponent's with that opponent's"
+    " id, rotation advice with 'rotate/'), plus some general knowledge. Answer in at most 4"
+    " short points, each one or two sentences (at most 60 words), the most important first."
+    " Use only the facts and knowledge given. Every number you write must appear in a fact"
+    " or knowledge entry that point cites. Do not mention places, weapons, characters,"
+    " teams or numbers that are not in what you cite. In 'cites', list the ids you used for"
+    " that point (at least one fact id). If the facts don't cover part of the question, say"
+    " so in 'not_covered' in one sentence with no numbers; otherwise leave it empty."
 )
 
 SCHEMA = {
@@ -154,6 +156,29 @@ def tag_items(items: Sequence[dict], prefix: str) -> list[dict]:
     return [{**it, "facts": [f"{prefix}/{i}" for i in it["facts"]]} for it in items]
 
 
+def clock(seconds) -> str:
+    """Game time as m:ss."""
+    s = round(float(seconds))
+    return f"{s // 60}:{s % 60:02d}"
+
+
+def drop_call(d: dict, place: str, map_name: str, first: bool) -> str:
+    """A coach's call for one drop: where, when to leave, where to be by when."""
+    lead = f"Drop {place}" if first else f"Another option is {place}"
+    steps = []
+    if d.get("left_s") is not None:
+        steps.append(f"leave by {clock(d['left_s'])}")
+    inside = {int(k): v for k, v in (d.get("inside_s") or {}).items()}
+    zones = [f"Zone {z} by {clock(t)}" for z, t in sorted(inside.items())]
+    if zones:
+        steps.append("be inside " + " and ".join(zones))
+    plan = f", {', then '.join(steps)}" if steps else ""
+    return (
+        f"{lead} on {map_name}{plan}. That's what the teams who finished top 5 from there did"
+        f" (average placement {d['avg_placement']} over {d['team_matches']} team matches)."
+    )
+
+
 def h2h_fact(h2h: dict, prefix: str, opponent: str) -> dict | None:
     """The two teams' record against each other, as a fact the answer can cite."""
     if not h2h.get("met"):
@@ -162,12 +187,21 @@ def h2h_fact(h2h: dict, prefix: str, opponent: str) -> dict | None:
     text = f"Against {opponent}: in the same lobby in {met} match{'es' if met != 1 else ''}"
     if h2h["fights"]:
         text += f", {h2h['fights']} fights between the two, won {h2h['won']}, lost {h2h['lost']}"
+        call = (
+            f"You've fought {opponent} {h2h['fights']} times and won {h2h['won']}"
+            f" ({h2h['lost']} lost), across {met} shared lobbies."
+            + (" You have the edge: take that fight." if h2h["won"] > h2h["lost"] else "")
+            + (" They have your number: don't take even fights with them." if h2h["lost"]
+               > h2h["won"] else "")
+        )  # fmt: skip
     else:
         text += ", no fights between the two"
+        call = f"You've shared {met} lobbies with {opponent} but never fought them yet."
     return {
         "id": f"{prefix}/h2h",
         "topic": "results",
         "text": text,
+        "call": call,
         "value": h2h["won"],
         "n": met,
         "of": met,
@@ -189,6 +223,7 @@ def drop_facts(advice: dict, map_slug: str, map_name: str) -> list[dict]:
                 "topic": "rotation",
                 "text": f"Dropping at {place} on {map_name}: average placement"
                 f" {d['avg_placement']} over {d['team_matches']} team matches. {lines}",
+                "call": drop_call(d, place, map_name, i == 1),
                 "value": d["avg_placement"],
                 "n": len(d["matches"]),
                 "of": len(advice.get("matches", [])) or len(d["matches"]),
@@ -212,24 +247,56 @@ def relevant(facts: Sequence[dict], map_slug: str | None) -> list[dict]:
 # -- The template answer (no AI) ----------------------------------------------------------
 
 
+ROTATE_WORDS = {
+    "rotate",
+    "rotation",
+    "rotations",
+    "rotating",
+    "drop",
+    "drops",
+    "land",
+    "landing",
+    "zone",
+    "zones",
+    "when",
+    "leave",
+}
+
+
+def about_rotation(question: str) -> bool:
+    return bool(set(_norm(question).split()) & ROTATE_WORDS)
+
+
 def template_points(
-    plays: Sequence[dict], facts: Sequence[dict], *, has_opponent: bool
+    plays: Sequence[dict],
+    facts: Sequence[dict],
+    *,
+    has_opponent: bool,
+    tasks: Sequence[dict] = (),
+    rotate_first: bool = False,
 ) -> list[dict]:
-    """The answer without AI: the strongest plays and facts that fit the question."""
+    """The answer without AI, in the coach's words: the plays against a named opponent, our
+    own biggest fixes (as in the weekly report), the head-to-head record and the best drops
+    on a named map, each backed by the facts and matches behind it."""
     by_id = {f["id"]: f for f in facts}
-    points: list[dict] = []
-    for p in plays:
-        points.append({"text": p["title"], "facts": p["facts"], "matches": p["matches"]})
-    # The head-to-head record and the rotation advice say something on their own.
-    for f in facts:
-        if f["id"].endswith("/h2h") or f["id"].startswith("rotate/"):
-            points.append({"text": f["text"], "facts": [f["id"]], "matches": f["matches"]})
+
+    def item(p: dict) -> dict:
+        return {"text": p["title"], "facts": p["facts"], "matches": p["matches"]}
+
+    def called(f: dict) -> dict:
+        return {"text": f.get("call", f["text"]), "facts": [f["id"]], "matches": f["matches"]}
+
+    h2h = [called(f) for f in facts if f["id"].endswith("/h2h")]
+    drops = [called(f) for f in facts if f["id"].startswith("rotate/")]
+    ours = [item(t) for t in tasks]
+    points = [item(p) for p in plays] + h2h
+    points += drops + ours if rotate_first else ours + drops
     if not has_opponent and not points:
-        # A question about ourselves: the facts that rest on the most matches.
-        ours = sorted(
+        # Nothing stands out: the facts about us that rest on the most matches.
+        rest = sorted(
             (f for f in facts if f["id"].startswith("us/")), key=lambda f: (-f["n"], f["id"])
         )
-        points += [{"text": f["text"], "facts": [f["id"]], "matches": f["matches"]} for f in ours]
+        points += [called(f) for f in rest]
     out, seen = [], set()
     for p in points:
         if p["text"] in seen or not all(i in by_id for i in p["facts"]):
@@ -381,6 +448,7 @@ def answer(question: str, team) -> dict:
 
     from . import counter
     from .engine import load_games, measure, profile
+    from .reports import tasks_from
 
     opponents, game_map = understand(question, team)
     if not opponents and not game_map and small_talk(question):
@@ -406,7 +474,10 @@ def answer(question: str, team) -> dict:
     names = dict(Team.objects.values_list("pk", "name"))
 
     ours = [measure(g, team.pk) for g in games if team.pk in g.teams]
-    facts = tag_facts(profile(ours, names)["facts"], "us") if ours else []
+    own = profile(ours, names)["facts"] if ours else []
+    facts = tag_facts(own, "us")
+    # Our biggest fixes, picked the same way as the weekly report's tasks.
+    tasks = tag_items(tasks_from(relevant(own, map_slug)), "us")
     plays: list[dict] = []
     for o in opponents:
         plan = counter.build(games, team.pk, o.pk, names)
@@ -417,11 +488,23 @@ def answer(question: str, team) -> dict:
     if game_map:
         facts = drop_facts(cached_map_advice(game_map.slug), game_map.slug, game_map.name) + facts
 
-    facts = relevant(facts, map_slug)[:MAX_FACTS]
+    # Keep the facts that the plays and fixes rest on, then the rest, up to MAX_FACTS.
+    cited = {i for p in [*plays, *tasks] for i in p["facts"]}
+    rel = relevant(facts, map_slug)
+    facts = ([f for f in rel if f["id"] in cited] + [f for f in rel if f["id"] not in cited])[
+        :MAX_FACTS
+    ]
     kept = {f["id"] for f in facts}
     plays = [p for p in plays if all(i in kept for i in p["facts"])]
+    tasks = [t for t in tasks if all(i in kept for i in t["facts"])]
 
-    points = template_points(plays, facts, has_opponent=bool(opponents))
+    points = template_points(
+        plays,
+        facts,
+        has_opponent=bool(opponents),
+        tasks=tasks,
+        rotate_first=about_rotation(question),
+    )
     note, used = "", "template"
     if (ai := ai_answer(question, team.name, facts, opponents=[o.name for o in opponents],
                         map_name=map_name)):  # fmt: skip

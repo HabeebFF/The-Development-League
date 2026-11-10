@@ -293,3 +293,41 @@ def test_a_failed_or_lost_answer_says_so(teams, monkeypatch):
     fresh = CoachQuestion.objects.create(team=alpha, question="And now?", writer=ask.PENDING)
     by_id = {q["id"]: q for q in a.get("/api/v1/coach/teams/alpha/ask").json()}
     assert by_id[old.pk]["writer"] == ask.FAILED and by_id[fresh.pk]["writer"] == ask.PENDING
+
+
+def test_drop_advice_reads_like_a_coach():
+    d = {"place": "Refinery", "matches": [1, 2], "team_matches": 6, "avg_placement": 4.5,
+         "left_s": 95, "inside_s": {"2": 499, "3": 731}, "advice": []}  # fmt: skip
+    assert ask.drop_call(d, "Refinery", "Bermuda", True) == (
+        "Drop Refinery on Bermuda, leave by 1:35, then be inside Zone 2 by 8:19 and Zone 3 by"
+        " 12:11. That's what the teams who finished top 5 from there did (average placement"
+        " 4.5 over 6 team matches)."
+    )
+    assert ask.drop_call({**d, "left_s": None, "inside_s": {}}, "Refinery", "Bermuda", False) == (
+        "Another option is Refinery on Bermuda. That's what the teams who finished top 5 from"
+        " there did (average placement 4.5 over 6 team matches)."
+    )
+    (f,) = ask.drop_facts({"matches": [], "drops": [d]}, "bermuda", "Bermuda")
+    assert f["call"].startswith("Drop Refinery") and "average placement 4.5" in f["text"]
+
+
+def test_template_puts_drops_first_for_rotation_questions():
+    facts = [
+        fact("us/x", "Late into Zone 3 in 4 of 6", 4, 4, 6, [1]),
+        {**fact("rotate/bermuda/1", "raw", 4.5, 3, 3, [2]), "call": "Drop Refinery"},
+    ]
+    tasks = [{"title": "Rotate earlier into Zone 3", "facts": ["us/x"], "matches": [1]}]
+    first = ask.template_points([], facts, has_opponent=False, tasks=tasks, rotate_first=True)
+    assert [p["text"] for p in first] == ["Drop Refinery", "Rotate earlier into Zone 3"]
+    other = ask.template_points([], facts, has_opponent=False, tasks=tasks)
+    assert [p["text"] for p in other] == ["Rotate earlier into Zone 3", "Drop Refinery"]
+    assert ask.about_rotation("When should we rotate on Bermuda?")
+    assert not ask.about_rotation("What can we do better?")
+
+
+def test_head_to_head_speaks_to_the_squad():
+    met = {"met": [4, 5, 6], "fights": 3, "won": 1, "lost": 2, "matches": [5]}
+    assert ask.h2h_fact(met, "slf", "SLF")["call"] == (
+        "You've fought SLF 3 times and won 1 (2 lost), across 3 shared lobbies. They have your"
+        " number: don't take even fights with them."
+    )
