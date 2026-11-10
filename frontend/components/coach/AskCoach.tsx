@@ -146,6 +146,9 @@ function AnswerCard({ answer, matchHref }: { answer: CoachAnswer; matchHref: (id
                       {byId.get(id)?.map ? ` · ${title(byId.get(id)!.map)}` : ""}
                     </Link>
                   ))}
+                  {(p.more_matches ?? 0) > 0 && (
+                    <span className="px-1.5 py-0.5 text-xs text-muted">+{p.more_matches} more</span>
+                  )}
                 </span>
               )}
             </li>

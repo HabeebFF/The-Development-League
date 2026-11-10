@@ -183,6 +183,17 @@ def test_asking_reads_the_opponent_and_map_and_keeps_the_question(teams):
     assert [q["question"] for q in history] == ["How do we beat BRAVO ESP on Bermuda?"]
 
 
+def test_hi_coach_gets_how_to_ask_not_a_list_of_facts(teams):
+    alpha, _ = teams
+    resp = _member(alpha, "a@tdl.test").post(
+        "/api/v1/coach/teams/alpha/ask", {"question": "Hi Coach"}, format="json"
+    )
+    body = resp.json()
+    assert resp.status_code == 201 and body["writer"] == "help"
+    assert body["points"] == [] and body["matches"] == []
+    assert body["not_covered"].startswith("Ask me about your team")
+
+
 def test_only_the_team_can_ask_and_questions_are_checked(teams):
     alpha, bravo = teams
     a, b = _member(alpha, "a@tdl.test"), _member(bravo, "b@tdl.test")
@@ -240,3 +251,22 @@ def test_ai_off_means_no_call(monkeypatch):
         assert ask.ai_answer("q", "Alpha", list(SOURCES.values())[:1], opponents=[],
                              map_name="") is None  # fmt: skip
     assert AiUsage.objects.count() == 0
+
+
+def test_greetings_and_off_topic_get_the_how_to_ask_reply():
+    for q in ["Hi Coach", "hello", "hey coach, how are you?", "thanks!", "lol"]:
+        assert ask.small_talk(q), q
+    for q in [
+        "What are we doing wrong?",
+        "When should we rotate?",
+        "how do we win more fights",
+        "What do we do?",
+    ]:
+        assert not ask.small_talk(q), q
+
+
+def test_points_keep_their_most_recent_matches():
+    points = [{"matches": list(range(1, 11))}, {"matches": [3, 1]}]
+    ask.trim_matches(points, limit=3)
+    assert points[0]["matches"] == [10, 9, 8] and points[0]["more_matches"] == 7
+    assert points[1]["matches"] == [3, 1] and points[1]["more_matches"] == 0

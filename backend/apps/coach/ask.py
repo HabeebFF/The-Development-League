@@ -34,6 +34,30 @@ MAX_FACTS = 40
 MAX_POINTS = 4
 MAX_POINT = 360
 MAX_DROPS = 4
+# Each point links to at most this many matches (the most recent); the rest are counted.
+MAX_POINT_MATCHES = 6
+
+# Words a greeting or small talk is made of. A question made only of these, or one that
+# names no team, no map and nothing the coach measures, gets a short "how to ask" reply
+# instead of a list of facts.
+SMALL_TALK = set(
+    "hi hello hey hiya yo sup wassup whats what s up coach good morning afternoon evening"
+    " night there how are you u r doing ok okay thanks thank cheers bye please".split()
+)
+TOPICS = set(
+    "beat win won lose lost losing rotate rotation rotations rotating zone zones drop drops"
+    " land landing fight fights fighting improve better worse wrong weak weakness weaknesses"
+    " strong strength strengths kill kills knock knocks placement place placed booyah style"
+    " playstyle aggressive passive play playing tips advice help trade trades third party"
+    " push pushing hold edge center centre late early first plan counter against vs versus"
+    " map maps team teams opponent opponents well badly mistakes stats do should need focus"
+    " practice work".split()
+)
+HELP = (
+    'Ask me about your team, an opponent or a map, for example "How do we beat'
+    ' Solar Flare on Purgatory?", "When should we rotate on Bermuda?" or "What are we'
+    ' doing wrong?"'
+)
 
 SYSTEM = (
     "You are the coach of a Free Fire esports squad, answering one of the squad's own"
@@ -97,6 +121,21 @@ def mentions(question: str, labels: dict, *, min_len: int = 2) -> list:
             found.append((*best, key))
     found.sort(key=lambda f: (f[0], f[1]))
     return [key for _, _, key in found]
+
+
+def small_talk(question: str) -> bool:
+    """True when a question (that names no team or map) isn't about anything we measure."""
+    words = set(_norm(question).split())
+    if not words or words <= SMALL_TALK:
+        return True
+    return not words & TOPICS
+
+
+def trim_matches(points: Sequence[dict], limit: int = MAX_POINT_MATCHES) -> None:
+    """Keep each point's most recent matches and count the rest in ``more_matches``."""
+    for p in points:
+        ms = sorted(p.get("matches", []), reverse=True)
+        p["matches"], p["more_matches"] = ms[:limit], max(0, len(ms) - limit)
 
 
 # -- Gathering the facts --------------------------------------------------------------------
@@ -318,6 +357,15 @@ def answer(question: str, team) -> dict:
     from .rotate import map_advice
 
     opponents, game_map = understand(question, team)
+    if not opponents and not game_map and small_talk(question):
+        return {
+            "opponents": [],
+            "map": None,
+            "points": [],
+            "not_covered": HELP,
+            "matches": [],
+            "writer": "help",
+        }
     map_slug = game_map.slug if game_map else None
     map_name = game_map.name if game_map else ""
 
@@ -359,6 +407,7 @@ def answer(question: str, team) -> dict:
             " thing in at least 3 matches."
         )
 
+    trim_matches(points)
     by_id = {f["id"]: f for f in facts}
     for p in points:
         p["why"] = [by_id[i]["text"] for i in p["facts"] if i in by_id]
