@@ -33,7 +33,7 @@ from .serializers import (
     KnowledgeEntrySerializer,
     WeaponNameSerializer,
 )
-from .tasks import build_reviews_task
+from .tasks import answer_question_task, build_reviews_task
 
 
 class KnowledgeEntryViewSet(viewsets.ModelViewSet):
@@ -308,6 +308,11 @@ def _asked(q: CoachQuestion) -> dict:
         "asked_at": q.created_at,
         "asked_by": q.asked_by.email.split("@")[0] if q.asked_by else None,
         "writer": q.writer,
+        "opponents": [],
+        "map": None,
+        "points": [],
+        "not_covered": "",
+        "matches": [],
         **q.answer,
     }
 
@@ -319,12 +324,17 @@ class TeamAskView(APIView):
 
     permission_classes = [HasFeature(COACH), IsTeamMemberOrStaff]
     HISTORY = 20
+    LOST_AFTER = timedelta(minutes=10)
 
     def get_team(self) -> Team:
         return get_object_or_404(Team, slug=self.kwargs["slug"])
 
     def get(self, request, slug: str):
         team = self.get_team()
+        # An answer still pending after this long was lost (say, the worker restarted).
+        CoachQuestion.objects.filter(
+            team=team, writer=ask.PENDING, created_at__lt=timezone.now() - self.LOST_AFTER
+        ).update(writer=ask.FAILED, answer={"not_covered": ask.LOST})
         recent = CoachQuestion.objects.filter(team=team).select_related("asked_by")
         return Response([_asked(q) for q in recent[: self.HISTORY]])
 
@@ -345,11 +355,16 @@ class TeamAskView(APIView):
                  " today. Ask again tomorrow."},
                 status=status.HTTP_429_TOO_MANY_REQUESTS,
             )  # fmt: skip
-        out = ask.answer(question, team)
-        used = out.pop("writer")
+        # Working out an answer can take a while (a team's recent matches are read from
+        # their replays), so it happens in the worker and the page waits for it.
         q = CoachQuestion.objects.create(
-            team=team, asked_by=request.user, question=question, answer=out, writer=used
+            team=team, asked_by=request.user, question=question, answer={}, writer=ask.PENDING
         )
+        try:
+            answer_question_task.delay(q.pk)
+        except Exception:  # no broker: answer here rather than leave it waiting
+            answer_question_task(q.pk)
+        q.refresh_from_db()
         return Response(_asked(q), status=status.HTTP_201_CREATED)
 
 

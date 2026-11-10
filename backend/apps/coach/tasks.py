@@ -48,3 +48,25 @@ def catch_up_reviews_task() -> int:
     ):
         done += build_reviews_task(pk)
     return done
+
+
+@shared_task
+def answer_question_task(question_id: int) -> str:
+    """Work out the answer to an Ask the coach question (it can take a while, so the page
+    waits for it instead of holding the request open)."""
+    from . import ask
+    from .models import CoachQuestion
+
+    q = CoachQuestion.objects.select_related("team").filter(pk=question_id).first()
+    if q is None or q.writer != ask.PENDING:
+        return "skipped"
+    try:
+        out = ask.answer(q.question, q.team)
+        q.writer = out.pop("writer")
+        q.answer = out
+    except Exception:
+        log.exception("Answering coach question %s failed", question_id)
+        q.writer = ask.FAILED
+        q.answer = {"not_covered": ask.LOST}
+    q.save(update_fields=["writer", "answer"])
+    return q.writer

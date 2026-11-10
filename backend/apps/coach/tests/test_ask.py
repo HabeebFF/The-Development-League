@@ -270,3 +270,26 @@ def test_points_keep_their_most_recent_matches():
     ask.trim_matches(points, limit=3)
     assert points[0]["matches"] == [10, 9, 8] and points[0]["more_matches"] == 7
     assert points[1]["matches"] == [3, 1] and points[1]["more_matches"] == 0
+
+
+def test_a_failed_or_lost_answer_says_so(teams, monkeypatch):
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    alpha, _ = teams
+    a = _member(alpha, "a@tdl.test")
+    monkeypatch.setattr(ask, "answer", lambda q, t: 1 / 0)
+    body = a.post(
+        "/api/v1/coach/teams/alpha/ask", {"question": "What are we doing wrong?"}, format="json"
+    ).json()
+    assert body["writer"] == ask.FAILED and body["not_covered"] == ask.LOST
+    assert body["points"] == []
+    # An answer left pending (the worker went away) is marked failed after a while.
+    old = CoachQuestion.objects.create(team=alpha, question="When to rotate?", writer=ask.PENDING)
+    CoachQuestion.objects.filter(pk=old.pk).update(
+        created_at=timezone.now() - timedelta(minutes=11)
+    )
+    fresh = CoachQuestion.objects.create(team=alpha, question="And now?", writer=ask.PENDING)
+    by_id = {q["id"]: q for q in a.get("/api/v1/coach/teams/alpha/ask").json()}
+    assert by_id[old.pk]["writer"] == ask.FAILED and by_id[fresh.pk]["writer"] == ask.PENDING
