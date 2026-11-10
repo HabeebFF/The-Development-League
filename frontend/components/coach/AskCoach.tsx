@@ -12,6 +12,9 @@ const EXAMPLES = [
   "What are we doing wrong?",
 ];
 
+const PENDING = "pending";
+const WAIT_MS = 3000;
+
 const title = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
 /** Ask the coach a question in your own words; every answer links to the matches behind it. */
@@ -26,6 +29,18 @@ export default function AskCoach({ teamSlug, matchHref }: { teamSlug: string; ma
       .then(setHistory)
       .catch(() => setHistory([]));
   }, [teamSlug]);
+
+  // Answers are worked out in the background: while one is pending, check back for it.
+  const pending = history?.some((a) => a.writer === PENDING) ?? false;
+  useEffect(() => {
+    if (!pending) return;
+    const timer = setTimeout(() => {
+      api<CoachAnswer[]>(`/coach/teams/${teamSlug}/ask`)
+        .then(setHistory)
+        .catch(() => setHistory((h) => (h ? [...h] : h))); // try again on the next tick
+    }, WAIT_MS);
+    return () => clearTimeout(timer);
+  }, [pending, history, teamSlug]);
 
   async function send(text: string) {
     const q = text.trim();
@@ -154,6 +169,9 @@ function AnswerCard({ answer, matchHref }: { answer: CoachAnswer; matchHref: (id
             </li>
           ))}
         </ol>
+      )}
+      {answer.writer === PENDING && (
+        <p className="mt-3 text-sm text-muted">The coach is going through your matches...</p>
       )}
       {answer.not_covered && <p className="mt-3 text-sm text-muted">{answer.not_covered}</p>}
       {aiWritten(answer.writer) && (

@@ -27,6 +27,10 @@ from . import writer
 logger = logging.getLogger(__name__)
 
 RULES = "ask-1"
+# A question's ``writer`` while the answer is being worked out, and when that failed.
+PENDING = "pending"
+FAILED = "failed"
+LOST = "The coach couldn't work that out. Try asking again."
 MIN_QUESTION = 3
 MAX_QUESTION = 300
 MAX_OPPONENTS = 2
@@ -348,13 +352,35 @@ def understand(question: str, team) -> tuple[list, object | None]:
     return opponents, game_map
 
 
+def cached_map_advice(map_slug: str) -> dict:
+    """When-to-rotate advice for a map (it reads every match on the map, so it is kept
+    for a while and made again once a new match on the map is published)."""
+    from django.core.cache import cache
+
+    from apps.league.models import Match
+
+    from .rotate import map_advice
+
+    latest = (
+        Match.objects.filter(status=Match.Status.PUBLISHED, map__slug=map_slug)
+        .order_by("-pk")
+        .values_list("pk", flat=True)
+        .first()
+    )
+    key = f"coach:ask:rotate:{map_slug}:{latest}"
+    advice = cache.get(key)
+    if advice is None:
+        advice = map_advice(map_slug)
+        cache.set(key, advice, 6 * 60 * 60)
+    return advice
+
+
 def answer(question: str, team) -> dict:
     """The coach's answer to ``team``'s question, with the facts and matches behind it."""
     from apps.league.models import Match, Team
 
     from . import counter
     from .engine import load_games, measure, profile
-    from .rotate import map_advice
 
     opponents, game_map = understand(question, team)
     if not opponents and not game_map and small_talk(question):
@@ -369,13 +395,13 @@ def answer(question: str, team) -> dict:
     map_slug = game_map.slug if game_map else None
     map_name = game_map.name if game_map else ""
 
-    def played(t) -> set[int]:
-        return set(
-            Match.objects.filter(status=Match.Status.PUBLISHED, team_results__team=t)
-            .values_list("pk", flat=True)
-        )  # fmt: skip
-
-    ids = played(team).union(*(played(o) for o in opponents))
+    # Every published match of the teams involved: the answer is worked out in the
+    # background worker, so reading them all is fine.
+    ids = set(
+        Match.objects.filter(
+            status=Match.Status.PUBLISHED, team_results__team__in=[team, *opponents]
+        ).values_list("pk", flat=True)
+    )
     games = load_games(sorted(ids)) if ids else []
     names = dict(Team.objects.values_list("pk", "name"))
 
@@ -389,7 +415,7 @@ def answer(question: str, team) -> dict:
         if h2h := h2h_fact(plan["head_to_head"], o.slug, o.name):
             facts.insert(0, h2h)
     if game_map:
-        facts = drop_facts(map_advice(game_map.slug), game_map.slug, game_map.name) + facts
+        facts = drop_facts(cached_map_advice(game_map.slug), game_map.slug, game_map.name) + facts
 
     facts = relevant(facts, map_slug)[:MAX_FACTS]
     kept = {f["id"] for f in facts}
