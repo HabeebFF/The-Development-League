@@ -49,7 +49,7 @@ export default function SpecialCards({ view }: { view: View }) {
         <div className="flex flex-wrap items-center gap-2">
           <span className="ml-auto flex items-center gap-2">
             <button
-              className="btn px-3 py-1.5 text-sm"
+              className="btn btn-ghost min-w-11 px-3"
               disabled={!d.previous}
               onClick={() => setWeek(d.previous)}
               aria-label="Earlier week"
@@ -60,7 +60,7 @@ export default function SpecialCards({ view }: { view: View }) {
               {weekLabel(d.week)}
             </span>
             <button
-              className="btn px-3 py-1.5 text-sm"
+              className="btn btn-ghost min-w-11 px-3"
               disabled={!d.next}
               onClick={() => setWeek(d.next)}
               aria-label="Later week"

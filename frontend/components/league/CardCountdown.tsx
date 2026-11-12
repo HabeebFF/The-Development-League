@@ -29,11 +29,14 @@ export default function CardCountdown() {
     [left.s, "sec"],
   ];
   return (
-    <div className="mb-6 flex flex-wrap items-center justify-between gap-4 border border-line bg-panel px-4 py-3 [clip-path:polygon(0_0,100%_0,100%_calc(100%-12px),calc(100%-12px)_100%,0_100%)]">
-      <div>
+    <div className="relative mb-6 flex flex-wrap items-center justify-between gap-4 overflow-hidden border-t-4 border-lion bg-panel px-4 py-4 [clip-path:polygon(0_0,100%_0,100%_calc(100%-12px),calc(100%-12px)_100%,0_100%)] sm:px-6">
+      <span aria-hidden className="hex-grid pointer-events-none absolute inset-0 opacity-50" />
+      <span aria-hidden className="pointer-events-none absolute inset-0 bg-[radial-gradient(60%_90%_at_100%_0%,rgb(245_165_36/0.18),transparent_70%)]" />
+      <div className="relative">
         <p className="eyebrow">
           {justOut ? "New cards are out" : "Next cards drop"}
         </p>
+        <p className="mt-1 font-display text-3xl leading-none font-black uppercase sm:text-4xl">New every Saturday</p>
         <p className="mt-1 text-sm text-muted">
           Every Saturday at midnight (Lagos time), as soon as the week ends on
           Friday night.{" "}
@@ -51,16 +54,16 @@ export default function CardCountdown() {
         </p>
       </div>
       <div
-        className="flex gap-2"
+        className="relative flex gap-2"
         role="timer"
         aria-label={`${left.d} days ${left.h} hours ${left.m} minutes until new cards`}
       >
         {parts.map(([n, label]) => (
           <span
             key={label}
-            className="flex min-w-14 flex-col items-center bg-bg px-2 py-1.5"
+            className="flex min-w-14 flex-col items-center border border-line bg-bg px-2 py-1.5"
           >
-            <span className="font-display text-3xl leading-none text-accent tabular-nums">
+            <span className="num text-3xl leading-none text-accent-hot">
               {String(n).padStart(2, "0")}
             </span>
             <span className="mt-1 text-[10px] font-bold tracking-widest text-muted uppercase">

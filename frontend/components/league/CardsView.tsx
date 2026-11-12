@@ -37,7 +37,7 @@ export default function CardsView({ team }: { team?: string }) {
             role="tab"
             aria-selected={view === key}
             onClick={() => setView(key)}
-            className={`-mb-px shrink-0 border-b-2 px-3 py-2 font-display text-lg whitespace-nowrap uppercase ${view === key ? "border-accent text-text" : "border-transparent text-muted hover:text-text"}`}
+            className={`-mb-px flex min-h-11 shrink-0 items-center border-b-2 px-3 font-display text-lg font-extrabold tracking-[0.06em] whitespace-nowrap uppercase transition-colors ${view === key ? "border-lion text-accent-hot" : "border-transparent text-muted hover:text-text"}`}
           >
             {label}
           </button>
@@ -85,7 +85,7 @@ function WeekCards({ team }: { team?: string }) {
         {ROLES.map((r) => (
           <button
             key={r.key}
-            className={`btn px-3 py-1.5 text-sm uppercase ${role === r.key ? "btn-primary" : ""}`}
+            className={`btn min-h-11 px-3 text-sm uppercase ${role === r.key ? "btn-primary" : "btn-ghost"}`}
             onClick={() => setRole(r.key)}
           >
             {r.label}
@@ -94,18 +94,18 @@ function WeekCards({ team }: { team?: string }) {
         {data.data?.week && (
           <span className="ml-auto flex items-center gap-2">
             <button
-              className="btn px-3 py-1.5 text-sm"
+              className="btn btn-ghost min-w-11 px-3"
               disabled={!data.data.previous}
               onClick={() => setWeek(data.data!.previous)}
               aria-label="Earlier week"
             >
               &larr;
             </button>
-            <span className="min-w-32 text-center font-display text-lg uppercase">
+            <span className="min-w-32 text-center font-display text-xl font-extrabold uppercase">
               {weekLabel(data.data.week)}
             </span>
             <button
-              className="btn px-3 py-1.5 text-sm"
+              className="btn btn-ghost min-w-11 px-3"
               disabled={!data.data.next}
               onClick={() => setWeek(data.data!.next)}
               aria-label="Later week"

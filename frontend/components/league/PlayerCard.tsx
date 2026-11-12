@@ -32,7 +32,7 @@ export default function PlayerCard({
   const icon = card.tier === "icon";
   return (
     <div
-      className="relative aspect-[5/7] w-[15em] select-none"
+      className="holo-host relative aspect-[5/7] w-[15em] select-none"
       style={{
         fontSize: `${size * 16}px`,
         color: ink,
@@ -58,6 +58,8 @@ export default function PlayerCard({
         {/* Sheen and pattern, like the real thing. */}
         <span className="absolute inset-0 bg-[linear-gradient(115deg,transparent_30%,rgb(255_255_255/0.28)_45%,transparent_60%)]" />
         <span className="absolute inset-0 bg-[repeating-linear-gradient(60deg,rgb(255_255_255/0.05)_0_2px,transparent_2px_12px)]" />
+        {/* Holographic shine that sweeps across on hover (off under reduced motion). */}
+        <span aria-hidden className="holo absolute inset-0" />
         {totm && (
           <span className="absolute inset-0 bg-[radial-gradient(circle_at_70%_25%,rgb(242_193_78/0.35),transparent_55%),radial-gradient(circle_at_20%_85%,rgb(150_80_255/0.35),transparent_60%)]" />
         )}

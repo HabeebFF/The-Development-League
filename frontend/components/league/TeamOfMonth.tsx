@@ -37,7 +37,7 @@ export default function TeamOfMonth() {
       <div className="flex flex-wrap items-center gap-2">
         <span className="ml-auto flex items-center gap-2">
           <button
-            className="btn px-3 py-1.5 text-sm"
+            className="btn btn-ghost min-w-11 px-3"
             disabled={!m.previous}
             onClick={() => setMonth(m.previous)}
             aria-label="Earlier month"
@@ -48,7 +48,7 @@ export default function TeamOfMonth() {
             {monthLabel(m.month)}
           </span>
           <button
-            className="btn px-3 py-1.5 text-sm"
+            className="btn btn-ghost min-w-11 px-3"
             disabled={!m.next}
             onClick={() => setMonth(m.next)}
             aria-label="Later month"
