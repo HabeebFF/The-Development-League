@@ -1,28 +1,67 @@
 @import "tailwindcss";
 
 /*
- * TDL design system: near-black, one fiery accent, condensed display type, angled cards.
- * Every page (public, team, staff) uses these tokens and the component classes below.
+ * TDL broadcast design system ("The Roaring Lion").
+ * Near-black with grain, one molten-gold accent for the lion and every call to action, one electric red
+ * for live / hot states, condensed heavy display type and chamfered shapes.
+ * EVERY colour, font, cut size, spacing step and easing curve lives here. Change the theme in this block.
  */
 :root {
+  /* surfaces */
   --bg: #07080c;
-  --panel: #10121a;
-  --panel-2: #181b26;
+  --panel: #0f1118;
+  --panel-2: #171a24;
   --line: #262a38;
   --text: #f2f3f7;
-  --muted: #8e93a6;
-  --accent: #ff5a1f; /* fiery orange */
-  --accent-hot: #ff8a3d;
-  --accent-2: #ffc23d; /* Booyah gold */
+  --muted: #9aa0b4; /* AA on --bg and --panel */
+
+  /* primary: molten gold, the lion. --accent is the name the components use. */
+  --lion: #f5a524;
+  --lion-hot: #ffcc4d;
+  --lion-deep: #c46a10;
+  --lion-ink: #1a1003; /* text on a gold fill (white fails contrast) */
+  --accent: var(--lion);
+  --accent-hot: var(--lion-hot);
+  --accent-2: #ffcc4d; /* Booyah gold */
+  --accent-rgb: 245 165 36;
+
+  /* secondary: live and hot states */
+  --hot: #ff2e4d;
+  --hot-rgb: 255 46 77;
+
+  /* semantic */
   --ok: #22c55e;
-  --bad: #f04444;
+  --bad: #ff4d61;
+  --up: #22c55e;
+  --down: #ff4d61;
+  --same: #8e93a6;
+
+  /* podium metals: cooler than the lion gold so they never blur together */
   --gold: #f6c544;
+  --gold-hi: #ffe08a;
   --silver: #c8d0dc;
+  --silver-hi: #eef2f7;
   --bronze: #d38a4c;
-  --cut: 14px; /* angled corner size */
-  /* The sticky top bar, and the bottom tab bar on phones. */
-  --header-h: 3.5rem;
+  --bronze-hi: #f0b47e;
+
+  /* rating scale (out of 10) */
+  --rate-low: #ff4d61;
+  --rate-mid: #f5a524;
+  --rate-high: #22c55e;
+
+  /* shape */
+  --cut: 14px; /* card corner */
+  --cut-sm: 8px; /* button / tab slant */
+
+  /* motion */
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --dur-fast: 150ms;
+  --dur: 250ms;
+
+  /* sizes: the sticky top bar, the phone tab bar and the smallest tap target */
+  --header-h: 4rem;
   --bottom-nav-h: 3.75rem;
+  --tap: 44px;
 }
 
 @media (width >= 48rem) {
@@ -41,13 +80,25 @@
   --color-accent: var(--accent);
   --color-accent-hot: var(--accent-hot);
   --color-accent-2: var(--accent-2);
+  --color-accent-ink: var(--lion-ink);
+  --color-lion: var(--lion);
+  --color-lion-hot: var(--lion-hot);
+  --color-lion-deep: var(--lion-deep);
+  --color-hot: var(--hot);
   --color-ok: var(--ok);
   --color-bad: var(--bad);
+  --color-up: var(--up);
+  --color-down: var(--down);
+  --color-same: var(--same);
   --color-gold: var(--gold);
   --color-silver: var(--silver);
   --color-bronze: var(--bronze);
+  --color-rate-low: var(--rate-low);
+  --color-rate-mid: var(--rate-mid);
+  --color-rate-high: var(--rate-high);
   --font-sans: var(--font-body);
   --font-display: var(--font-display);
+  --ease-snap: var(--ease-out);
 }
 
 html {
@@ -56,107 +107,183 @@ html {
 }
 
 body {
+  isolation: isolate;
   background:
-    radial-gradient(60rem 30rem at 85% -10%, rgb(255 90 31 / 0.10), transparent 60%),
-    radial-gradient(40rem 24rem at -10% 10%, rgb(255 194 61 / 0.05), transparent 60%),
+    radial-gradient(60rem 30rem at 85% -10%, rgb(var(--accent-rgb) / 0.1), transparent 60%),
+    radial-gradient(40rem 24rem at -10% 10%, rgb(var(--hot-rgb) / 0.05), transparent 60%),
     var(--bg);
   background-attachment: fixed;
   color: var(--text);
 }
 
-::selection {
-  background: rgb(255 90 31 / 0.35);
+/* Film grain and faint diagonal lines over the whole page, behind the content. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0.55;
+  background-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 .08 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"),
+    repeating-linear-gradient(135deg, rgb(255 255 255 / 0.018) 0 1px, transparent 1px 22px);
 }
 
-/* Display headings: bold, condensed, upper case. */
+::selection {
+  background: rgb(var(--accent-rgb) / 0.4);
+}
+
+:focus-visible {
+  outline: 2px solid var(--lion-hot);
+  outline-offset: 3px;
+}
+
+/* Display headings: heavy, condensed, upper case, tight. */
 .font-display {
-  font-weight: 700;
+  font-weight: 800;
   letter-spacing: 0.01em;
 }
 
-/* -- buttons ------------------------------------------------------------------------------ */
+/* Every stat number: display face, digits line up. */
+.num {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+table,
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/* A faint hex grid for heroes; mask it with a radial so it fades out. */
+.hex-grid {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='97'%3E%3Cpath d='M28 0 56 16v32L28 64 0 48V16zM28 64v33' fill='none' stroke='%23f5a524' stroke-opacity='.18'/%3E%3C/svg%3E");
+  -webkit-mask: radial-gradient(60% 70% at 75% 40%, #000, transparent);
+  mask: radial-gradient(60% 70% at 75% 40%, #000, transparent);
+}
+
+/* Gold gradient text (hero words, the podium winner). */
+.text-lion-gradient {
+  background: linear-gradient(180deg, var(--lion-hot), var(--lion) 55%, var(--lion-deep));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* -- buttons: slanted parallelograms, 44px tall on phones -------------------------------- */
 .btn {
-  @apply inline-flex items-center justify-center gap-2 border border-line bg-panel-2 px-3 py-2 text-sm font-semibold transition duration-150 hover:border-accent/60 hover:text-white active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50;
-  clip-path: polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 8px 100%, 0 calc(100% - 8px));
+  @apply inline-flex min-h-11 items-center justify-center gap-2 bg-panel-2 px-4 py-2 font-display text-[15px] font-extrabold tracking-[0.1em] text-text uppercase transition duration-150 active:scale-[0.97] disabled:pointer-events-none disabled:opacity-50 sm:min-h-10;
+  box-shadow: inset 0 0 0 1px var(--line);
+  clip-path: polygon(var(--cut-sm) 0, 100% 0, calc(100% - var(--cut-sm)) 100%, 0 100%);
+}
+.btn:hover {
+  color: var(--lion-hot);
+  box-shadow: inset 0 0 0 1px var(--lion);
 }
 .btn-primary {
-  @apply border-accent text-white uppercase tracking-wide;
-  background: linear-gradient(135deg, var(--accent), var(--accent-hot));
-  box-shadow: 0 0 24px -6px rgb(255 90 31 / 0.7);
+  color: var(--lion-ink);
+  box-shadow: none;
+  background: linear-gradient(135deg, var(--lion-hot), var(--lion) 45%, var(--lion-deep));
 }
 .btn-primary:hover {
-  @apply brightness-110;
-  box-shadow: 0 0 32px -4px rgb(255 90 31 / 0.85);
+  color: var(--lion-ink);
+  box-shadow: none;
+  filter: brightness(1.1) drop-shadow(0 0 14px rgb(var(--accent-rgb) / 0.55));
 }
 .btn-ghost {
-  @apply border-transparent bg-transparent;
+  @apply bg-transparent text-muted;
+  box-shadow: none;
+}
+.btn-ghost:hover {
+  @apply bg-white/[0.04] text-text;
+  box-shadow: none;
+}
+.btn-hot {
+  @apply text-white;
+  background: var(--hot);
+  box-shadow: none;
+}
+.btn-hot:hover {
+  @apply text-white;
+  box-shadow: none;
+  filter: brightness(1.1) drop-shadow(0 0 14px rgb(var(--hot-rgb) / 0.55));
 }
 
 /* -- form fields -------------------------------------------------------------------------- */
 .input {
-  @apply w-full rounded-none border border-line bg-panel px-3 py-2 text-sm outline-none transition focus:border-accent focus:shadow-[0_0_0_3px_rgb(255_90_31/0.18)];
+  @apply w-full rounded-none border border-line bg-panel px-3 py-2 text-sm outline-none transition focus:border-accent focus:shadow-[0_0_0_3px_rgb(245_165_36/0.2)];
 }
 .kbd {
   @apply border border-line bg-panel-2 px-1.5 py-0.5 font-mono text-xs text-muted;
 }
 
-/* -- cards: sharp angled corners, a faint top glow ---------------------------------------- */
+/* -- cards: chamfered corners, a faint top sheen, a gold edge on hover --------------------- */
 .card {
   @apply relative border border-line bg-panel;
   clip-path: polygon(0 0, calc(100% - var(--cut)) 0, 100% var(--cut), 100% 100%, var(--cut) 100%, 0 calc(100% - var(--cut)));
-  background-image: linear-gradient(180deg, rgb(255 255 255 / 0.025), transparent 40%);
+  background-image: linear-gradient(180deg, rgb(255 255 255 / 0.03), transparent 45%);
 }
 .card-hover {
-  @apply transition duration-200 hover:-translate-y-0.5 hover:border-accent/50;
+  @apply transition duration-200 hover:-translate-y-[3px] hover:border-accent/60;
 }
 .card-hover:hover {
-  box-shadow: 0 10px 40px -18px rgb(255 90 31 / 0.6);
+  filter: drop-shadow(0 12px 22px rgb(var(--accent-rgb) / 0.2));
 }
 
-/* Section titles with an accent slash in front. */
+/* Section titles with a slanted, glowing gold bar in front. */
 .section-title {
-  @apply flex items-center gap-3 font-display text-2xl uppercase sm:text-3xl;
+  @apply flex items-center gap-3 font-display text-2xl font-extrabold uppercase sm:text-3xl;
 }
 .section-title::before {
   content: "";
-  @apply inline-block h-6 w-1.5 -skew-x-12 bg-accent sm:h-7;
-  box-shadow: 0 0 12px rgb(255 90 31 / 0.8);
+  @apply inline-block h-6 w-1.5 -skew-x-[18deg] sm:h-7;
+  background: linear-gradient(var(--lion-hot), var(--lion-deep));
+  box-shadow: 0 0 14px rgb(var(--accent-rgb) / 0.7);
 }
 
 .eyebrow {
   @apply text-xs font-bold tracking-[0.25em] text-accent uppercase;
 }
 
-/* A small label chip. */
+/* A small slanted label chip. */
 .chip {
-  @apply inline-flex items-center gap-1 border border-line bg-panel-2 px-2 py-0.5 text-[11px] font-semibold tracking-wide uppercase;
+  @apply inline-flex items-center gap-1 bg-panel-2 px-2 py-0.5 font-display text-xs font-extrabold tracking-[0.08em] uppercase;
+  clip-path: polygon(4px 0, 100% 0, calc(100% - 4px) 100%, 0 100%);
+}
+.chip-hot {
+  color: var(--hot);
+  background: rgb(var(--hot-rgb) / 0.15);
+}
+.chip-gold {
+  color: var(--lion-hot);
+  background: rgb(var(--accent-rgb) / 0.14);
 }
 
-/* Rank badges: gold, silver, bronze for the podium. */
+/* Rank badges: big slanted numbers; gold, silver and bronze for the podium. */
 .rank {
-  @apply flex h-8 w-8 shrink-0 items-center justify-center font-display text-lg text-muted;
-  clip-path: polygon(25% 0, 100% 0, 75% 100%, 0 100%);
+  @apply flex h-9 w-10 shrink-0 items-center justify-center bg-panel-2 font-display text-xl font-extrabold text-muted tabular-nums;
+  clip-path: polygon(22% 0, 100% 0, 78% 100%, 0 100%);
 }
 .rank-1 {
-  @apply text-black;
-  background: linear-gradient(135deg, #ffe08a, var(--gold));
+  color: #241800;
+  background: linear-gradient(135deg, var(--gold-hi), var(--gold));
   box-shadow: 0 0 18px rgb(246 197 68 / 0.6);
 }
 .rank-2 {
-  @apply text-black;
-  background: linear-gradient(135deg, #f1f4f8, var(--silver));
+  color: #10141c;
+  background: linear-gradient(135deg, var(--silver-hi), var(--silver));
 }
 .rank-3 {
-  @apply text-black;
-  background: linear-gradient(135deg, #f0b47e, var(--bronze));
+  color: #1d0e04;
+  background: linear-gradient(135deg, var(--bronze-hi), var(--bronze));
 }
 
 /* Data tables. */
 .table {
-  @apply w-full text-sm;
+  @apply w-full text-sm tabular-nums;
 }
 .table thead {
-  @apply text-[11px] tracking-wider text-muted uppercase;
+  @apply text-[11px] tracking-[0.16em] text-muted uppercase;
 }
 .table th {
   @apply px-2 py-2.5 font-semibold;
@@ -164,13 +291,16 @@ body {
 .table tbody tr {
   @apply border-t border-line transition-colors hover:bg-white/[0.03];
 }
+.table tbody tr:hover > :first-child {
+  box-shadow: inset 3px 0 0 var(--accent);
+}
 
-/* Loading skeletons. */
+/* Loading skeletons: slanted bars with a gold shimmer. */
 .skeleton {
   @apply bg-panel-2;
-  background-image: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.05), transparent);
+  background-image: linear-gradient(90deg, transparent, rgb(var(--accent-rgb) / 0.07), transparent);
   background-size: 200% 100%;
-  animation: shimmer 1.4s infinite;
+  animation: shimmer 1.4s infinite linear;
 }
 @keyframes shimmer {
   from {
@@ -193,13 +323,65 @@ body {
 
 /* Page enter transition (app/template.tsx wraps every page). */
 .page-enter {
-  animation: page-enter 0.28s ease-out both;
+  animation: page-enter 0.28s var(--ease-out) both;
 }
 @keyframes page-enter {
   from {
     opacity: 0;
     transform: translateY(6px);
   }
+}
+
+/* Stagger children in on load (lists of cards, podiums). */
+.stagger > * {
+  animation: rise 0.45s var(--ease-out) both;
+}
+.stagger > :nth-child(2) { animation-delay: 60ms; }
+.stagger > :nth-child(3) { animation-delay: 120ms; }
+.stagger > :nth-child(4) { animation-delay: 180ms; }
+.stagger > :nth-child(5) { animation-delay: 240ms; }
+.stagger > :nth-child(n + 6) { animation-delay: 300ms; }
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+}
+
+/* The lion loading mark breathes. */
+.lion-breathe {
+  animation: lion-breathe 1.2s ease-in-out infinite;
+}
+@keyframes lion-breathe {
+  50% {
+    transform: scale(1.12);
+    filter: drop-shadow(0 0 10px rgb(var(--accent-rgb) / 0.8));
+  }
+}
+
+/* A pulsing dot for live states. */
+.live-dot {
+  @apply inline-block h-2 w-2 rounded-full;
+  background: var(--hot);
+  animation: live-pulse 1.4s infinite;
+}
+@keyframes live-pulse {
+  0% { box-shadow: 0 0 0 0 rgb(var(--hot-rgb) / 0.7); }
+  70%, 100% { box-shadow: 0 0 0 8px rgb(var(--hot-rgb) / 0); }
+}
+
+/* Mega menu panel: slides down and fades in. */
+.mega {
+  @apply invisible opacity-0;
+  transform: translate(-50%, -6px);
+  transition:
+    opacity var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out),
+    visibility var(--dur-fast);
+}
+.mega[data-open="true"] {
+  @apply visible opacity-100;
+  transform: translate(-50%, 0);
 }
 
 /* Face-down cards (Team of the Week and Month): a light sweeping the back, and a burst of
@@ -226,6 +408,9 @@ body {
 
 @media (prefers-reduced-motion: reduce) {
   .page-enter,
+  .stagger > *,
+  .lion-breathe,
+  .live-dot,
   .skeleton,
   .card-back-shine,
   .card-reveal {
@@ -233,5 +418,10 @@ body {
   }
   .card-hover {
     @apply hover:translate-y-0;
+  }
+  .mega,
+  .btn,
+  .card-hover {
+    transition: none;
   }
 }

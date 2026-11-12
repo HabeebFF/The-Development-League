@@ -20,7 +20,7 @@ export default function MatchMvp({ id }: { id: number }) {
   const data = useApi<{ mvp: Mvp | null }>(`/matches/${id}/mvp`);
   const m = data.data?.mvp;
   if (!m) return null;
-  const colour = m.team.primary_color || "#ff5a1f";
+  const colour = m.team.primary_color || "#f5a524";
   return (
     <section className="card relative mt-6 overflow-hidden">
       <div className="pointer-events-none absolute inset-0" style={{ background: `linear-gradient(115deg, ${colour}55, transparent 60%)` }} />

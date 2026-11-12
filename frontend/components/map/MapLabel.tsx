@@ -209,7 +209,7 @@ function KillBadge({ kills, x, y, size, font, dim }: { kills: number; x: number;
         width={w}
         height={h}
         cornerRadius={h / 2}
-        fill={hot ? "#ff5a1f" : "rgba(8, 8, 12, 0.85)"}
+        fill={hot ? "#f5a524" : "rgba(8, 8, 12, 0.85)"}
         stroke={hot ? "#000" : GREY}
         strokeWidth={0.8}
       />

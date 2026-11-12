@@ -8,7 +8,7 @@ export default function ExploreGrid({ links, className = "" }: { links: NavLink[
     <div className={`grid grid-cols-2 gap-3 lg:grid-cols-4 ${className}`}>
       {links.map((l) => (
         <Link key={l.href} href={l.href} className="card card-hover group flex flex-col gap-2 p-4">
-          <span className="flex h-10 w-10 items-center justify-center bg-accent/15 text-accent transition-colors group-hover:bg-accent group-hover:text-white">
+          <span className="flex h-10 w-10 items-center justify-center bg-accent/15 text-accent transition-colors group-hover:bg-accent group-hover:text-accent-ink">
             <svg viewBox="0 0 24 24" className="h-5 w-5" fill="currentColor" aria-hidden>
               <path d={l.icon} />
             </svg>

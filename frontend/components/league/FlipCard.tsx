@@ -91,7 +91,7 @@ function CardBack({
         style={{
           clipPath: CARD_SHAPE,
           background:
-            "radial-gradient(circle at 50% 38%, rgb(255 90 31 / 0.35), transparent 55%), linear-gradient(160deg, #1d2130, #07080c)",
+            "radial-gradient(circle at 50% 38%, rgb(245 165 36 / 0.35), transparent 55%), linear-gradient(160deg, #1d2130, #07080c)",
         }}
       >
         <span className="absolute inset-0 bg-[repeating-linear-gradient(60deg,rgb(255_255_255/0.04)_0_2px,transparent_2px_12px)]" />
@@ -99,7 +99,7 @@ function CardBack({
           className="absolute inset-[6px]"
           style={{
             clipPath: CARD_SHAPE,
-            boxShadow: "inset 0 0 0 1.5px #ff5a1f",
+            boxShadow: "inset 0 0 0 1.5px #f5a524",
           }}
         />
         <span className="card-back-shine absolute inset-0" />

@@ -72,7 +72,7 @@ export default function PPView() {
           <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {t.tasks.map((task) => (
               <div key={task.id} className="card relative overflow-hidden p-4">
-                <span className="pointer-events-none absolute inset-0 bg-[linear-gradient(160deg,rgb(255_90_31/0.12),transparent_55%)]" />
+                <span className="pointer-events-none absolute inset-0 bg-[linear-gradient(160deg,rgb(245_165_36/0.12),transparent_55%)]" />
                 <p className="relative font-display text-xl leading-tight uppercase">{task.title}</p>
                 <p className="relative mt-1 text-sm text-muted">{ruleText(task)}</p>
                 <p className="relative mt-2 text-sm font-semibold text-accent">{rewardText(task)}</p>

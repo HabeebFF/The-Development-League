@@ -12,10 +12,12 @@ export function TeamMark({ team, size = "sm" }: { team: TeamRef; size?: keyof ty
     <img src={team.logo} alt="" className={`${box} shrink-0 object-contain`} loading="lazy" />
   ) : (
     <span
-      className={`${box} flex shrink-0 items-center justify-center font-display text-white`}
+      className={`${box} flex shrink-0 items-center justify-center font-display font-black text-white`}
       style={{
-        background: `linear-gradient(135deg, ${team.primary_color || "var(--panel-2)"}, color-mix(in srgb, ${team.primary_color || "#181b26"} 55%, black))`,
-        clipPath: "polygon(0 0, 100% 0, 100% 78%, 78% 100%, 0 100%)",
+        background: `linear-gradient(135deg, color-mix(in srgb, ${team.primary_color || "#3a4054"} 85%, white), color-mix(in srgb, ${team.primary_color || "#3a4054"} 60%, black))`,
+        // A crest: a hexagon shield in the team colour.
+        clipPath: "polygon(50% 0, 100% 18%, 100% 70%, 50% 100%, 0 70%, 0 18%)",
+        textShadow: "0 1px 2px rgb(0 0 0 / 0.5)",
       }}
     >
       {(team.tag || team.name).slice(0, 4).toUpperCase()}
