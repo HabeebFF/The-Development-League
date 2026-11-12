@@ -9,4 +9,6 @@ export { default as RankBadge, Movement } from "./RankBadge";
 export { default as SectionHeader } from "./SectionHeader";
 export { default as StatBlock } from "./StatBlock";
 export { default as Tabs } from "./Tabs";
+export { default as MatchCard, BooyahBadge, mapArt } from "./MatchCard";
 export { default as TeamBadge, TeamMark } from "../league/TeamBadge";
+export { default as TrophyCard, AWARD_ICON } from "./TrophyCard";
