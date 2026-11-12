@@ -2,7 +2,7 @@ import Link from "next/link";
 
 import { PLAYER_PAGES, SOCIALS, TEAM_PAGES } from "@/lib/nav";
 
-import LionMark from "./ui/LionMark";
+import TdlLogo from "./ui/TdlLogo";
 
 const SOCIAL_ICON: Record<(typeof SOCIALS)[number]["label"], string> = {
   Instagram:
@@ -30,10 +30,7 @@ export default function SiteFooter() {
       <div className="mx-auto grid max-w-6xl grid-cols-2 gap-6 px-4 pt-9 pb-11 md:grid-cols-[1.4fr_1fr_1fr]">
         <div className="col-span-2 md:col-span-1">
           <Link href="/" className="inline-flex min-h-11 items-center gap-2.5" aria-label="The Development League, home">
-            <LionMark className="h-10 w-10" />
-            <span className="font-display text-[26px] font-black tracking-wide">
-              T<span className="text-accent">D</span>L
-            </span>
+            <TdlLogo size="lg" tagline />
           </Link>
           <p className="mt-2 max-w-xs text-sm text-muted">The home of The Development League. Free Fire esports: every scrim, every stat.</p>
           {SOCIALS.length > 0 && (
