@@ -1,4 +1,4 @@
-/* "THE ROARING LION" splash (RoaringLionIntro.tsx). About 4.3 s, then it zooms away. */
+/* "ROAR": the Roaring Lion splash (RoaringLionIntro.tsx). About 4.3 s, then it zooms away. */
 
 .intro-seen .lion-intro {
   display: none;
@@ -28,7 +28,7 @@
 .lion-shake {
   position: absolute;
   inset: 0;
-  animation: lion-shake 0.5s ease-out 1.45s both;
+  animation: lion-shake 0.5s ease-out 0.75s both;
 }
 @keyframes lion-shake {
   0%, 100% { transform: translate(0, 0); }
@@ -47,7 +47,7 @@
     radial-gradient(42% 38% at 50% 46%, rgb(245 165 36 / 0.55), transparent 70%),
     radial-gradient(70% 50% at 50% 100%, rgb(255 138 61 / 0.35), transparent 70%),
     radial-gradient(120% 80% at 50% 50%, transparent 40%, #000 100%);
-  animation: lion-glow 1.2s ease-out 0.15s both, lion-pulse 2.4s ease-in-out 1.45s infinite;
+  animation: lion-glow 1.2s ease-out 0.15s both, lion-pulse 2.4s ease-in-out 0.9s infinite;
 }
 @keyframes lion-glow {
   from { opacity: 0; transform: scale(0.6); }
@@ -123,22 +123,24 @@
   translate: -50% 0;
   /* No mask here: a mask would clip the glow into a box. .lion-floor fades the bottom. */
   filter: drop-shadow(0 0 18px rgb(245 165 36 / 0.55)) drop-shadow(0 0 2px rgb(255 160 80 / 0.9));
-  animation: lion-rise 1.25s cubic-bezier(0.16, 1, 0.3, 1) 0.25s both;
+  transform-origin: 50% 70%;
+  animation: lion-rise 0.75s cubic-bezier(0.16, 1, 0.3, 1) 0.15s both;
   pointer-events: none;
 }
 @keyframes lion-rise {
   0% {
     opacity: 0;
-    transform: translateY(18%) scale(1.18);
-    filter: blur(14px) brightness(3) saturate(0);
+    transform: scale(1.6);
+    filter: blur(16px) brightness(3) saturate(0);
   }
-  45% {
+  55% {
     opacity: 1;
-    filter: blur(2px) brightness(1.6) drop-shadow(0 0 40px rgb(245 165 36 / 0.9));
+    transform: scale(0.97);
+    filter: blur(1px) brightness(1.7) drop-shadow(0 0 40px rgb(245 165 36 / 0.9));
   }
   100% {
-    transform: translateY(0) scale(1);
-    filter: drop-shadow(0 0 18px rgb(245 165 36 / 0.55)) drop-shadow(0 0 2px rgb(255 160 80 / 0.9));
+    transform: scale(1);
+    filter: drop-shadow(0 0 18px rgb(245 165 36 / 0.55)) drop-shadow(0 0 2px rgb(255 204 77 / 0.9));
   }
 }
 
@@ -156,7 +158,7 @@
   inset: 0;
   background: radial-gradient(circle at 50% 70%, rgb(255 230 200 / 0.9), rgb(245 165 36 / 0.5) 35%, transparent 70%);
   opacity: 0;
-  animation: lion-flash 0.7s ease-out 1.42s both;
+  animation: lion-flash 0.6s ease-out 0.72s both;
   pointer-events: none;
 }
 @keyframes lion-flash {
@@ -178,68 +180,107 @@
   pointer-events: none;
 }
 .lion-the {
-  font-size: clamp(1.1rem, 4.5vw, 1.9rem);
-  font-weight: 700;
-  letter-spacing: 0.6em;
-  margin-right: -0.6em;
-  color: #fff;
+  font-size: clamp(0.8rem, 3.4vw, 1.15rem);
+  font-weight: 800;
+  letter-spacing: 0.5em;
+  margin-right: -0.5em;
+  color: #ffcc4d;
   text-shadow: 0 0 18px rgb(245 165 36 / 0.8);
-  animation: lion-the 0.6s cubic-bezier(0.16, 1, 0.3, 1) 0.95s both;
+  animation: lion-the 0.6s cubic-bezier(0.16, 1, 0.3, 1) 0.8s both;
 }
 @keyframes lion-the {
-  from { opacity: 0; letter-spacing: 1.6em; filter: blur(6px); }
+  from { opacity: 0; letter-spacing: 1.4em; filter: blur(6px); }
 }
 .lion-title {
   display: flex;
   flex-direction: column;
   align-items: center;
-  margin: 0.05em 0 0;
-  line-height: 0.82;
-  font-weight: 800;
-  font-size: clamp(4.2rem, 21vw, 10rem);
-  letter-spacing: -0.01em;
+  margin: 0.15em 0 0;
+  line-height: 0.86;
+  font-weight: 900;
+  font-size: clamp(3rem, 15vw, 7.5rem);
+  letter-spacing: -0.005em;
+  color: #fff;
+  filter: drop-shadow(0 4px 0 rgb(0 0 0 / 0.6));
 }
 @media (width >= 48rem) {
   .lion-title {
     flex-direction: row;
-    gap: 0.22em;
+    flex-wrap: wrap;
+    justify-content: center;
+    column-gap: 0.22em;
   }
 }
-.lion-roaring,
-.lion-lion {
+.lion-word {
   display: block;
-  background: linear-gradient(100deg, #fff4d6 0%, #ffc23d 28%, #f5a524 55%, #c81e00 80%, #ffc23d 100%);
-  background-size: 220% 100%;
+  white-space: nowrap;
+}
+.lion-letter {
+  display: inline-block;
+  animation: lion-slam 0.32s cubic-bezier(0.2, 1.5, 0.4, 1) both;
+}
+.lion-gold .lion-letter {
+  background: linear-gradient(180deg, #fff4d6, #ffcc4d 35%, #f5a524 65%, #c46a10);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
-  filter: drop-shadow(0 4px 0 rgb(0 0 0 / 0.6)) drop-shadow(0 0 24px rgb(245 165 36 / 0.55));
-}
-.lion-roaring {
-  animation: lion-slam 0.5s cubic-bezier(0.2, 1.4, 0.4, 1) 1.15s both, lion-burn 2.6s linear 1.65s infinite;
-}
-.lion-lion {
-  animation: lion-slam 0.5s cubic-bezier(0.2, 1.4, 0.4, 1) 1.4s both, lion-burn 2.6s linear 1.9s infinite;
+  filter: drop-shadow(0 0 18px rgb(245 165 36 / 0.6));
 }
 @keyframes lion-slam {
   from {
     opacity: 0;
-    transform: scale(2.6) skewX(-8deg);
-    filter: blur(10px);
+    transform: translateY(-0.35em) scale(2.4) skewX(-10deg);
+    filter: blur(8px);
+  }
+  70% {
+    opacity: 1;
+    transform: translateY(0) scale(0.94);
   }
 }
-@keyframes lion-burn {
-  to { background-position: -220% 0; }
+
+/* Shockwave: three gold rings burst out from the lion as it lands. */
+.lion-shock {
+  position: absolute;
+  left: 50%;
+  top: 52%;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+.lion-shock span {
+  position: absolute;
+  left: -50vmax;
+  top: -50vmax;
+  width: 100vmax;
+  height: 100vmax;
+  border-radius: 50%;
+  border: 3px solid rgb(255 204 77 / 0.9);
+  box-shadow: 0 0 30px rgb(245 165 36 / 0.8), inset 0 0 30px rgb(245 165 36 / 0.6);
+  opacity: 0;
+  transform: scale(0.05);
+  animation: lion-shock 0.9s cubic-bezier(0.1, 0.8, 0.3, 1) 0.74s both;
+}
+.lion-shock span:nth-child(2) {
+  animation-delay: 0.84s;
+  border-width: 2px;
+}
+.lion-shock span:nth-child(3) {
+  animation-delay: 0.96s;
+  border-width: 1px;
+}
+@keyframes lion-shock {
+  0% { opacity: 1; transform: scale(0.05); }
+  100% { opacity: 0; transform: scale(1.4); }
 }
 .lion-bar {
   display: block;
   width: min(70vw, 26rem);
   height: 3px;
   margin-top: 0.9rem;
-  background: linear-gradient(90deg, transparent, #f5a524 20%, #ffc23d 50%, #f5a524 80%, transparent);
+  background: linear-gradient(90deg, transparent, #f5a524 20%, #ff2e4d 50%, #f5a524 80%, transparent);
   box-shadow: 0 0 14px rgb(245 165 36 / 0.9);
   transform-origin: center;
-  animation: lion-bar 0.6s cubic-bezier(0.16, 1, 0.3, 1) 1.7s both;
+  animation: lion-bar 0.6s cubic-bezier(0.16, 1, 0.3, 1) 2.05s both;
 }
 @keyframes lion-bar {
   from { transform: scaleX(0); }
@@ -251,7 +292,7 @@
   letter-spacing: 0.42em;
   margin-right: -0.42em;
   color: rgb(242 243 247 / 0.78);
-  animation: lion-sub 0.6s ease-out 1.95s both;
+  animation: lion-sub 0.6s ease-out 2.25s both;
 }
 .lion-sub b {
   color: #f5a524;
@@ -262,20 +303,25 @@
 
 .lion-skip {
   position: absolute;
-  top: max(14px, env(safe-area-inset-top));
-  right: 16px;
-  padding: 0.45rem 0.9rem;
-  font-size: 0.7rem;
-  font-weight: 700;
+  z-index: 2;
+  top: max(12px, env(safe-area-inset-top));
+  right: max(12px, env(safe-area-inset-right));
+  min-height: 44px;
+  padding: 0 1.1rem;
+  font-size: 0.75rem;
+  font-weight: 800;
   letter-spacing: 0.2em;
   text-transform: uppercase;
-  color: rgb(242 243 247 / 0.75);
-  border: 1px solid rgb(255 255 255 / 0.18);
-  background: rgb(0 0 0 / 0.35);
+  color: #fff;
+  border: 1px solid rgb(255 255 255 / 0.28);
+  background: rgb(0 0 0 / 0.5);
   backdrop-filter: blur(6px);
-  clip-path: polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px);
+  clip-path: polygon(8px 0, 100% 0, calc(100% - 8px) 100%, 0 100%);
   cursor: pointer;
-  animation: lion-sub 0.4s ease-out 0.6s both;
+}
+.lion-skip:focus-visible {
+  outline: 2px solid #ffcc4d;
+  outline-offset: 2px;
 }
 .lion-skip:hover {
   color: #fff;
@@ -288,7 +334,8 @@
   .lion-intro *::after {
     animation: none !important;
   }
-  .lion-embers {
+  .lion-embers,
+  .lion-shock {
     display: none;
   }
   .lion-leave {

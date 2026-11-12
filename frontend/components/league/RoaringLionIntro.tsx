@@ -7,7 +7,7 @@ import { INTRO_KEY } from "./introScript";
 import "./RoaringLionIntro.css";
 
 /**
- * "THE ROARING LION" splash, played over the home page the first time someone opens the site
+ * "ROAR": the Roaring Lion splash, played over the home page the first time someone opens the site
  * in a browser session. Tap anywhere (or Skip, or Esc) to close it early. Add ?intro=1 to the
  * address to play it again.
  *
@@ -18,6 +18,10 @@ import "./RoaringLionIntro.css";
  */
 
 const PLAY_MS = 4300; // when the exit starts
+// "THE DEVELOPMENT LEAGUE" slams in letter by letter, a line at a time.
+const TITLE = ["The", "Development", "League"];
+const LETTER_START = 1.05; // seconds: right after the flash and shockwave
+const LETTER_STEP = 0.045;
 const EXIT_MS = 650;
 const QUICK_MS = 1600; // reduced motion: a still frame, then a fade
 
@@ -122,16 +126,30 @@ export default function RoaringLionIntro() {
         <div className="lion-floor" aria-hidden />
         <div className="lion-flash" aria-hidden />
 
+        <div className="lion-shock" aria-hidden>
+          <span />
+          <span />
+          <span />
+        </div>
+
         <div className="lion-words font-display">
-          <span className="lion-the">The</span>
-          <h1 className="lion-title">
-            <span className="lion-roaring">Roaring</span>
-            <span className="lion-lion">Lion</span>
+          <span className="lion-the">The Roaring Lion</span>
+          <h1 className="lion-title" aria-label="The Development League">
+            {TITLE.map((word, w) => {
+              const before = TITLE.slice(0, w).join("").length;
+              return (
+                <span key={word} className={`lion-word ${w === 2 ? "lion-gold" : ""}`} aria-hidden>
+                  {[...word].map((ch, i) => (
+                    <span key={i} className="lion-letter" style={{ animationDelay: `${(LETTER_START + (before + i) * LETTER_STEP).toFixed(3)}s` }}>
+                      {ch}
+                    </span>
+                  ))}
+                </span>
+              );
+            })}
           </h1>
           <span className="lion-bar" aria-hidden />
-          <span className="lion-sub">
-            The Development <b>League</b>
-          </span>
+          <span className="lion-sub">Free Fire esports</span>
         </div>
       </div>
 
@@ -143,7 +161,7 @@ export default function RoaringLionIntro() {
           close();
         }}
       >
-        Skip &rsaquo;
+        Skip intro &rsaquo;
       </button>
     </div>
   );
