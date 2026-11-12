@@ -4,6 +4,9 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { createContext, useContext, useEffect } from "react";
 
+import EmptyState from "@/components/ui/EmptyState";
+import { LionLoader } from "@/components/ui/LoadingSkeleton";
+
 import type { Me } from "@/lib/api";
 import { useMe } from "@/lib/useMe";
 
@@ -24,15 +27,31 @@ export default function StaffGate({ children }: { children: React.ReactNode }) {
     if (signedOut) router.replace(`/auth/login?next=${encodeURIComponent(path)}`);
   }, [signedOut, router, path]);
 
-  if (loading || signedOut) return <p className="p-6 text-muted">Loading...</p>;
-  if (!me) return <p className="p-6 text-bad">Couldn&apos;t reach the server. Try again.</p>;
+  if (loading || signedOut)
+    return (
+      <div className="flex justify-center p-10">
+        <LionLoader />
+      </div>
+    );
+  if (!me)
+    return (
+      <p className="p-6 text-down" role="alert">
+        Couldn&apos;t reach the server. Try again.
+      </p>
+    );
   if (!me.staff_role) {
     return (
       <div className="mx-auto max-w-xl p-6">
-        <p>This area is for league staff.</p>
-        <Link href="/" className="mt-4 inline-block text-accent">
-          Back home
-        </Link>
+        <EmptyState
+          title="Staff only"
+          action={
+            <Link href="/" className="btn btn-primary">
+              Back home
+            </Link>
+          }
+        >
+          This area is for league staff.
+        </EmptyState>
       </div>
     );
   }

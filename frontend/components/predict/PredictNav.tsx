@@ -24,7 +24,7 @@ export default function PredictNav({ wallet }: { wallet: WalletState }) {
         {LINKS.map((l) => {
           const on = l.href === "/predict" ? path === "/predict" || path.startsWith("/predict/markets") : path.startsWith(l.href);
           return (
-            <Link key={l.href} href={l.href} className={`btn shrink-0 px-3 py-1.5 text-xs uppercase ${on ? "border-accent text-white" : "text-muted"}`}>
+            <Link key={l.href} href={l.href} className={`btn shrink-0 px-4 text-xs uppercase ${on ? "btn-primary" : "btn-ghost"}`}>
               {l.label}
             </Link>
           );
@@ -54,7 +54,7 @@ function OddsSwitch() {
           type="button"
           aria-pressed={format === key}
           title={key === "decimal" ? "Decimal odds" : "Fractional odds"}
-          className={`btn px-2 py-1 ${format === key ? "border-accent text-white" : "text-muted"}`}
+          className={`btn min-w-11 px-2 ${format === key ? "btn-primary" : "btn-ghost"}`}
           onClick={() => setFormat(key)}
         >
           {label}
@@ -67,7 +67,7 @@ function OddsSwitch() {
 export function Balance({ wallet }: { wallet: WalletState }) {
   if (wallet.kind === "ok")
     return (
-      <span className="border border-accent-2/40 bg-accent-2/10 px-3 py-0.5 font-display text-xl text-accent-2" aria-label="Your Development Coins (DC)">
+      <span className="num border border-lion/50 bg-lion/10 px-3 py-1 text-2xl text-accent-hot shadow-[0_0_14px_rgb(245_165_36/0.25)]" aria-label="Your Development Coins (DC)">
         {coins(wallet.wallet.balance)}
       </span>
     );
