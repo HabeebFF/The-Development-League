@@ -144,3 +144,27 @@ export function mapName(slug: string | null): string {
   if (!slug) return "Unknown map";
   return slug.charAt(0).toUpperCase() + slug.slice(1);
 }
+
+/**
+ * How many places each team moved in the overall table because of the latest match day: the
+ * overall table now against the same table with that day taken out (points, then Booyahs, then
+ * kills). Positive is up. Teams that only played on the latest day have no movement (new).
+ */
+export function overallMovement(overall: StandingRow[], latestDay: StandingRow[]): Map<number, number | null> {
+  const day = new Map(latestDay.map((r) => [r.team.id, r]));
+  const before = overall
+    .map((r) => {
+      const d = day.get(r.team.id);
+      return {
+        id: r.team.id,
+        played: r.matches_played - (d?.matches_played ?? 0),
+        points: r.total_points - (d?.total_points ?? 0),
+        booyahs: r.booyahs - (d?.booyahs ?? 0),
+        kills: r.kills - (d?.kills ?? 0),
+      };
+    })
+    .filter((r) => r.played > 0)
+    .sort((a, b) => b.points - a.points || b.booyahs - a.booyahs || b.kills - a.kills);
+  const was = new Map(before.map((r, i) => [r.id, i + 1]));
+  return new Map(overall.map((r) => [r.team.id, was.has(r.team.id) ? was.get(r.team.id)! - r.rank : null]));
+}
