@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 
+import { BooyahBadge } from "@/components/ui/MatchCard";
 import type { Paged } from "@/lib/api";
 import { BLANK_PHOTO, TIER_COLORS } from "@/lib/cards";
 import {
@@ -29,9 +30,9 @@ const RECENT = 5;
 
 function Stat({ label, value, hot = false }: { label: string; value: string | number; hot?: boolean }) {
   return (
-    <div className="card px-4 py-3">
+    <div className="card border-t-2 border-lion/60 px-4 py-3">
       <p className="text-[10px] font-bold tracking-widest text-muted uppercase">{label}</p>
-      <p className={`font-display text-3xl leading-tight ${hot ? "text-accent-2" : "text-white"}`}>{value}</p>
+      <p className={`num text-4xl leading-tight ${hot ? "text-accent-hot" : "text-text"}`}>{value}</p>
     </div>
   );
 }
@@ -42,9 +43,9 @@ function RecentMatch({ match, teamId }: { match: MatchListItem; teamId: number }
   const own = detail.data?.results.find((r) => r.team.id === teamId);
   return (
     <li>
-      <Link href={`/matches/${match.id}`} className="flex items-center gap-3 px-4 py-3 text-sm transition-colors hover:bg-white/[0.03]">
-        <span className={`w-16 shrink-0 font-display text-xl uppercase ${own?.booyah ? "text-accent-2" : "text-muted"}`}>
-          {own ? (own.booyah ? "Booyah" : ordinal(own.placement)) : "..."}
+      <Link href={`/matches/${match.id}`} className="flex min-h-11 items-center gap-3 px-4 py-3 text-sm transition-colors hover:bg-white/[0.03]">
+        <span className={`w-16 shrink-0 font-display text-xl font-black uppercase ${own?.booyah ? "text-accent-hot" : "text-muted"}`}>
+          {own ? (own.booyah ? <BooyahBadge /> : ordinal(own.placement)) : "..."}
         </span>
         <span className="min-w-0 flex-1 truncate">
           Match {match.number} · {mapName(match.map)}
@@ -53,7 +54,7 @@ function RecentMatch({ match, teamId }: { match: MatchListItem; teamId: number }
         {own && (
           <span className="text-right text-xs text-muted">
             {plural(own.kills, "kill")}
-            <span className="block font-display text-lg text-white">{own.total_points} pts</span>
+            <span className="num block text-xl text-accent-hot">{own.total_points} pts</span>
           </span>
         )}
       </Link>
@@ -153,6 +154,7 @@ export default function TeamView({ slug }: { slug: string }) {
     <>
       <section className="relative overflow-hidden border-b border-line">
         <div className="pointer-events-none absolute inset-0" style={{ background: `linear-gradient(115deg, ${colour}66, ${colour}1a 45%, transparent 75%)` }} />
+        <div className="hex-grid pointer-events-none absolute inset-0 opacity-50" />
         <div className="pointer-events-none absolute -right-16 top-0 h-full w-1/2 -skew-x-[20deg] bg-[repeating-linear-gradient(90deg,rgb(255_255_255/0.04)_0_2px,transparent_2px_16px)]" />
         <div className="pointer-events-none absolute inset-x-0 bottom-0 h-1" style={{ background: colour, boxShadow: `0 0 24px ${colour}` }} />
         <div className="relative mx-auto max-w-6xl px-4 py-8 sm:py-12">
@@ -163,7 +165,7 @@ export default function TeamView({ slug }: { slug: string }) {
             <TeamMark team={t} size="xl" />
             <div className="min-w-0">
               {t.tag && <p className="eyebrow text-white/80">{t.tag}</p>}
-              <h1 className="font-display text-4xl leading-none font-extrabold break-words uppercase sm:text-6xl">{t.name}</h1>
+              <h1 className="font-display text-4xl leading-none font-black break-words uppercase sm:text-7xl">{t.name}</h1>
               {record?.form.length ? (
                 <div className="mt-3 flex items-center gap-2">
                   <span className="text-[10px] font-bold tracking-widest text-white/70 uppercase">Form</span>

@@ -106,3 +106,27 @@ export function outcome(t: Pick<PPTask, "pp_done">, done: boolean | null): strin
   if (t.pp_done < 0) return done ? "Penalty" : "Safe";
   return done ? "Done" : "Not done";
 }
+
+export type LedgerLine =
+  | { kind: "task"; date: string; pp: number; total: number; task: PPTeam["tasks"][number] }
+  | { kind: "START" | "ADJUST"; date: string; pp: number; total: number; reason: string };
+
+/**
+ * A team's period as a ledger: starting PP first, then every task and staff adjustment by date,
+ * each with the running total after it.
+ */
+export function ppLedger(team: Pick<PPTeam, "tasks" | "adjustments">): LedgerLine[] {
+  type Entry = { kind: "task" | "START" | "ADJUST"; date: string; pp: number; order: number; task?: PPTeam["tasks"][number]; reason?: string };
+  const entries: Entry[] = [
+    ...team.adjustments.map((a, i) => ({ kind: a.kind, date: a.date, pp: a.pp, reason: a.reason, order: a.kind === "START" ? -1 : 1000 + i })),
+    ...team.tasks.map((t, i) => ({ kind: "task" as const, date: t.date, pp: t.result.pp, task: t, order: i })),
+  ];
+  entries.sort((a, b) => (a.kind === "START" ? -1 : 0) - (b.kind === "START" ? -1 : 0) || a.date.localeCompare(b.date) || a.order - b.order);
+  let total = 0;
+  return entries.map((e) => {
+    total += e.pp;
+    return e.kind === "task"
+      ? { kind: "task", date: e.date, pp: e.pp, total, task: e.task! }
+      : { kind: e.kind, date: e.date, pp: e.pp, total, reason: e.reason ?? "" };
+  });
+}
