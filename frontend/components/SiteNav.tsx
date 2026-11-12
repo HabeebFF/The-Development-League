@@ -10,6 +10,7 @@ import { useApi } from "@/lib/useApi";
 
 import { TeamMark } from "./league/TeamBadge";
 import LionMark from "./ui/LionMark";
+import TdlLogo, { TdlMark } from "./ui/TdlLogo";
 import PlayerAvatar from "./ui/PlayerAvatar";
 
 import { useAuth } from "./Auth";
@@ -61,13 +62,7 @@ export default function SiteNav() {
         />
         <nav className="mx-auto flex h-full max-w-6xl items-center gap-4 px-4 lg:gap-6" aria-label="Site">
           <Link href="/" className="flex min-h-11 shrink-0 items-center gap-2.5" aria-label="The Development League, home">
-            <LionMark className="h-10 w-10 drop-shadow-[0_0_10px_rgb(245_165_36/0.45)]" />
-            <span className="flex flex-col leading-none">
-              <span className="font-display text-[26px] font-black tracking-wide">
-                T<span className="text-accent">D</span>L
-              </span>
-              <span className="hidden text-[9px] font-bold tracking-[0.28em] text-muted uppercase lg:block">The Development League</span>
-            </span>
+            <TdlLogo />
           </Link>
           <div className={`hidden h-full flex-1 items-center ${shown ? "md:flex" : ""}`}>
             <div className="mx-auto flex h-full items-center">
@@ -130,7 +125,7 @@ export default function SiteNav() {
           >
             <div className="flex items-center justify-between">
               <p className="flex items-center gap-2">
-                <LionMark className="h-6 w-6" />
+                <TdlMark className="h-5 w-auto" />
                 <span className="eyebrow">Menu</span>
               </p>
               <button type="button" className="flex h-11 w-11 items-center justify-center text-2xl leading-none text-muted" onClick={() => setOpen(false)} aria-label="Close menu">

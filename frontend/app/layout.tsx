@@ -14,6 +14,8 @@ const display = Barlow_Condensed({ variable: "--font-display", weight: ["600", "
 export const metadata: Metadata = {
   title: { default: "The Development League", template: "%s | The Development League" },
   description: "The official home of The Development League, a Free Fire esports league.",
+  // Absolute links for the share image (app/opengraph-image.png); SITE_URL overrides once there's a domain.
+  metadataBase: new URL(process.env.SITE_URL || "https://141-147-116-231.sslip.io"),
 };
 
 export const viewport: Viewport = { themeColor: "#07080c", colorScheme: "dark", viewportFit: "cover" };
