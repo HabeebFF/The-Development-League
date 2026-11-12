@@ -72,6 +72,24 @@ export const BAND_CLASSES: Record<Band, string> = {
   gold: "bg-[#f6c544] text-black",
 };
 
+export type RatingTone = "low" | "mid" | "high" | "elite";
+
+/** Broadcast colours by the number itself: red under 6, amber 6 to 7.4, green 7.5 and up, glowing at 9+. */
+export function ratingTone(r: number): RatingTone {
+  const x = Math.round(r * 10) / 10;
+  if (x >= 9) return "elite";
+  if (x >= 7.5) return "high";
+  if (x >= 6) return "mid";
+  return "low";
+}
+
+export const TONE_CLASSES: Record<RatingTone, string> = {
+  low: "bg-rate-low text-white",
+  mid: "bg-rate-mid text-accent-ink",
+  high: "bg-rate-high text-[#04140a]",
+  elite: "bg-gradient-to-br from-lion-hot to-rate-high text-[#04140a] shadow-[0_0_14px_rgb(255_204_77/0.65)]",
+};
+
 /** 7 shows as "7.0", like the football apps. */
 export function ratingText(r: number): string {
   return r.toFixed(1);

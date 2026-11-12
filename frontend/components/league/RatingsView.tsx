@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 
+import Tabs from "@/components/ui/Tabs";
 import { shortDate } from "@/lib/league";
 import { ratingsPath, type DayRatings } from "@/lib/ratings";
 import { useApi } from "@/lib/useApi";
@@ -20,26 +21,21 @@ export default function RatingsView({ date = null, session = null }: { date?: st
 
   return (
     <>
-      <div className="flex flex-wrap items-center gap-2">
-        <button className={`btn px-4 py-1.5 text-sm uppercase ${sess == null ? "btn-primary" : ""}`} onClick={() => setSess(null)}>
-          Day
-        </button>
-        {r?.sessions.map((s) => (
-          <button
-            key={s.id}
-            className={`btn px-4 py-1.5 text-sm uppercase ${sess === s.id ? "btn-primary" : ""}`}
-            onClick={() => {
-              setDay(r.date);
-              setSess(s.id);
-            }}
-          >
-            {sessionName(s.title)}
-          </button>
-        ))}
+      <div className="flex flex-wrap items-center gap-3">
+        <Tabs
+          label="Day or session"
+          tabs={[{ key: "day", label: "Day" }, ...(r?.sessions ?? []).map((x) => ({ key: String(x.id), label: sessionName(x.title) }))]}
+          value={sess == null ? "day" : String(sess)}
+          onChange={(k) => {
+            if (k === "day") return setSess(null);
+            if (r) setDay(r.date);
+            setSess(Number(k));
+          }}
+        />
         {r && (
           <span className="flex w-full items-center gap-2 sm:ml-auto sm:w-auto">
             <button
-              className="btn px-3 py-1.5 text-sm"
+              className="btn btn-ghost min-w-11 px-3"
               disabled={!r.previous}
               onClick={() => {
                 setDay(r.previous);
@@ -49,9 +45,9 @@ export default function RatingsView({ date = null, session = null }: { date?: st
             >
               &larr;
             </button>
-            <span className="min-w-36 flex-1 truncate text-center font-display text-lg uppercase">{r.date ? shortDate(r.date) : "No days yet"}</span>
+            <span className="min-w-36 flex-1 truncate text-center font-display text-xl font-extrabold uppercase">{r.date ? shortDate(r.date) : "No days yet"}</span>
             <button
-              className="btn px-3 py-1.5 text-sm"
+              className="btn btn-ghost min-w-11 px-3"
               disabled={!r.next}
               onClick={() => {
                 setDay(r.next);

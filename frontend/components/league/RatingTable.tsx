@@ -6,6 +6,8 @@ import { Fragment, useState } from "react";
 import { plural } from "@/lib/league";
 import { matchCount, type RatingBoard, type RatingRow } from "@/lib/ratings";
 
+import RankBadge from "@/components/ui/RankBadge";
+
 import RatingBadge from "./RatingBadge";
 import { matchPlayers } from "./SearchBox";
 import { TeamMark } from "./TeamBadge";
@@ -15,8 +17,9 @@ const FIRST = 15; // rows shown before "Show all"
 /** The Player of the Day (or Session): big, on top of the table. */
 export function StarPlayer({ row, label }: { row: RatingRow; label: string }) {
   return (
-    <div className="card relative overflow-hidden p-5 sm:p-6">
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgb(255_194_61/0.18),transparent_60%)]" />
+    <div className="card relative overflow-hidden border-t-4 border-lion p-5 sm:p-6">
+      <div className="hex-grid pointer-events-none absolute inset-0 opacity-60" />
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgb(245_165_36/0.22),transparent_60%)]" />
       <div className="relative flex items-center gap-4">
         {row.team && (
           <span className="hidden sm:block">
@@ -25,7 +28,7 @@ export function StarPlayer({ row, label }: { row: RatingRow; label: string }) {
         )}
         <div className="min-w-0 flex-1">
           <p className="eyebrow text-accent-2">★ {label}</p>
-          <p className="mt-1 truncate font-display text-2xl uppercase sm:text-4xl">{row.player}</p>
+          <p className="mt-1 truncate font-display text-3xl font-black uppercase sm:text-5xl">{row.player}</p>
           <p className="mt-1 text-sm text-muted">
             {[row.team?.name, matchCount(row.matches), plural(row.kills, "kill"), `best ${row.best.toFixed(1)}`]
               .filter(Boolean)
@@ -55,7 +58,7 @@ export default function RatingTable({ board, limit, query = "" }: { board: Ratin
         <table className="table">
           <thead>
             <tr>
-              <th className="w-10 px-2 py-2 text-left">#</th>
+              <th className="w-14 px-2 py-2 text-left">#</th>
               <th className="px-2 py-2 text-left">Player</th>
               <th className={`${cell} hidden sm:table-cell`}>Matches</th>
               <th className={`${cell} hidden sm:table-cell`}>Kills</th>
@@ -66,16 +69,18 @@ export default function RatingTable({ board, limit, query = "" }: { board: Ratin
             {rows.map((p) => (
               <Fragment key={p.player_id}>
                 <tr
-                  className={`cursor-pointer ${p.star ? "bg-[linear-gradient(90deg,rgb(255_194_61/0.10),transparent_60%)]" : ""}`}
+                  className={`cursor-pointer ${p.star ? "bg-[linear-gradient(90deg,rgb(246_197_68/0.14),transparent_60%)]" : ""}`}
                   onClick={() => setOpen(open === p.player_id ? null : p.player_id)}
                   aria-expanded={open === p.player_id}
                 >
-                  <td className={`px-2 py-2.5 font-display text-lg ${p.rank <= 3 ? "text-accent-2" : "text-muted"}`}>{p.rank}</td>
+                  <td className="px-2 py-2">
+                    <RankBadge rank={p.rank} />
+                  </td>
                   <td className="max-w-[13rem] px-2 py-2 sm:max-w-none">
                     <span className="flex min-w-0 items-center gap-2.5">
                       {p.team && <TeamMark team={p.team} />}
                       <span className="min-w-0">
-                        <span className="block truncate font-semibold">
+                        <span className="block truncate font-display text-base font-extrabold uppercase">
                           {p.player}
                           {p.star && <span className="ml-1.5 text-accent-2" title="Player of the Day">★</span>}
                         </span>

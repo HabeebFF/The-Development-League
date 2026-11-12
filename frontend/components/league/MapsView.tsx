@@ -3,6 +3,9 @@
 import Link from "next/link";
 import { useState } from "react";
 
+import EmptyState from "@/components/ui/EmptyState";
+import { mapArt } from "@/components/ui/MatchCard";
+import Tabs from "@/components/ui/Tabs";
 import { mapPeriodLabel, mapStatsPath, type MapLeader, type MapPeriod, type MapStats } from "@/lib/maps";
 import { useApi } from "@/lib/useApi";
 
@@ -27,41 +30,55 @@ export default function MapsView() {
 
   return (
     <>
-      <div className="flex flex-wrap gap-2" role="tablist" aria-label="Maps">
-        {(s?.maps ?? []).map((m) => (
-          <button
-            key={m.slug}
-            role="tab"
-            aria-selected={current === m.slug}
-            className={`btn px-4 py-1.5 text-sm uppercase ${current === m.slug ? "btn-primary" : ""}`}
-            onClick={() => setMap(m.slug)}
-          >
-            {m.name}
-            <span className="ml-1.5 opacity-70">{m.matches}</span>
-          </button>
-        ))}
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5" role="tablist" aria-label="Maps">
+        {(s?.maps ?? []).map((m) => {
+          const on = current === m.slug;
+          const art = mapArt(m.slug);
+          return (
+            <button
+              key={m.slug}
+              role="tab"
+              aria-selected={on}
+              className={`group relative flex min-h-16 items-end overflow-hidden border px-3 py-2 text-left transition-colors ${
+                on ? "border-lion shadow-[0_0_18px_rgb(245_165_36/0.35)]" : "border-line hover:border-lion/60"
+              }`}
+              style={{ clipPath: "polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 10px 100%, 0 calc(100% - 10px))" }}
+              onClick={() => setMap(m.slug)}
+            >
+              {art && (
+                <span
+                  aria-hidden
+                  className={`absolute inset-0 bg-cover bg-center transition-opacity ${on ? "opacity-70" : "opacity-35 group-hover:opacity-55"}`}
+                  style={{ backgroundImage: `url(${art})` }}
+                />
+              )}
+              <span aria-hidden className="absolute inset-0 bg-[linear-gradient(180deg,transparent,rgb(7_8_12/0.85))]" />
+              <span className="relative flex w-full items-baseline justify-between gap-2">
+                <span className={`font-display text-lg leading-none font-black uppercase ${on ? "text-accent-hot" : ""}`}>{m.name}</span>
+                <span className="text-xs text-muted tabular-nums">{m.matches}</span>
+              </span>
+            </button>
+          );
+        })}
       </div>
 
-      <div className="mt-3 flex flex-wrap items-center gap-2">
-        {PERIODS.map((p) => (
-          <button
-            key={p.key}
-            className={`btn px-3 py-1 text-xs uppercase ${period === p.key ? "border-accent text-accent" : ""}`}
-            onClick={() => {
-              setPeriod(p.key);
-              setAt(null);
-            }}
-          >
-            {p.label}
-          </button>
-        ))}
+      <div className="mt-4 flex flex-wrap items-center gap-3">
+        <Tabs
+          label="Period"
+          tabs={PERIODS}
+          value={period}
+          onChange={(k) => {
+            setPeriod(k);
+            setAt(null);
+          }}
+        />
         {s && s.period !== "all" && (
           <span className="flex w-full items-center gap-2 sm:ml-auto sm:w-auto">
-            <button className="btn px-3 py-1.5 text-sm" disabled={!s.previous} onClick={() => setAt(s.previous)} aria-label="Earlier">
+            <button className="btn btn-ghost min-w-11 px-3" disabled={!s.previous} onClick={() => setAt(s.previous)} aria-label="Earlier">
               &larr;
             </button>
             <span className="min-w-36 flex-1 truncate text-center font-display text-lg uppercase">{mapPeriodLabel(s)}</span>
-            <button className="btn px-3 py-1.5 text-sm" disabled={!s.next} onClick={() => setAt(s.next)} aria-label="Later">
+            <button className="btn btn-ghost min-w-11 px-3" disabled={!s.next} onClick={() => setAt(s.next)} aria-label="Later">
               &rarr;
             </button>
           </span>
@@ -73,18 +90,20 @@ export default function MapsView() {
           <Loading error={data.error} count={8} />
         </div>
       ) : !s.map ? (
-        <p className="mt-6 text-sm text-muted">No maps yet.</p>
+        <div className="mt-6">
+          <EmptyState title="No maps yet">Map leaders show up after the first match is uploaded.</EmptyState>
+        </div>
       ) : (
         <div className="mt-6 space-y-10">
-          <section className="card relative overflow-hidden px-5 py-6">
-            {s.map.image && (
+          <section className="card relative overflow-hidden px-5 py-10 sm:py-14">
+            {(s.map.image || mapArt(s.map.slug)) && (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={s.map.image} alt="" className="pointer-events-none absolute inset-0 h-full w-full object-cover opacity-25" />
+              <img src={s.map.image || mapArt(s.map.slug)!} alt="" className="pointer-events-none absolute inset-0 h-full w-full object-cover opacity-45" />
             )}
             <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(90deg,var(--panel)_20%,transparent)]" />
             <div className="relative">
               <p className="eyebrow">{mapPeriodLabel(s)}</p>
-              <h2 className="font-display text-5xl leading-none uppercase">{s.map.name}</h2>
+              <h2 className="font-display text-6xl leading-none font-black uppercase sm:text-7xl">{s.map.name}</h2>
               <p className="mt-2 text-sm text-muted">
                 {s.matches} {s.matches === 1 ? "match" : "matches"} · {s.kills} kills
               </p>
@@ -92,7 +111,7 @@ export default function MapsView() {
           </section>
 
           {s.matches === 0 ? (
-            <p className="text-sm text-muted">No matches on {s.map.name} in this period.</p>
+            <EmptyState title={`Nothing on ${s.map.name}`}>No matches on {s.map.name} in this period.</EmptyState>
           ) : (
             <>
               <section>

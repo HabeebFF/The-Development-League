@@ -3,7 +3,7 @@
 import Link from "next/link";
 
 import { shortDate } from "@/lib/league";
-import { BAND_CLASSES, matchCount, ratingText, type PlayerRatings } from "@/lib/ratings";
+import { matchCount, ratingText, ratingTone, TONE_CLASSES, type PlayerRatings } from "@/lib/ratings";
 import { useApi } from "@/lib/useApi";
 
 import RatingBadge from "./RatingBadge";
@@ -53,7 +53,7 @@ export default function RatingHistory({ id }: { id: string }) {
         {days.map((d) => (
           <div key={d.date} className="flex h-full min-w-0 max-w-16 flex-1 flex-col items-center justify-end gap-1" title={`${shortDate(d.date)}: ${ratingText(d.rating)} from ${matchCount(d.matches)}`}>
             <span className="text-xs font-bold tabular-nums">{ratingText(d.rating)}</span>
-            <span className={`w-full max-w-10 rounded-t-sm ${BAND_CLASSES[d.band]}`} style={{ height: `${Math.max(6, ((d.rating - 3) / 7) * 100)}%` }} />
+            <span className={`w-full max-w-10 rounded-t-sm ${TONE_CLASSES[ratingTone(d.rating)]}`} style={{ height: `${Math.max(6, ((d.rating - 3) / 7) * 100)}%` }} />
             <span className="w-full truncate text-center text-[10px] text-muted">{dayMonth(d.date)}</span>
           </div>
         ))}
