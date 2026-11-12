@@ -21,11 +21,11 @@ export default function MarketCard({ market, now, fold = true }: { market: Marke
   const folded = fold && !all && choices.length > FOLDED + 1;
   const shown = folded ? choices.slice(0, FOLDED) : choices;
   return (
-    <div className="card p-4">
+    <div className="card card-hover p-4">
       <Link href={`/predict/markets/${market.id}`} className="flex items-start gap-3">
         <div className="min-w-0 flex-1">
           <p className="eyebrow">{market.category_label}</p>
-          <p className="mt-0.5 font-display text-xl leading-tight uppercase hover:text-accent">{market.title}</p>
+          <p className="mt-0.5 font-display text-xl leading-tight font-extrabold uppercase hover:text-accent-hot">{market.title}</p>
         </div>
         <span className={`chip shrink-0 ${open ? "text-ok" : "text-muted"}`}>{open ? closesIn(market.closes_at, now) : MARKET_STATUS[market.status]}</span>
       </Link>
@@ -67,13 +67,13 @@ function Choice({ market, outcome: o }: { market: Market; outcome: Outcome }) {
       aria-pressed={on}
       onClick={() => slip.toggle(toPick(market, o))}
       className={`flex min-h-11 items-center gap-2 border px-2.5 py-1.5 text-left text-sm ${
-        on ? "border-accent bg-accent/15" : won ? "border-ok bg-panel-2" : "border-line bg-panel-2"
+        on ? "border-lion bg-lion/15 shadow-[0_0_12px_rgb(245_165_36/0.35)]" : won ? "border-ok bg-panel-2" : "border-line bg-panel-2"
       } ${o.is_active ? "" : "opacity-40"} ${can ? "hover:border-accent" : "cursor-default"}`}
     >
       {o.team && <TeamMark team={o.team} />}
       <span className="min-w-0 flex-1 leading-tight">{o.label}</span>
       {won && <span className="chip text-ok">Won</span>}
-      <span className="font-display text-lg text-accent">{showOdds(o.odds, format)}</span>
+      <span className="num text-xl text-accent-hot">{showOdds(o.odds, format)}</span>
     </button>
   );
 }
@@ -119,12 +119,12 @@ function RowChoice({ market, outcome: o }: { market: Market; outcome: Outcome })
       aria-label={`${o.label}, odds ${showOdds(o.odds, format)}`}
       onClick={() => slip.toggle(toPick(market, o))}
       className={`flex min-h-11 items-center gap-2 border px-2.5 py-1.5 text-left text-sm ${
-        on ? "border-accent bg-accent/15" : won ? "border-ok bg-panel-2" : "border-line bg-panel-2"
+        on ? "border-lion bg-lion/15 shadow-[0_0_12px_rgb(245_165_36/0.35)]" : won ? "border-ok bg-panel-2" : "border-line bg-panel-2"
       } ${o.is_active ? "" : "opacity-40"} ${can ? "hover:border-accent" : "cursor-default"}`}
     >
       {o.team && <TeamMark team={o.team} />}
       <span className="min-w-0 flex-1 truncate">{short(o.label)}</span>
-      <span className="font-display text-lg text-accent">{showOdds(o.odds, format)}</span>
+      <span className="num text-xl text-accent-hot">{showOdds(o.odds, format)}</span>
     </button>
   );
 }

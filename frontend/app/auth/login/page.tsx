@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 
 import GoogleSignIn from "@/components/auth/GoogleSignIn";
+import AuthShell from "@/components/ui/AuthShell";
 
 import LoginForm from "./LoginForm";
 import NoAccount from "./NoAccount";
@@ -12,11 +13,10 @@ export default async function LoginPage({ searchParams }: PageProps<"/auth/login
   // Only same-site paths: "//evil.test" would leave the site.
   const target = typeof next === "string" && /^\/(?!\/)/.test(next) ? next : null;
   return (
-    <section className="mx-auto max-w-sm px-4 py-16">
-      <h1 className="font-display text-3xl uppercase">Sign in</h1>
+    <AuthShell eyebrow="Welcome back" title="Sign in">
       <LoginForm next={target} />
       <GoogleSignIn next={target} text="signin_with" />
       <NoAccount />
-    </section>
+    </AuthShell>
   );
 }
