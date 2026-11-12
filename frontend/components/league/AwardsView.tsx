@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
+import Tabs from "@/components/ui/Tabs";
+import { AWARD_ICON } from "@/components/ui/TrophyCard";
 import { headline, periodLabel, unit, type Award, type Awards } from "@/lib/awards";
 import { useApi } from "@/lib/useApi";
 
@@ -27,26 +29,26 @@ export default function AwardsView() {
 
   return (
     <>
-      <div className="flex flex-wrap items-center gap-2">
-        {(["week", "month"] as const).map((p) => (
-          <button
-            key={p}
-            className={`btn px-4 py-1.5 text-sm uppercase ${period === p ? "btn-primary" : ""}`}
-            onClick={() => {
-              setPeriod(p);
-              setDate(null);
-            }}
-          >
-            {p === "week" ? "Week" : "Month"}
-          </button>
-        ))}
+      <div className="flex flex-wrap items-center gap-3">
+        <Tabs
+          label="Period"
+          tabs={[
+            { key: "week", label: "Week" },
+            { key: "month", label: "Month" },
+          ]}
+          value={period}
+          onChange={(p) => {
+            setPeriod(p);
+            setDate(null);
+          }}
+        />
         {data.data && (
-          <span className="ml-auto flex items-center gap-2">
-            <button className="btn px-3 py-1.5 text-sm" onClick={() => setDate(data.data!.previous)} aria-label="Earlier">
+          <span className="flex w-full items-center gap-2 sm:ml-auto sm:w-auto">
+            <button className="btn btn-ghost min-w-11 px-3" onClick={() => setDate(data.data!.previous)} aria-label="Earlier">
               &larr;
             </button>
-            <span className="min-w-36 text-center font-display text-lg uppercase">{periodLabel(data.data)}</span>
-            <button className="btn px-3 py-1.5 text-sm" disabled={!data.data.next} onClick={() => setDate(data.data!.next)} aria-label="Later">
+            <span className="min-w-36 flex-1 truncate text-center font-display text-xl font-extrabold uppercase">{periodLabel(data.data)}</span>
+            <button className="btn btn-ghost min-w-11 px-3" disabled={!data.data.next} onClick={() => setDate(data.data!.next)} aria-label="Later">
               &rarr;
             </button>
           </span>
@@ -64,18 +66,18 @@ export default function AwardsView() {
               ? `No matches were played this ${period}.`
               : `From ${data.data.matches} match${data.data.matches === 1 ? "" : "es"} this ${period}.`}
           </p>
-          <h2 className="section-title mt-8">Team awards</h2>
-          <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {data.data.team_awards.map((a) => (
-              <AwardCard key={a.key} award={a} />
-            ))}
-          </div>
-          <h2 className="section-title mt-10">Player awards</h2>
+          <h2 className="section-title mt-8">Trophy case</h2>
           <div className="mt-4 grid gap-4 sm:grid-cols-2">
             <div className="sm:col-span-2">
               <AwardCard award={data.data.mvp} />
             </div>
             {data.data.awards.map((a) => (
+              <AwardCard key={a.key} award={a} />
+            ))}
+          </div>
+          <h2 className="section-title mt-12">Team awards</h2>
+          <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {data.data.team_awards.map((a) => (
               <AwardCard key={a.key} award={a} />
             ))}
           </div>
@@ -96,9 +98,19 @@ export function AwardCard({ award, compact = false }: { award: Award; compact?: 
   const [winner, ...rest] = award.top;
   const isTeam = winner ? winner.player === null : false;
   return (
-    <div className="card relative overflow-hidden p-4 sm:p-5">
-      <span className="pointer-events-none absolute inset-0 bg-[linear-gradient(160deg,rgb(245_165_36/0.14),transparent_55%)]" />
-      <p className="relative text-xs font-bold tracking-widest text-accent uppercase">{award.title}</p>
+    <div className={`card relative overflow-hidden border-t-4 p-4 sm:p-5 ${winner ? "border-lion" : "border-line"}`}>
+      <span className="pointer-events-none absolute inset-0 bg-[radial-gradient(80%_60%_at_100%_0%,rgb(245_165_36/0.16),transparent_70%)]" />
+      <div className="relative flex items-start justify-between gap-3">
+        <p className="eyebrow">{award.title}</p>
+        <span
+          className="flex h-11 w-11 shrink-0 items-center justify-center bg-accent/[0.12] text-accent"
+          style={{ clipPath: "polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%)" }}
+        >
+          <svg viewBox="0 0 24 24" className="h-5 w-5" fill="currentColor" aria-hidden>
+            <path d={AWARD_ICON[award.key] ?? AWARD_ICON.player} />
+          </svg>
+        </span>
+      </div>
       {award.blocked ? (
         <p className="relative mt-3 text-sm text-muted">{award.blocked}</p>
       ) : !winner ? (
@@ -119,7 +131,7 @@ export function AwardCard({ award, compact = false }: { award: Award; compact?: 
             size={compact ? "md" : "lg"}
           />
           <div className="min-w-0 flex-1">
-            <p className={`truncate font-display uppercase ${compact ? "text-xl" : "text-3xl"}`}>{winner.player ?? winner.team}</p>
+            <p className={`truncate font-display font-black uppercase ${compact ? "text-xl" : "text-3xl"}`}>{winner.player ?? winner.team}</p>
             {winner.team_slug ? (
               <Link href={`/teams/${winner.team_slug}`} className="block truncate text-sm text-muted hover:text-accent">
                 {isTeam ? "Team page" : winner.team}
@@ -129,7 +141,7 @@ export function AwardCard({ award, compact = false }: { award: Award; compact?: 
             )}
           </div>
           <div className="text-right">
-            <p className={`font-display leading-none text-accent ${compact ? "text-3xl" : "text-5xl"}`}>{headline(award.key, winner.value)}</p>
+            <p className={`num leading-none text-accent-hot ${compact ? "text-3xl" : "text-5xl"}`}>{headline(award.key, winner.value)}</p>
             <p className="text-[10px] font-bold tracking-widest text-muted uppercase">{unit(award.key, winner.value)}</p>
           </div>
         </div>
@@ -144,7 +156,7 @@ export function AwardCard({ award, compact = false }: { award: Award; compact?: 
                 <Link
                   key={id}
                   href={`/matches/${id}`}
-                  className="rounded border border-line px-1.5 py-0.5 text-xs text-muted hover:border-accent hover:text-white"
+                  className="chip transition-colors hover:border-accent hover:text-text"
                 >
                   Match {i + 1}
                 </Link>
