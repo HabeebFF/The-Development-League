@@ -4,12 +4,12 @@ import Link from "next/link";
 
 import type { KillList } from "@/lib/kills";
 import { ratingsPath, type DayRatings } from "@/lib/ratings";
-import { dayName, shortDate, type MatchDayDetail } from "@/lib/league";
+import MatchCard from "@/components/ui/MatchCard";
+import { dayName, mapName, shortDate, type MatchDayDetail } from "@/lib/league";
 import { useApi } from "@/lib/useApi";
 
 import KillTable from "./KillTable";
 import Loading, { Skeleton } from "./Loading";
-import MatchDayCard from "./MatchDayCard";
 import PageHeader from "./PageHeader";
 import RatingTable, { StarPlayer } from "./RatingTable";
 import StandingsTable from "./StandingsTable";
@@ -36,20 +36,31 @@ export default function MatchDayView({ id }: { id: number }) {
         <Link href="/results" className="text-xs font-bold tracking-widest text-muted uppercase hover:text-accent">
           &larr; All results
         </Link>
-        <div className="mt-4 grid gap-10 lg:grid-cols-[3fr_2fr] [&>*]:min-w-0">
-          <section>
-            <h2 className="section-title">Day table</h2>
-            <div className="mt-4">
-              <StandingsTable rows={d.standings} />
-            </div>
-          </section>
-          <section>
-            <h2 className="section-title">Matches</h2>
-            <div className="mt-4">
-              <MatchDayCard day={d} link={false} />
-            </div>
-          </section>
-        </div>
+        <section className="mt-6">
+          <h2 className="section-title">Matches</h2>
+          <ul className="stagger mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+            {[...d.matches]
+              .sort((a, b) => a.number - b.number)
+              .map((m) => (
+                <li key={m.id}>
+                  {m.played ? (
+                    <MatchCard href={`/matches/${m.id}`} map={m.map} label={`M${m.number}`} booyah={m.booyah?.name} />
+                  ) : (
+                    <div className="card p-3.5 text-sm text-muted">
+                      <span className="block font-display text-xl font-black text-text uppercase">{mapName(m.map)}</span>
+                      M{m.number} · Not played yet
+                    </div>
+                  )}
+                </li>
+              ))}
+          </ul>
+        </section>
+        <section className="mt-10">
+          <h2 className="section-title">Day table</h2>
+          <div className="mt-4">
+            <StandingsTable rows={d.standings} />
+          </div>
+        </section>
         {ratings.data && ratings.data.matches > 0 && (
           <section className="mt-10">
             <div className="flex items-baseline justify-between gap-3">

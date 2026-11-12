@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { BooyahBadge, mapArt } from "@/components/ui/MatchCard";
 import type { MatchDay } from "@/lib/api";
 import { dayName, mapName, shortDate } from "@/lib/league";
 
@@ -32,14 +33,17 @@ export default function MatchDayCard({ day, link = true }: { day: MatchDay; link
         {day.matches.map((m) => (
           <li key={m.id}>
             {m.played ? (
-              <Link href={`/matches/${m.id}`} className="group flex items-center gap-3 px-4 py-3 text-sm transition-colors hover:bg-white/[0.03]">
+              <Link href={`/matches/${m.id}`} className="group flex min-h-11 items-center gap-3 px-4 py-2.5 text-sm transition-colors hover:bg-white/[0.03]">
                 <span className="w-9 shrink-0 font-display text-lg text-muted group-hover:text-accent">M{m.number}</span>
+                <MapThumb map={m.map} />
                 <span className="w-20 shrink-0 text-xs font-semibold tracking-wide text-muted uppercase">{mapName(m.map)}</span>
                 <span className="min-w-0 flex-1 truncate text-right">
                   {m.booyah ? (
                     <>
-                      <span className="mr-2 font-display text-accent-2 uppercase">Booyah</span>
-                      <span className="font-semibold">{m.booyah.name}</span>
+                      <span className="mr-2 align-middle">
+                        <BooyahBadge />
+                      </span>
+                      <span className="font-display text-base font-bold text-accent-hot uppercase">{m.booyah.name}</span>
                     </>
                   ) : (
                     <span className="text-muted">Played</span>
@@ -60,5 +64,17 @@ export default function MatchDayCard({ day, link = true }: { day: MatchDay; link
         ))}
       </ul>
     </div>
+  );
+}
+
+/** A small strip of the map's art, hidden on the narrowest phones. */
+function MapThumb({ map }: { map: string | null }) {
+  const art = mapArt(map);
+  return (
+    <span
+      aria-hidden
+      className="hidden h-7 w-11 shrink-0 bg-panel-2 bg-cover bg-center min-[400px]:block"
+      style={{ backgroundImage: art ? `url(${art})` : undefined, clipPath: "polygon(4px 0, 100% 0, calc(100% - 4px) 100%, 0 100%)" }}
+    />
   );
 }
