@@ -37,7 +37,7 @@ export default function PlayerCard({
         fontSize: `${size * 16}px`,
         color: ink,
         filter: totw
-          ? "drop-shadow(0 0 0.9em rgb(255 90 31 / 0.55))"
+          ? "drop-shadow(0 0 0.9em rgb(245 165 36 / 0.55))"
           : totm
             ? "drop-shadow(0 0 0.9em rgb(242 193 78 / 0.5))"
             : rising
@@ -62,7 +62,7 @@ export default function PlayerCard({
           <span className="absolute inset-0 bg-[radial-gradient(circle_at_70%_25%,rgb(242_193_78/0.35),transparent_55%),radial-gradient(circle_at_20%_85%,rgb(150_80_255/0.35),transparent_60%)]" />
         )}
         {totw && (
-          <span className="absolute inset-0 bg-[radial-gradient(circle_at_70%_25%,rgb(255_90_31/0.45),transparent_60%)]" />
+          <span className="absolute inset-0 bg-[radial-gradient(circle_at_70%_25%,rgb(245_165_36/0.45),transparent_60%)]" />
         )}
         {rising && (
           <span className="absolute inset-0 bg-[radial-gradient(circle_at_70%_25%,rgb(62_230_176/0.4),transparent_60%),linear-gradient(0deg,rgb(62_230_176/0.18),transparent_40%)]" />

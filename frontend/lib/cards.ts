@@ -236,7 +236,7 @@ export const TIER_COLORS: Record<
   gold: ["#f6d36b", "#a8781c", "#1d1405", "#fff3c4"],
   silver: ["#e3e8ef", "#7d8796", "#11151c", "#ffffff"],
   bronze: ["#e0a46d", "#7b4520", "#1e0f05", "#ffd9b5"],
-  totw: ["#1a1d29", "#07080c", "#f2f3f7", "#ff5a1f"],
+  totw: ["#1a1d29", "#07080c", "#f2f3f7", "#f5a524"],
   totm: ["#24124a", "#090414", "#f7e6b4", "#f2c14e"],
   rising: ["#0f6b5f", "#04201f", "#e9fff8", "#3ee6b0"],
   icon: ["#fbf8ee", "#cdb67a", "#241a04", "#a8811f"],

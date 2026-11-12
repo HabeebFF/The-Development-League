@@ -77,7 +77,7 @@ export default function HomeView() {
   return (
     <>
       <section className="relative overflow-hidden border-b border-line">
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(50rem_26rem_at_75%_0%,rgb(255_90_31/0.28),transparent_65%)]" />
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(50rem_26rem_at_75%_0%,rgb(245_165_36/0.28),transparent_65%)]" />
         <div className="pointer-events-none absolute -right-24 top-0 h-full w-2/3 -skew-x-[20deg] bg-[repeating-linear-gradient(90deg,rgb(255_255_255/0.03)_0_2px,transparent_2px_18px)]" />
         <div className="pointer-events-none absolute -right-6 -bottom-10 font-display text-[11rem] leading-none text-white/[0.03] select-none sm:text-[18rem]">
           TDL
@@ -194,11 +194,11 @@ export default function HomeView() {
                   {...(m.vod_url ? { target: "_blank", rel: "noreferrer" } : {})}
                   className="card card-hover group flex aspect-[4/3] flex-col justify-between overflow-hidden p-3 sm:p-4"
                 >
-                  <span className="pointer-events-none absolute inset-0 bg-[linear-gradient(160deg,rgb(255_90_31/0.18),transparent_55%)] opacity-60 transition-opacity group-hover:opacity-100" />
+                  <span className="pointer-events-none absolute inset-0 bg-[linear-gradient(160deg,rgb(245_165_36/0.18),transparent_55%)] opacity-60 transition-opacity group-hover:opacity-100" />
                   <span className="relative flex items-start justify-between gap-2">
                     <span className="chip">{dayName(m.day)}</span>
                     <span
-                      className="flex h-9 w-9 items-center justify-center bg-accent text-white shadow-[0_0_16px_rgb(255_90_31/0.6)] transition-transform group-hover:scale-110"
+                      className="flex h-9 w-9 items-center justify-center bg-accent text-accent-ink shadow-[0_0_16px_rgb(245_165_36/0.6)] transition-transform group-hover:scale-110"
                       style={{ clipPath: "polygon(0 0, 100% 50%, 0 100%)" }}
                       aria-hidden
                     />

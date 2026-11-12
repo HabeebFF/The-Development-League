@@ -147,7 +147,7 @@ export default function TeamView({ slug }: { slug: string }) {
   const record = table.data?.rows.find((r) => r.team.id === t.id);
   const recent = matches.data ? rows(matches.data) : [];
   const socials = Object.entries(t.socials ?? {}).filter(([, url]) => /^https?:\/\//.test(url));
-  const colour = t.primary_color || "#ff5a1f";
+  const colour = t.primary_color || "#f5a524";
 
   return (
     <>

@@ -165,7 +165,7 @@ function Tab({ on, onClick, big, children }: { on: boolean; onClick: () => void;
       className={`relative shrink-0 px-3 py-2 font-display uppercase transition-colors ${big ? "text-xl" : "text-lg"} ${on ? "text-white" : "text-muted hover:text-white"}`}
     >
       {children}
-      {on && <span className="absolute inset-x-2 bottom-0 h-0.5 bg-accent shadow-[0_0_10px_rgb(255_90_31)]" />}
+      {on && <span className="absolute inset-x-2 bottom-0 h-0.5 bg-accent shadow-[0_0_10px_rgb(245_165_36)]" />}
     </button>
   );
 }

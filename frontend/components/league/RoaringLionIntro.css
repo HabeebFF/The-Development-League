@@ -44,7 +44,7 @@
   position: absolute;
   inset: 0;
   background:
-    radial-gradient(42% 38% at 50% 46%, rgb(255 90 31 / 0.55), transparent 70%),
+    radial-gradient(42% 38% at 50% 46%, rgb(245 165 36 / 0.55), transparent 70%),
     radial-gradient(70% 50% at 50% 100%, rgb(255 138 61 / 0.35), transparent 70%),
     radial-gradient(120% 80% at 50% 50%, transparent 40%, #000 100%);
   animation: lion-glow 1.2s ease-out 0.15s both, lion-pulse 2.4s ease-in-out 1.45s infinite;
@@ -85,7 +85,7 @@
   line-height: 1;
   letter-spacing: -0.02em;
   color: transparent;
-  -webkit-text-stroke: 2px rgb(255 90 31 / 0.22);
+  -webkit-text-stroke: 2px rgb(245 165 36 / 0.22);
   white-space: nowrap;
   animation: lion-ghost 4.3s ease-out 0.2s both;
 }
@@ -122,7 +122,7 @@
   max-width: none;
   translate: -50% 0;
   /* No mask here: a mask would clip the glow into a box. .lion-floor fades the bottom. */
-  filter: drop-shadow(0 0 18px rgb(255 90 31 / 0.55)) drop-shadow(0 0 2px rgb(255 160 80 / 0.9));
+  filter: drop-shadow(0 0 18px rgb(245 165 36 / 0.55)) drop-shadow(0 0 2px rgb(255 160 80 / 0.9));
   animation: lion-rise 1.25s cubic-bezier(0.16, 1, 0.3, 1) 0.25s both;
   pointer-events: none;
 }
@@ -134,11 +134,11 @@
   }
   45% {
     opacity: 1;
-    filter: blur(2px) brightness(1.6) drop-shadow(0 0 40px rgb(255 90 31 / 0.9));
+    filter: blur(2px) brightness(1.6) drop-shadow(0 0 40px rgb(245 165 36 / 0.9));
   }
   100% {
     transform: translateY(0) scale(1);
-    filter: drop-shadow(0 0 18px rgb(255 90 31 / 0.55)) drop-shadow(0 0 2px rgb(255 160 80 / 0.9));
+    filter: drop-shadow(0 0 18px rgb(245 165 36 / 0.55)) drop-shadow(0 0 2px rgb(255 160 80 / 0.9));
   }
 }
 
@@ -154,7 +154,7 @@
 .lion-flash {
   position: absolute;
   inset: 0;
-  background: radial-gradient(circle at 50% 70%, rgb(255 230 200 / 0.9), rgb(255 90 31 / 0.5) 35%, transparent 70%);
+  background: radial-gradient(circle at 50% 70%, rgb(255 230 200 / 0.9), rgb(245 165 36 / 0.5) 35%, transparent 70%);
   opacity: 0;
   animation: lion-flash 0.7s ease-out 1.42s both;
   pointer-events: none;
@@ -183,7 +183,7 @@
   letter-spacing: 0.6em;
   margin-right: -0.6em;
   color: #fff;
-  text-shadow: 0 0 18px rgb(255 90 31 / 0.8);
+  text-shadow: 0 0 18px rgb(245 165 36 / 0.8);
   animation: lion-the 0.6s cubic-bezier(0.16, 1, 0.3, 1) 0.95s both;
 }
 @keyframes lion-the {
@@ -208,12 +208,12 @@
 .lion-roaring,
 .lion-lion {
   display: block;
-  background: linear-gradient(100deg, #fff4d6 0%, #ffc23d 28%, #ff5a1f 55%, #c81e00 80%, #ffc23d 100%);
+  background: linear-gradient(100deg, #fff4d6 0%, #ffc23d 28%, #f5a524 55%, #c81e00 80%, #ffc23d 100%);
   background-size: 220% 100%;
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
-  filter: drop-shadow(0 4px 0 rgb(0 0 0 / 0.6)) drop-shadow(0 0 24px rgb(255 90 31 / 0.55));
+  filter: drop-shadow(0 4px 0 rgb(0 0 0 / 0.6)) drop-shadow(0 0 24px rgb(245 165 36 / 0.55));
 }
 .lion-roaring {
   animation: lion-slam 0.5s cubic-bezier(0.2, 1.4, 0.4, 1) 1.15s both, lion-burn 2.6s linear 1.65s infinite;
@@ -236,8 +236,8 @@
   width: min(70vw, 26rem);
   height: 3px;
   margin-top: 0.9rem;
-  background: linear-gradient(90deg, transparent, #ff5a1f 20%, #ffc23d 50%, #ff5a1f 80%, transparent);
-  box-shadow: 0 0 14px rgb(255 90 31 / 0.9);
+  background: linear-gradient(90deg, transparent, #f5a524 20%, #ffc23d 50%, #f5a524 80%, transparent);
+  box-shadow: 0 0 14px rgb(245 165 36 / 0.9);
   transform-origin: center;
   animation: lion-bar 0.6s cubic-bezier(0.16, 1, 0.3, 1) 1.7s both;
 }
@@ -254,7 +254,7 @@
   animation: lion-sub 0.6s ease-out 1.95s both;
 }
 .lion-sub b {
-  color: #ff5a1f;
+  color: #f5a524;
 }
 @keyframes lion-sub {
   from { opacity: 0; transform: translateY(8px); }
@@ -279,7 +279,7 @@
 }
 .lion-skip:hover {
   color: #fff;
-  border-color: #ff5a1f;
+  border-color: #f5a524;
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -98,7 +98,7 @@ export default function SeasonSetup() {
                 </button>
               </form>
               {season.is_active ? (
-                <span className="bg-accent px-2 py-1 text-xs font-semibold text-white">Current season</span>
+                <span className="bg-accent px-2 py-1 text-xs font-semibold text-accent-ink">Current season</span>
               ) : (
                 <button
                   className="btn px-2 py-1 text-xs"

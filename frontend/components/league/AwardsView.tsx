@@ -97,7 +97,7 @@ export function AwardCard({ award, compact = false }: { award: Award; compact?: 
   const isTeam = winner ? winner.player === null : false;
   return (
     <div className="card relative overflow-hidden p-4 sm:p-5">
-      <span className="pointer-events-none absolute inset-0 bg-[linear-gradient(160deg,rgb(255_90_31/0.14),transparent_55%)]" />
+      <span className="pointer-events-none absolute inset-0 bg-[linear-gradient(160deg,rgb(245_165_36/0.14),transparent_55%)]" />
       <p className="relative text-xs font-bold tracking-widest text-accent uppercase">{award.title}</p>
       {award.blocked ? (
         <p className="relative mt-3 text-sm text-muted">{award.blocked}</p>

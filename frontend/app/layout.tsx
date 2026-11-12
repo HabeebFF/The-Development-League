@@ -1,9 +1,9 @@
 import type { Metadata, Viewport } from "next";
 import { Barlow_Condensed, Inter } from "next/font/google";
-import Link from "next/link";
 
 import { AuthGate, AuthProvider } from "@/components/Auth";
 import PageTracker from "@/components/PageTracker";
+import SiteFooter from "@/components/SiteFooter";
 import SiteNav from "@/components/SiteNav";
 import RoaringLionIntro from "@/components/league/RoaringLionIntro";
 import { INTRO_HEAD_SCRIPT } from "@/components/league/introScript";
@@ -11,7 +11,7 @@ import { INTRO_HEAD_SCRIPT } from "@/components/league/introScript";
 import "./globals.css";
 
 const body = Inter({ variable: "--font-body", subsets: ["latin"] });
-const display = Barlow_Condensed({ variable: "--font-display", weight: ["600", "700", "800"], subsets: ["latin"] });
+const display = Barlow_Condensed({ variable: "--font-display", weight: ["600", "700", "800", "900"], subsets: ["latin"] });
 
 export const metadata: Metadata = {
   title: { default: "The Development League", template: "%s | The Development League" },
@@ -35,30 +35,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
           <main className="flex-1">
             <AuthGate>{children}</AuthGate>
           </main>
-        <footer className="border-t border-line">
-          <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-6 text-xs text-muted">
-            <span className="font-display text-sm tracking-wide uppercase">
-              The Development <span className="text-accent">League</span>
-            </span>
-            <span className="flex gap-4">
-              <Link href="/standings" className="hover:text-white">
-                Standings
-              </Link>
-              <Link href="/results" className="hover:text-white">
-                Results
-              </Link>
-              <Link href="/teams" className="hover:text-white">
-                Teams
-              </Link>
-              <Link href="/staff" className="hover:text-white">
-                Staff
-              </Link>
-              <Link href="/privacy" className="hover:text-white">
-                Privacy
-              </Link>
-            </span>
-          </div>
-        </footer>
+          <SiteFooter />
         </AuthProvider>
       </body>
     </html>

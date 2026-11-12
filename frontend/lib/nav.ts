@@ -66,3 +66,6 @@ export function isActive(path: string, href: string): boolean {
 export function groupActive(path: string, g: NavGroup): boolean {
   return isActive(path, g.href) || !!g.items?.some((i) => isActive(path, i.href));
 }
+
+/** The league's social accounts, shown in the footer. Add one here and its icon appears. */
+export const SOCIALS: { label: "Instagram" | "TikTok" | "YouTube" | "X" | "Discord" | "WhatsApp"; href: string }[] = [];
