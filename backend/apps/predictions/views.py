@@ -60,7 +60,15 @@ from .models import (
 )
 from .multiples import max_picks, max_return, place_multiple, quote
 from .odds import MAX_MATCHES_LEFT, suggest_odds
-from .services import CoinError, Kind, can_play, initial_coins, post_entry, wallet_for
+from .services import (
+    CoinError,
+    Kind,
+    can_play,
+    daily_bonus,
+    initial_coins,
+    post_entry,
+    wallet_for,
+)
 
 
 class PredictionsOn(BasePermission):
@@ -106,15 +114,20 @@ class EntrySerializer(serializers.ModelSerializer):
 
 
 class WalletView(APIView):
-    """GET: my balance. The first visit creates the wallet with the starting coins."""
+    """GET: my balance. The first visit creates the wallet with the starting coins, and the
+    first visit of each Lagos day adds the daily bonus (``bonus`` says how much was just given).
+    """
 
     permission_classes = [PredictionsOn, IsAuthenticated, CanPlay]
 
     def get(self, request):
         wallet = wallet_for(request.user)
+        bonus = daily_bonus(wallet)
         return Response(
             {
                 "balance": wallet.balance,
+                "bonus": bonus,
+                "daily_bonus": max(settings.PREDICTIONS_DAILY_BONUS, 0),
                 "starting_coins": initial_coins(),
                 "created_at": wallet.created_at,
             }
@@ -1144,7 +1157,9 @@ def _settled(model, status_: str):
 class LeaderboardView(APIView):
     """Three separate tables, never mixed:
 
-    - ``balance``: coins now (everyone started with the same amount, so this is profit).
+    - ``balance``: net DC, that is coins now plus DC spent in the card shop, so buying a
+      design never costs a place (everyone started with the same amount and gets the same
+      daily bonus, so this is profit).
     - ``accuracy``: won / (won + lost), voids left out, only with at least 10 settled bets.
     - ``wins``: number of winning bets.
     """
@@ -1157,8 +1172,19 @@ class LeaderboardView(APIView):
             won=_settled(Bet, Bet.Status.WON) + _settled(Multiple, Bet.Status.WON),
             lost=_settled(Bet, Bet.Status.LOST) + _settled(Multiple, Bet.Status.LOST),
         )
+        spent = (
+            LedgerEntry.objects.filter(
+                wallet=OuterRef("pk"), kind__in=[Kind.PURCHASE, Kind.SHOP_REFUND]
+            )
+            .values("wallet")
+            .annotate(n=Sum("amount"))
+            .values("n")
+        )
+        qs = qs.annotate(
+            shop_spent=-Coalesce(Subquery(spent, output_field=IntegerField()), Value(0))
+        ).annotate(net=F("balance") + F("shop_spent"))
         if metric == "balance":
-            qs = qs.order_by("-balance", "created_at")
+            qs = qs.order_by("-net", "created_at")
         elif metric == "accuracy":
             qs = qs.annotate(settled=F("won") + F("lost")).filter(settled__gte=ACCURACY_MIN_SETTLED)
             qs = qs.annotate(
@@ -1168,8 +1194,12 @@ class LeaderboardView(APIView):
             qs = qs.filter(won__gt=0).order_by("-won", "lost", "created_at")
         else:
             raise ValidationError({"metric": "Use balance, accuracy or wins."})
+        from apps.shop.services import equipped_designs
+
+        top = list(qs[:LEADERBOARD_SIZE])
+        designs = equipped_designs([w.user_id for w in top])
         rows = []
-        for n, w in enumerate(qs[:LEADERBOARD_SIZE], start=1):
+        for n, w in enumerate(top, start=1):
             settled = w.won + w.lost
             rows.append(
                 {
@@ -1177,6 +1207,9 @@ class LeaderboardView(APIView):
                     "name": _name(w),
                     "is_me": request.user.is_authenticated and w.user_id == request.user.pk,
                     "balance": w.balance,
+                    "shop_spent": w.shop_spent,
+                    "net": w.net,
+                    "design": designs.get(w.user_id),
                     "won": w.won,
                     "lost": w.lost,
                     "accuracy": round(w.won / settled, 4) if settled else None,

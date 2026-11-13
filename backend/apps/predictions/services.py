@@ -111,6 +111,26 @@ def wallet_for(user) -> Wallet:
     return wallet
 
 
+def lagos_today():
+    from zoneinfo import ZoneInfo
+
+    from django.utils import timezone
+
+    return timezone.now().astimezone(ZoneInfo(settings.ANALYTICS_TIME_ZONE)).date()
+
+
+def daily_bonus(wallet: Wallet) -> int:
+    """Give the daily bonus once per Lagos day; returns the coins given now (0 if already
+    given today or the bonus is off). The key makes a second give on the same day a no-op."""
+    amount = settings.PREDICTIONS_DAILY_BONUS
+    if amount <= 0:
+        return 0
+    _, created = post_entry(
+        wallet, Kind.DAILY_BONUS, amount, f"daily:{wallet.pk}:{lagos_today().isoformat()}"
+    )
+    return amount if created else 0
+
+
 @dataclass
 class WalletProblem:
     wallet_id: int

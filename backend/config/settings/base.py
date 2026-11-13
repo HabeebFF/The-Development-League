@@ -48,6 +48,7 @@ INSTALLED_APPS = [
     "apps.protection",
     "apps.predictions",
     "apps.scrims",
+    "apps.shop",
 ]
 
 MIDDLEWARE = [
@@ -147,6 +148,8 @@ PREDICTIONS_ENABLED = env_bool("PREDICTIONS_ENABLED", False)
 PREDICTIONS_INITIAL_COINS = int(env("PREDICTIONS_INITIAL_COINS", "1000"))
 PREDICTIONS_MIN_STAKE = int(env("PREDICTIONS_MIN_STAKE", "10"))
 PREDICTIONS_MAX_STAKE = int(env("PREDICTIONS_MAX_STAKE", "500"))
+# DC given on the first wallet visit of each Lagos day (0 turns the bonus off).
+PREDICTIONS_DAILY_BONUS = int(env("PREDICTIONS_DAILY_BONUS", "20"))
 # Multiples: how many picks, and the most one can pay (coins).
 PREDICTIONS_MAX_PICKS = int(env("PREDICTIONS_MAX_PICKS", "8"))
 PREDICTIONS_MAX_RETURN = int(env("PREDICTIONS_MAX_RETURN", "50000"))
