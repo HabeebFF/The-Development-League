@@ -7,6 +7,7 @@ import {
   type CardStat,
   type PlayerCard as Card,
 } from "@/lib/cards";
+import { copyText, designColors, PATTERNS } from "@/lib/cardDesigns";
 
 // The card's outline: a FUT style shield with cut top corners and a pointed base.
 export const CARD_SHAPE =
@@ -23,7 +24,14 @@ export default function PlayerCard({
   /** Replaces the line along the bottom (a daily card shows its day). */
   footer?: string;
 }) {
-  const [top, bottom, ink, line] = TIER_COLORS[card.tier];
+  const plainTier = card.tier === "gold" || card.tier === "silver" || card.tier === "bronze";
+  // A shop design repaints a plain card; the tier stays on the rating badge.
+  const look = plainTier ? designColors(card.design) : null;
+  const tierColors = TIER_COLORS[card.tier];
+  const [top, bottom, ink, line] = look ? [look.top, look.bottom, look.ink, look.line] : tierColors;
+  const effect = look ? card.design!.parts.effect : "none";
+  const pattern = look ? PATTERNS[card.design!.parts.pattern] : undefined;
+  const copy = look ? copyText(card.design) : null;
   const main = card.stats.filter((s) => !s.extra);
   const extras = card.stats.filter((s) => s.extra);
   const totw = card.tier === "totw";
@@ -36,7 +44,10 @@ export default function PlayerCard({
       style={{
         fontSize: `${size * 16}px`,
         color: ink,
-        filter: totw
+        ...(look ? { ["--design-glow" as string]: look.glow } : {}),
+        filter: look
+          ? `drop-shadow(0 0 0.8em rgb(${look.glow} / 0.45))`
+          : totw
           ? "drop-shadow(0 0 0.9em rgb(245 165 36 / 0.55))"
           : totm
             ? "drop-shadow(0 0 0.9em rgb(242 193 78 / 0.5))"
@@ -57,7 +68,15 @@ export default function PlayerCard({
       >
         {/* Sheen and pattern, like the real thing. */}
         <span className="absolute inset-0 bg-[linear-gradient(115deg,transparent_30%,rgb(255_255_255/0.28)_45%,transparent_60%)]" />
-        <span className="absolute inset-0 bg-[repeating-linear-gradient(60deg,rgb(255_255_255/0.05)_0_2px,transparent_2px_12px)]" />
+        {pattern && pattern !== "none" ? (
+          <span className="absolute inset-0" style={{ background: pattern }} />
+        ) : (
+          <span className="absolute inset-0 bg-[repeating-linear-gradient(60deg,rgb(255_255_255/0.05)_0_2px,transparent_2px_12px)]" />
+        )}
+        {effect === "glow" && <span aria-hidden className="design-glow absolute inset-0" />}
+        {effect === "shine" && <span aria-hidden className="design-shine absolute inset-0" />}
+        {effect === "flame" && <span aria-hidden className="design-flame absolute inset-0" />}
+        {effect === "sparkle" && <span aria-hidden className="design-sparkle absolute inset-0" />}
         {/* Holographic shine that sweeps across on hover (off under reduced motion). */}
         <span aria-hidden className="holo absolute inset-0" />
         {totm && (
@@ -82,9 +101,24 @@ export default function PlayerCard({
 
         {/* Rating, role and team down the left; the photo on the right. */}
         <div className="absolute top-[1.4em] left-[1.5em] flex w-[3.2em] flex-col items-center">
-          <span className="font-display text-[3em] leading-[0.85]">
-            {card.overall}
-          </span>
+          {look ? (
+            // The tier (gold, silver, bronze) stays visible as the rating badge's colour.
+            <span
+              className="px-[0.12em] pt-[0.04em] font-display text-[2.35em] leading-[0.88]"
+              style={{
+                background: `linear-gradient(160deg, ${tierColors[0]}, ${tierColors[1]})`,
+                color: tierColors[2],
+                clipPath: "polygon(0 0, 100% 0, 100% 80%, 80% 100%, 0 100%)",
+              }}
+              title={`${card.tier[0].toUpperCase()}${card.tier.slice(1)} card`}
+            >
+              {card.overall}
+            </span>
+          ) : (
+            <span className="font-display text-[3em] leading-[0.85]">
+              {card.overall}
+            </span>
+          )}
           <span className="mt-[0.15em] font-display text-[1.05em] tracking-wider uppercase">
             {roleShort(card.role)}
           </span>
@@ -173,6 +207,7 @@ export default function PlayerCard({
         <div className="absolute inset-x-0 bottom-[1.3em]">
           <p className="text-center text-[0.5em] font-bold tracking-[0.25em] uppercase opacity-70">
             {footer ?? cardFooter(card)}
+            {copy && <span className="ml-[0.6em]">{copy}</span>}
           </p>
         </div>
       </div>

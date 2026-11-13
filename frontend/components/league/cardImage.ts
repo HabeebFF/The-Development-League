@@ -9,6 +9,7 @@ import {
   TIER_COLORS,
   type PlayerCard,
 } from "@/lib/cards";
+import { copyText, designColors } from "@/lib/cardDesigns";
 
 const W = 750;
 const H = 1050;
@@ -49,7 +50,12 @@ export async function cardImage(card: PlayerCard): Promise<Blob | null> {
   const body =
     getComputedStyle(document.body).getPropertyValue("--font-body").trim() ||
     "sans-serif";
-  const [top, bottom, ink, line] = TIER_COLORS[card.tier];
+  const plainTier = card.tier === "gold" || card.tier === "silver" || card.tier === "bronze";
+  const look = plainTier ? designColors(card.design) : null;
+  const tierColors = TIER_COLORS[card.tier];
+  const [top, bottom, ink, line] = look
+    ? [look.top, look.bottom, look.ink, look.line]
+    : tierColors;
   const [photo, logo] = await Promise.all([
     load(card.photo || BLANK_PHOTO),
     card.team?.logo ? load(card.team.logo) : null,
@@ -106,6 +112,7 @@ export async function cardImage(card: PlayerCard): Promise<Blob | null> {
     ctx.fillStyle = r;
     ctx.fillRect(0, 0, W, H);
   }
+  if (look && card.design) drawDesign(ctx, card.design.parts, look.glow);
   const sheen = ctx.createLinearGradient(0, 0, W, H * 0.6);
   sheen.addColorStop(0.3, "rgba(255,255,255,0)");
   sheen.addColorStop(0.45, "rgba(255,255,255,0.25)");
@@ -146,8 +153,25 @@ export async function cardImage(card: PlayerCard): Promise<Blob | null> {
   ctx.textAlign = "center";
   ctx.textBaseline = "alphabetic";
   const cx = 150;
+  if (look) {
+    // The tier stays on the rating badge.
+    const badge = ctx.createLinearGradient(cx - 80, 60, cx + 80, 215);
+    badge.addColorStop(0, tierColors[0]);
+    badge.addColorStop(1, tierColors[1]);
+    ctx.fillStyle = badge;
+    ctx.beginPath();
+    ctx.moveTo(cx - 85, 70);
+    ctx.lineTo(cx + 85, 70);
+    ctx.lineTo(cx + 85, 190);
+    ctx.lineTo(cx + 55, 220);
+    ctx.lineTo(cx - 85, 220);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = tierColors[2];
+  }
   ctx.font = `700 150px ${font}`;
   ctx.fillText(String(card.overall), cx, 200);
+  ctx.fillStyle = ink;
   ctx.font = `700 52px ${font}`;
   ctx.fillText(roleShort(card.role), cx, 262);
   ctx.globalAlpha = 0.35;
@@ -222,8 +246,105 @@ export async function cardImage(card: PlayerCard): Promise<Blob | null> {
           : card.tier === "rising"
             ? `RISING STAR${card.rise ? ` · +${card.rise}` : ""}`
             : "THE DEVELOPMENT LEAGUE";
-  ctx.fillText(foot, W / 2, H - 120);
+  const copy = look ? copyText(card.design) : null;
+  ctx.fillText(copy ? `${foot} · ${copy}` : foot, W / 2, H - 120);
   ctx.globalAlpha = 1;
 
   return new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
+}
+
+/** A shop design's pattern and effect, drawn roughly like the on-page card. */
+function drawDesign(
+  ctx: CanvasRenderingContext2D,
+  parts: { pattern: string; effect: string },
+  glow: string,
+) {
+  const rgb = glow.split(" ").join(",");
+  ctx.save();
+  if (parts.pattern === "lines" || parts.pattern === "carbon") {
+    ctx.strokeStyle = "rgba(255,255,255,0.08)";
+    ctx.lineWidth = parts.pattern === "lines" ? 4 : 3;
+    const step = parts.pattern === "lines" ? 36 : 12;
+    for (let x = -H; x < W + H; x += step) {
+      ctx.beginPath();
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x + H * 0.5, H);
+      ctx.stroke();
+    }
+  } else if (parts.pattern === "hex" || parts.pattern === "circuit") {
+    ctx.fillStyle = parts.pattern === "hex" ? "rgba(255,255,255,0.1)" : `rgba(${rgb},0.14)`;
+    for (let y = 0; y < H; y += 36)
+      for (let x = (y / 36) % 2 ? 18 : 0; x < W; x += 36) {
+        ctx.beginPath();
+        ctx.arc(x, y, parts.pattern === "hex" ? 6 : 2.5, 0, Math.PI * 2);
+        ctx.fill();
+      }
+  }
+  if (parts.pattern === "flames" || parts.effect === "glow" || parts.effect === "flame") {
+    const r = ctx.createRadialGradient(W / 2, H * 1.05, 0, W / 2, H * 1.05, H * 0.65);
+    r.addColorStop(0, `rgba(${rgb},0.6)`);
+    r.addColorStop(1, `rgba(${rgb},0)`);
+    ctx.fillStyle = r;
+    ctx.fillRect(0, 0, W, H);
+  }
+  if (parts.effect === "flame") {
+    ctx.strokeStyle = `rgba(${rgb},0.85)`;
+    ctx.lineWidth = 16;
+    ctx.shadowColor = `rgba(${rgb},1)`;
+    ctx.shadowBlur = 30;
+    shape(ctx, 8);
+    ctx.stroke();
+  }
+  if (parts.pattern === "paper") {
+    ctx.fillStyle = "rgba(90,60,20,0.14)";
+    for (let i = 0; i < 900; i++) ctx.fillRect((i * 97) % W, (i * 389) % H, 2, 2);
+    const v = ctx.createRadialGradient(W / 2, H * 0.45, W * 0.3, W / 2, H * 0.45, H * 0.75);
+    v.addColorStop(0, "rgba(70,40,10,0)");
+    v.addColorStop(1, "rgba(70,40,10,0.45)");
+    ctx.fillStyle = v;
+    ctx.fillRect(0, 0, W, H);
+  }
+  if (parts.pattern === "facets") {
+    const cx = W / 2,
+      cy = H * 0.38;
+    for (let i = 0; i < 12; i++) {
+      const a0 = (i / 12) * Math.PI * 2,
+        a1 = ((i + 1) / 12) * Math.PI * 2;
+      ctx.fillStyle = i % 2 ? "rgba(255,255,255,0.28)" : "rgba(140,190,240,0.12)";
+      ctx.beginPath();
+      ctx.moveTo(cx, cy);
+      ctx.lineTo(cx + Math.cos(a0) * H, cy + Math.sin(a0) * H);
+      ctx.lineTo(cx + Math.cos(a1) * H, cy + Math.sin(a1) * H);
+      ctx.closePath();
+      ctx.fill();
+    }
+  }
+  if (parts.effect === "sparkle") {
+    ctx.fillStyle = "rgba(255,255,255,0.95)";
+    for (const [x, y, r] of [[0.2, 0.15, 10], [0.8, 0.3, 14], [0.3, 0.62, 8], [0.75, 0.78, 11], [0.55, 0.1, 7]]) {
+      ctx.beginPath();
+      ctx.moveTo(W * x, H * y - r * 2);
+      ctx.lineTo(W * x + r / 3, H * y);
+      ctx.lineTo(W * x, H * y + r * 2);
+      ctx.lineTo(W * x - r / 3, H * y);
+      ctx.closePath();
+      ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(W * x - r * 2, H * y);
+      ctx.lineTo(W * x, H * y + r / 3);
+      ctx.lineTo(W * x + r * 2, H * y);
+      ctx.lineTo(W * x, H * y - r / 3);
+      ctx.closePath();
+      ctx.fill();
+    }
+  }
+  if (parts.effect === "shine") {
+    const g = ctx.createLinearGradient(0, 0, W, H);
+    g.addColorStop(0.3, "rgba(255,255,255,0)");
+    g.addColorStop(0.5, "rgba(200,225,255,0.35)");
+    g.addColorStop(0.7, "rgba(255,255,255,0)");
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, W, H);
+  }
+  ctx.restore();
 }
