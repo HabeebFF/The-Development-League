@@ -295,6 +295,49 @@ function drawDesign(
     shape(ctx, 8);
     ctx.stroke();
   }
+  if (parts.pattern === "paper") {
+    ctx.fillStyle = "rgba(90,60,20,0.14)";
+    for (let i = 0; i < 900; i++) ctx.fillRect((i * 97) % W, (i * 389) % H, 2, 2);
+    const v = ctx.createRadialGradient(W / 2, H * 0.45, W * 0.3, W / 2, H * 0.45, H * 0.75);
+    v.addColorStop(0, "rgba(70,40,10,0)");
+    v.addColorStop(1, "rgba(70,40,10,0.45)");
+    ctx.fillStyle = v;
+    ctx.fillRect(0, 0, W, H);
+  }
+  if (parts.pattern === "facets") {
+    const cx = W / 2,
+      cy = H * 0.38;
+    for (let i = 0; i < 12; i++) {
+      const a0 = (i / 12) * Math.PI * 2,
+        a1 = ((i + 1) / 12) * Math.PI * 2;
+      ctx.fillStyle = i % 2 ? "rgba(255,255,255,0.28)" : "rgba(140,190,240,0.12)";
+      ctx.beginPath();
+      ctx.moveTo(cx, cy);
+      ctx.lineTo(cx + Math.cos(a0) * H, cy + Math.sin(a0) * H);
+      ctx.lineTo(cx + Math.cos(a1) * H, cy + Math.sin(a1) * H);
+      ctx.closePath();
+      ctx.fill();
+    }
+  }
+  if (parts.effect === "sparkle") {
+    ctx.fillStyle = "rgba(255,255,255,0.95)";
+    for (const [x, y, r] of [[0.2, 0.15, 10], [0.8, 0.3, 14], [0.3, 0.62, 8], [0.75, 0.78, 11], [0.55, 0.1, 7]]) {
+      ctx.beginPath();
+      ctx.moveTo(W * x, H * y - r * 2);
+      ctx.lineTo(W * x + r / 3, H * y);
+      ctx.lineTo(W * x, H * y + r * 2);
+      ctx.lineTo(W * x - r / 3, H * y);
+      ctx.closePath();
+      ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(W * x - r * 2, H * y);
+      ctx.lineTo(W * x, H * y + r / 3);
+      ctx.lineTo(W * x + r * 2, H * y);
+      ctx.lineTo(W * x, H * y - r / 3);
+      ctx.closePath();
+      ctx.fill();
+    }
+  }
   if (parts.effect === "shine") {
     const g = ctx.createLinearGradient(0, 0, W, H);
     g.addColorStop(0.3, "rgba(255,255,255,0)");

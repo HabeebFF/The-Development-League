@@ -18,12 +18,15 @@ from apps.shop.models import CardDesign, Equipped, OwnedDesign
 
 pytestmark = pytest.mark.django_db
 PASSWORD = "a-Long-password-42"
+START = 50_000
 
 
 @pytest.fixture(autouse=True)
 def _on(settings):
     settings.PREDICTIONS_ENABLED = True
     settings.PUBLIC_SITE = True
+    # Designs cost 1,500 to 1,000,000 DC; start rich enough to buy the cheaper ones.
+    settings.PREDICTIONS_INITIAL_COINS = START
 
 
 def make_user(email="fan@tdl.test", name="Fan") -> User:
@@ -65,17 +68,20 @@ def buy(client, d, **body):
 def test_starting_designs_are_in_the_shop_for_anyone():
     rows = APIClient().get("/api/v1/shop/designs").json()["designs"]
     assert [(r["slug"], r["price"], r["rarity"]) for r in rows] == [
-        ("carbon-black", 150, "COMMON"),
-        ("ocean-blue", 150, "COMMON"),
-        ("molten-gold", 300, "RARE"),
-        ("neon-cyan", 300, "RARE"),
-        ("crimson", 300, "RARE"),
-        ("lava-flow", 600, "EPIC"),
-        ("holo-shine", 600, "EPIC"),
-        ("champion", 1000, "LEGENDARY"),
+        ("carbon-black", 1500, "COMMON"),
+        ("ocean-blue", 1500, "COMMON"),
+        ("molten-gold", 5000, "RARE"),
+        ("neon-cyan", 5000, "RARE"),
+        ("crimson", 5000, "RARE"),
+        ("lava-flow", 15000, "EPIC"),
+        ("holo-shine", 15000, "EPIC"),
+        ("champion", 40000, "LEGENDARY"),
+        ("vintage", 100000, "VINTAGE"),
+        ("diamond", 1000000, "DIAMOND"),
     ]
-    champion = rows[-1]
-    assert (champion["copies"], champion["left"], champion["owned"]) == (20, 20, False)
+    by_slug = {r["slug"]: r for r in rows}
+    assert (by_slug["champion"]["copies"], by_slug["champion"]["left"]) == (20, 20)
+    assert (by_slug["vintage"]["copies"], by_slug["diamond"]["copies"]) == (10, 1)
 
 
 def test_shop_is_hidden_while_predictions_are_off(settings):
@@ -104,10 +110,10 @@ def test_hidden_or_ended_designs_leave_the_shop_but_owners_still_see_theirs(fan)
 def test_buying_takes_the_price_through_the_ledger(fan):
     resp = buy(as_user(fan), design("molten-gold"))
     assert resp.status_code == 201, resp.content
-    assert resp.json()["balance"] == 700
+    assert resp.json()["balance"] == START - 5000
     wallet = wallet_for(fan)
     entry = wallet.entries.get(kind=Kind.PURCHASE)
-    assert (entry.amount, entry.balance_after) == (-300, 700)
+    assert (entry.amount, entry.balance_after) == (-5000, START - 5000)
     assert OwnedDesign.objects.get(user=fan).entry == entry
     assert check_wallet(wallet) == []
 
@@ -117,16 +123,15 @@ def test_cant_buy_the_same_design_twice(fan):
     assert buy(c, design("ocean-blue")).status_code == 201
     again = buy(c, design("ocean-blue"))
     assert again.status_code == 400 and "already own" in again.json()["detail"]
-    assert wallet_for(fan).balance == 850
+    assert wallet_for(fan).balance == START - 1500
 
 
 def test_cant_buy_without_enough_dc_and_nothing_is_kept(fan):
     c = as_user(fan)
-    assert buy(c, design("champion")).status_code == 201  # 1,000 -> 0
-    resp = buy(c, design("ocean-blue"))
+    resp = buy(c, design("diamond"))  # 1,000,000 DC
     assert resp.status_code == 400 and "Not enough DC" in resp.json()["detail"]
-    assert not OwnedDesign.objects.filter(design__slug="ocean-blue").exists()
-    assert wallet_for(fan).balance == 0
+    assert not OwnedDesign.objects.filter(design__slug="diamond").exists()
+    assert wallet_for(fan).balance == START
 
 
 def test_staff_cant_buy(staff):
@@ -147,7 +152,7 @@ def test_limited_copies_get_numbers_and_sell_out(fan):
     assert services.buy(b, rare.pk).copy_number == 2
     with pytest.raises(services.ShopError, match="Sold out"):
         services.buy(fan, rare.pk)
-    assert wallet_for(fan).balance == 1000
+    assert wallet_for(fan).balance == START
 
 
 @pytest.mark.django_db(transaction=True)
@@ -182,7 +187,7 @@ def test_limited_copies_cant_be_oversold_when_many_buy_at_once():
 def test_one_wallet_cant_spend_the_same_dc_twice_at_once():
     fan = make_user()
     wallet_for(fan)
-    pricey = [design(f"d{n}", price=400) for n in range(5)]
+    pricey = [design(f"d{n}", price=20_000) for n in range(5)]
     results = []
 
     def go(d):
@@ -201,7 +206,7 @@ def test_one_wallet_cant_spend_the_same_dc_twice_at_once():
         t.join()
     assert results.count("ok") == 2
     wallet = wallet_for(fan)
-    assert wallet.balance == 200 and check_wallet(wallet) == []
+    assert wallet.balance == START - 40_000 and check_wallet(wallet) == []
 
 
 # -- equipping ---------------------------------------------------------------------------------
@@ -226,8 +231,8 @@ def test_me_shows_fan_card_owned_designs_and_net_dc(fan):
     resp = c.patch("/api/v1/shop/me", {"favourite_team": team.slug}, format="json").json()
     assert resp["favourite_team"]["slug"] == team.slug
     assert resp["design"]["slug"] == "champion" and resp["design"]["copy_number"] == 1
-    assert resp["stats"]["balance"] == 0
-    assert resp["stats"]["shop_spent"] == 1000 and resp["stats"]["net"] == 1000
+    assert resp["stats"]["balance"] == START - 40_000
+    assert resp["stats"]["shop_spent"] == 40_000 and resp["stats"]["net"] == START
     assert [o["design"]["slug"] for o in resp["owned"]] == ["champion"]
     assert resp["player_id"] is None
 
@@ -275,7 +280,7 @@ def test_refund_gives_coins_back_and_takes_the_design_off(fan, staff, carded):
     resp = as_user(staff).post(f"/api/v1/admin/shop/sales/{owned.pk}/refund")
     assert resp.status_code == 200 and resp.json()["refunded_at"]
     wallet = wallet_for(fan)
-    assert wallet.balance == 1000 and check_wallet(wallet) == []
+    assert wallet.balance == START and check_wallet(wallet) == []
     assert wallet.entries.get(kind=Kind.SHOP_REFUND).actor == staff
     assert Equipped.objects.get(user=fan).design is None
     again = as_user(staff).post(f"/api/v1/admin/shop/sales/{owned.pk}/refund")
@@ -301,7 +306,7 @@ def test_gift_is_free_and_counts_as_a_copy(fan, staff):
     )
     assert resp.status_code == 201, resp.content
     assert resp.json()["gift"] and resp.json()["price_paid"] == 0
-    assert wallet_for(fan).balance == 1000
+    assert wallet_for(fan).balance == START
     shop = {r["slug"]: r for r in APIClient().get("/api/v1/shop/designs").json()["designs"]}
     assert shop["champion"]["left"] == 19
     gift_to_staff = as_user(staff).post(
@@ -368,7 +373,7 @@ def test_staff_add_edit_and_cant_delete_an_owned_design(fan, staff):
         "effect",
     }
     sales = c.get("/api/v1/admin/shop/sales").json()
-    assert sales["totals"] == {"copies": 1, "dc": 150}
+    assert sales["totals"] == {"copies": 1, "dc": 1500}
     assert sales["results"][0]["email"] == fan.email
 
 
@@ -388,8 +393,8 @@ def test_leaderboard_ranks_by_net_dc_so_shopping_costs_no_place(fan):
     services.equip(fan, design("champion").pk)
     rows = APIClient().get("/api/v1/predictions/leaderboard?metric=balance").json()["rows"]
     by_name = {r["name"]: r for r in rows}
-    assert by_name["Fan"]["net"] == by_name["Saver"]["net"] == 1000
-    assert by_name["Fan"]["balance"] == 0 and by_name["Fan"]["shop_spent"] == 1000
+    assert by_name["Fan"]["net"] == by_name["Saver"]["net"] == START
+    assert by_name["Fan"]["balance"] == START - 40_000 and by_name["Fan"]["shop_spent"] == 40_000
     assert by_name["Fan"]["design"]["slug"] == "champion"
     assert by_name["Saver"]["design"] is None
 
@@ -401,15 +406,15 @@ def test_daily_bonus_once_per_lagos_day(fan, settings, monkeypatch):
     c = as_user(fan)
     monkeypatch.setattr(coin, "lagos_today", lambda: dt.date(2026, 11, 13))
     first = c.get("/api/v1/predictions/wallet").json()
-    assert (first["balance"], first["bonus"]) == (1020, 20)
+    assert (first["balance"], first["bonus"]) == (START + 20, 20)
     again = c.get("/api/v1/predictions/wallet").json()
-    assert (again["balance"], again["bonus"]) == (1020, 0)
+    assert (again["balance"], again["bonus"]) == (START + 20, 0)
     monkeypatch.setattr(coin, "lagos_today", lambda: dt.date(2026, 11, 14))
-    assert c.get("/api/v1/predictions/wallet").json()["balance"] == 1040
+    assert c.get("/api/v1/predictions/wallet").json()["balance"] == START + 40
     assert check_wallet(wallet_for(fan)) == []
 
 
 def test_daily_bonus_off(fan, settings):
     settings.PREDICTIONS_DAILY_BONUS = 0
     resp = as_user(fan).get("/api/v1/predictions/wallet").json()
-    assert (resp["balance"], resp["bonus"]) == (1000, 0)
+    assert (resp["balance"], resp["bonus"]) == (START, 0)

@@ -76,6 +76,7 @@ export default function PlayerCard({
         {effect === "glow" && <span aria-hidden className="design-glow absolute inset-0" />}
         {effect === "shine" && <span aria-hidden className="design-shine absolute inset-0" />}
         {effect === "flame" && <span aria-hidden className="design-flame absolute inset-0" />}
+        {effect === "sparkle" && <span aria-hidden className="design-sparkle absolute inset-0" />}
         {/* Holographic shine that sweeps across on hover (off under reduced motion). */}
         <span aria-hidden className="holo absolute inset-0" />
         {totm && (

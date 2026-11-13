@@ -2,14 +2,16 @@ from django.db import migrations
 
 STARTING = [
     # slug, name, rarity, price, palette, pattern, effect, copies
-    ("carbon-black", "Carbon Black", "COMMON", 150, "carbon", "carbon", "none", None),
-    ("ocean-blue", "Ocean Blue", "COMMON", 150, "ocean", "lines", "none", None),
-    ("molten-gold", "Molten Gold", "RARE", 300, "gold", "hex", "none", None),
-    ("neon-cyan", "Neon Cyan", "RARE", 300, "cyan", "circuit", "none", None),
-    ("crimson", "Crimson", "RARE", 300, "crimson", "lines", "none", None),
-    ("lava-flow", "Lava Flow", "EPIC", 600, "lava", "flames", "glow", None),
-    ("holo-shine", "Holo Shine", "EPIC", 600, "holo", "hex", "shine", None),
-    ("champion", "Champion", "LEGENDARY", 1000, "champion", "flames", "flame", 20),
+    ("carbon-black", "Carbon Black", "COMMON", 1500, "carbon", "carbon", "none", None),
+    ("ocean-blue", "Ocean Blue", "COMMON", 1500, "ocean", "lines", "none", None),
+    ("molten-gold", "Molten Gold", "RARE", 5000, "gold", "hex", "none", None),
+    ("neon-cyan", "Neon Cyan", "RARE", 5000, "cyan", "circuit", "none", None),
+    ("crimson", "Crimson", "RARE", 5000, "crimson", "lines", "none", None),
+    ("lava-flow", "Lava Flow", "EPIC", 15000, "lava", "flames", "glow", None),
+    ("holo-shine", "Holo Shine", "EPIC", 15000, "holo", "hex", "shine", None),
+    ("champion", "Champion", "LEGENDARY", 40000, "champion", "flames", "flame", 20),
+    ("vintage", "Vintage", "VINTAGE", 100000, "vintage", "paper", "none", 10),
+    ("diamond", "Diamond", "DIAMOND", 1000000, "diamond", "facets", "sparkle", 1),
 ]
 
 

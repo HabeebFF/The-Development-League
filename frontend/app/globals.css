@@ -484,3 +484,22 @@ table,
 @media (prefers-reduced-motion: reduce) {
   .design-glow, .design-shine, .design-flame { animation: none; }
 }
+/* Diamond: little four-point stars that twinkle. */
+.design-sparkle {
+  pointer-events: none;
+  background:
+    radial-gradient(circle, rgb(255 255 255) 0 0.08em, transparent 0.12em) 18% 14% / 100% 100% no-repeat,
+    radial-gradient(circle, rgb(255 255 255) 0 0.1em, transparent 0.15em) 82% 30% / 100% 100% no-repeat,
+    radial-gradient(circle, rgb(255 255 255) 0 0.07em, transparent 0.11em) 30% 62% / 100% 100% no-repeat,
+    radial-gradient(circle, rgb(255 255 255) 0 0.09em, transparent 0.13em) 74% 78% / 100% 100% no-repeat,
+    linear-gradient(115deg, transparent 30%, rgb(255 255 255 / 0.45) 48%, transparent 62%) 0 0 / 300% 300%;
+  mix-blend-mode: screen;
+  animation: design-sparkle 2.4s ease-in-out infinite;
+}
+@keyframes design-sparkle {
+  0%, 100% { opacity: 0.55; background-position: 18% 14%, 82% 30%, 30% 62%, 74% 78%, 100% 0; }
+  50% { opacity: 1; background-position: 18% 14%, 82% 30%, 30% 62%, 74% 78%, 0 100%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .design-sparkle { animation: none; }
+}
