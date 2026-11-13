@@ -34,7 +34,7 @@ from apps.league.models import Match, MatchDay, Season
 from common.pagination import DefaultPagination
 from common.permissions import IsStaff, IsSuperAdmin, PublicRead
 
-from . import auto, settlement
+from . import auto, autosettle, settlement
 from .markets import (
     MarketError,
     PlayerRules,
@@ -668,7 +668,9 @@ class FixtureSerializer(serializers.ModelSerializer):
             "match",
             "match_day",
             "teams",
+            "attention",
         ]
+        read_only_fields = ["attention"]
         validators = []  # the unique check below gives a readable message
 
     def validate(self, attrs):
@@ -754,7 +756,12 @@ class FixtureAdminViewSet(viewsets.ModelViewSet):
 
     def perform_update(self, serializer):
         before = set(serializer.instance.teams.values_list("pk", flat=True))
+        links = (serializer.instance.match_id, serializer.instance.match_day_id)
         fixture = serializer.save()
+        if fixture.attention and (fixture.match_id, fixture.match_day_id) != links:
+            # Staff linked it by hand: the note about it is dealt with.
+            fixture.attention = ""
+            fixture.save(update_fields=["attention"])
         after = set(fixture.teams.values_list("pk", flat=True))
         self.rebuilt = None
         if fixture.match_number is None and after != before and len(after) >= 2:
@@ -1230,6 +1237,7 @@ class AutoSettingsSerializer(serializers.ModelSerializer):
         model = AutoSettings
         fields = [
             "enabled",
+            "settle_enabled",
             "weekdays",
             "skip_dates",
             "last_run_at",
@@ -1302,3 +1310,16 @@ class AutoRunView(APIView):
                 {"date": f"Markets can be made up to {auto.MAKE_AHEAD_DAYS} days ahead."}
             )
         return Response(auto.run(date, force=True, actor=request.user))
+
+
+class AutoSettleView(APIView):
+    """GET what the site left for staff ("Needs you"); POST links and settles now."""
+
+    permission_classes = [IsStaff]
+
+    def get(self, request):
+        return Response({**autosettle.needs_you(), "on": autosettle.is_on()})
+
+    def post(self, request):
+        report = autosettle.run(force=True, actor=request.user)
+        return Response({**report, **autosettle.needs_you(), "on": autosettle.is_on()})

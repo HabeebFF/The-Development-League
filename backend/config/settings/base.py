@@ -248,6 +248,11 @@ CELERY_BEAT_SCHEDULE = {
         "task": "apps.predictions.tasks.auto_markets_task",
         "schedule": crontab(minute="*/5"),
     },
+    # Link uploaded matches to predictions and settle what they decide (also runs on upload).
+    "predictions-auto-settle": {
+        "task": "apps.predictions.tasks.auto_settle_task",
+        "schedule": crontab(minute="2-59/5"),
+    },
     "predictions-check-wallets": {
         "task": "apps.predictions.tasks.check_wallets_task",
         "schedule": crontab(minute=50, hour=3),
