@@ -39,6 +39,8 @@ class Migration(migrations.Migration):
                             ("RARE", "Rare"),
                             ("EPIC", "Epic"),
                             ("LEGENDARY", "Legendary"),
+                            ("VINTAGE", "Vintage"),
+                            ("DIAMOND", "Diamond"),
                         ],
                         default="COMMON",
                         max_length=10,

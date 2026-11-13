@@ -15,6 +15,8 @@ PALETTES = {
     "lava": "Lava",
     "holo": "Holo",
     "champion": "Champion gold",
+    "vintage": "Vintage sepia",
+    "diamond": "Diamond ice",
 }
 
 PATTERNS = {
@@ -24,6 +26,8 @@ PATTERNS = {
     "hex": "Hexagons",
     "circuit": "Circuit",
     "flames": "Flames",
+    "paper": "Aged paper",
+    "facets": "Diamond facets",
 }
 
 EFFECTS = {
@@ -31,6 +35,7 @@ EFFECTS = {
     "glow": "Moving glow",
     "shine": "Tilting shine",
     "flame": "Flame frame",
+    "sparkle": "Sparkle",
 }
 
 PARTS = {"palette": PALETTES, "pattern": PATTERNS, "effect": EFFECTS}
