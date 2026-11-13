@@ -13,7 +13,7 @@ const LINKS = [
   { href: "/predict/mine", label: "My predictions" },
   { href: "/predict/wallet", label: "DC" },
   { href: "/predict/leaderboard", label: "Leaderboard" },
-  { href: "/predict/shop", label: "Card shop" },
+  { href: "/shop", label: "Card shop" },
 ];
 
 /** Tabs across the prediction pages, with the balance (or a sign-up prompt) on the right. */

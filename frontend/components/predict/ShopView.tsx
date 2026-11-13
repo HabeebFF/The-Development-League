@@ -145,7 +145,7 @@ export default function ShopView() {
           {error && !buying && <p className="mt-3 text-sm text-bad">{error}</p>}
           {state.kind === "out" && (
             <p className="mt-3 text-sm text-muted">
-              <Link href="/auth/login?next=/predict/shop" className="text-accent underline">
+              <Link href="/auth/login?next=/shop" className="text-accent underline">
                 Sign in
               </Link>{" "}
               to buy designs with your DC.

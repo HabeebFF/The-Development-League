@@ -29,6 +29,7 @@ const ICON = {
   teams: "M12 3 4 6v6c0 4.5 3.4 8.3 8 9 4.6-.7 8-4.5 8-9V6z",
   pp: "M12 2 4 5v6c0 5 3.4 9.4 8 11 4.6-1.6 8-6 8-11V5zm-1 6h2v3h3v2h-3v3h-2v-3H8v-2h3z",
   predict: "M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20m0 3a7 7 0 1 1 0 14 7 7 0 0 1 0-14m-1 2v5.4l4.3 2.6 1-1.7-3.3-2V7z",
+  shop: "M4 7h16l-1.2 12.2A2 2 0 0 1 16.8 21H7.2a2 2 0 0 1-2-1.8zm4 0V6a4 4 0 0 1 8 0v1h-2V6a2 2 0 0 0-4 0v1z",
   menu: "M4 6h16v2H4zm0 5h16v2H4zm0 5h16v2H4z",
 };
 
@@ -53,6 +54,7 @@ export const GROUPS: NavGroup[] = [
   { href: "/players", label: "Players", blurb: "Kills, ratings, cards and awards", icon: ICON.players, items: PLAYER_PAGES },
   { href: "/teams", label: "Teams", blurb: "Teams and Protection Points", icon: ICON.teams, items: TEAM_PAGES },
   { href: "/predict", label: "Predict", blurb: "Bet free DC on matches, no real money", icon: ICON.predict, flag: "predictions" },
+  { href: "/shop", label: "Shop", blurb: "Buy card designs with your DC", icon: ICON.shop, flag: "predictions" },
 ];
 
 export const MENU_ICON = ICON.menu;
