@@ -1,6 +1,7 @@
 // FUT style player cards (``/cards``), out every Saturday at midnight (Lagos) for the Saturday to Friday week before.
 
 import type { TeamRef } from "./api";
+import type { CardDesign } from "./cardDesigns";
 import type { Band } from "./ratings";
 
 export type CardStat = {
@@ -45,6 +46,8 @@ export type PlayerCard = {
   matches: number;
   week_matches: number;
   stale: boolean;
+  /** A design the player bought in the shop (weekly cards only; never on specials). */
+  design?: CardDesign | null;
 };
 
 export type CardWeek = {

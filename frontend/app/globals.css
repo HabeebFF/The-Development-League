@@ -450,3 +450,37 @@ table,
 @media (prefers-reduced-motion: reduce) {
   .holo-host:hover .holo { animation: none; opacity: 0.3; }
 }
+
+/* Shop card designs: a moving glow, a tilting shine and a flame frame (see lib/cardDesigns). */
+.design-glow {
+  pointer-events: none;
+  background: radial-gradient(circle at 50% 110%, rgb(var(--design-glow) / 0.55), transparent 60%);
+  animation: design-glow 3.2s ease-in-out infinite alternate;
+}
+@keyframes design-glow {
+  from { opacity: 0.45; transform: translateY(4%); }
+  to { opacity: 1; transform: translateY(-4%); }
+}
+.design-shine {
+  pointer-events: none;
+  background: linear-gradient(115deg, transparent 25%, rgb(255 255 255 / 0.5) 45%, rgb(180 220 255 / 0.35) 50%, transparent 65%);
+  background-size: 300% 300%;
+  mix-blend-mode: overlay;
+  animation: design-shine 4s ease-in-out infinite;
+}
+@keyframes design-shine {
+  0%, 100% { background-position: 100% 0; }
+  50% { background-position: 0 100%; }
+}
+.design-flame {
+  pointer-events: none;
+  box-shadow: inset 0 0 0.6em 0.15em rgb(var(--design-glow) / 0.9), inset 0 -1.2em 1.4em -0.4em rgb(255 110 20 / 0.7);
+  animation: design-flame 1.6s ease-in-out infinite alternate;
+}
+@keyframes design-flame {
+  from { opacity: 0.7; }
+  to { opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .design-glow, .design-shine, .design-flame { animation: none; }
+}
