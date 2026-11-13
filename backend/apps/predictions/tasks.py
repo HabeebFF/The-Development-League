@@ -2,7 +2,7 @@ import logging
 
 from celery import shared_task
 
-from . import auto
+from . import auto, autosettle
 from .markets import close_due_markets
 from .services import check_wallets
 
@@ -32,3 +32,13 @@ def auto_markets_task() -> int:
     for note in report["notes"]:
         log.info("Automatic markets %s: %s", report["date"], note)
     return len(report["made"])
+
+
+@shared_task
+def auto_settle_task(match_id: int | None = None) -> dict:
+    """After an upload (and every 5 minutes): link uploaded matches to their fixtures and
+    settle the closed markets the logs decide. Anything unclear is left for staff."""
+    report = autosettle.run(match_id)
+    if report.get("markets"):
+        log.info("Automatic settling: %s", report["markets"])
+    return report

@@ -302,6 +302,106 @@ function AutoPanel({ onRan }: { onRan: () => void }) {
   );
 }
 
+type NeedsYouData = {
+  on: boolean;
+  fixtures: { id: number; title: string; date: string; note: string }[];
+  markets: { id: number; title: string; status: string; fixture: string | null; fixture_id: number | null; note: string }[];
+};
+
+/** What the site couldn't link or settle by itself after uploads, with a button to try now.
+ * Uploaded matches link to their fixtures and closed markets settle on their own. */
+function NeedsYou({ onPick, onRan }: { onPick: (fixtureId: number | "season") => void; onRan: () => void }) {
+  const [data, setData] = useState<NeedsYouData | null>(null);
+  const [conf, setConf] = useState<{ settle_enabled: boolean } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
+
+  useEffect(() => {
+    api<NeedsYouData>("/admin/predictions/needs-you")
+      .then(setData)
+      .catch((e) => setNote(message(e)));
+    api<{ settle_enabled: boolean }>("/admin/predictions/auto")
+      .then(setConf)
+      .catch(() => undefined);
+  }, []);
+
+  async function toggle() {
+    if (!conf) return;
+    setNote(null);
+    try {
+      setConf(await api<{ settle_enabled: boolean }>("/admin/predictions/auto", { method: "PATCH", body: { settle_enabled: !conf.settle_enabled } }));
+    } catch (e) {
+      setNote(message(e));
+    }
+  }
+
+  async function runNow() {
+    setBusy(true);
+    setNote(null);
+    try {
+      setData(await api<NeedsYouData>("/admin/predictions/needs-you", { method: "POST" }));
+      onRan();
+    } catch (e) {
+      setNote(message(e));
+    }
+    setBusy(false);
+  }
+
+  if (!data) return note ? <p className="text-bad">{note}</p> : null;
+  const count = data.fixtures.length + data.markets.length;
+
+  return (
+    <section className="card p-4">
+      <div className="flex flex-wrap items-center gap-3">
+        <h2 className="section-title">Needs you{count ? ` (${count})` : ""}</h2>
+        {conf && (
+          <button
+            type="button"
+            aria-pressed={conf.settle_enabled}
+            className={`btn ml-auto px-3 py-1.5 text-sm ${conf.settle_enabled ? "btn-primary" : "text-muted"}`}
+            onClick={toggle}
+            title="Link uploaded matches and settle markets by themselves"
+          >
+            Auto-settle {conf.settle_enabled ? "on" : "off"}
+          </button>
+        )}
+        <button type="button" disabled={busy} className={`btn px-3 py-1.5 text-sm ${conf ? "" : "ml-auto"}`} onClick={runNow}>
+          {busy ? "Checking..." : "Link and settle now"}
+        </button>
+      </div>
+      <p className="mt-1 text-sm text-muted">
+        When a match is uploaded, the site links it to its fixture (session from the match day name, the date, the match number) and settles the closed
+        markets from the logs. Session markets settle once all 5 matches are in. Anything it isn&apos;t sure about is listed here; settled markets are
+        never changed by themselves.
+      </p>
+      {count === 0 ? (
+        <p className="mt-3 text-sm">Nothing waiting on you.</p>
+      ) : (
+        <ul className="mt-3 space-y-2 text-sm">
+          {data.fixtures.map((f) => (
+            <li key={`f${f.id}`}>
+              <button type="button" className="font-semibold underline" onClick={() => onPick(f.id)}>
+                {f.title}
+              </button>
+              <span className="block text-muted">{f.note}</span>
+            </li>
+          ))}
+          {data.markets.map((m) => (
+            <li key={`m${m.id}`}>
+              <button type="button" className="font-semibold underline" onClick={() => onPick(m.fixture_id ?? "season")}>
+                {m.fixture ? `${m.fixture}: ` : ""}
+                {m.title}
+              </button>
+              <span className="block text-muted">{m.note}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {note && <p className="mt-2 text-sm text-bad">{note}</p>}
+    </section>
+  );
+}
+
 function Markets() {
   const [seasons, setSeasons] = useState<Season[] | null>(null);
   const [teams, setTeams] = useState<TeamRef[]>([]);
@@ -335,11 +435,12 @@ function Markets() {
 
   return (
     <div className="mt-6 space-y-8">
+      <NeedsYou onPick={setFixtureId} onRan={loadFixtures} />
       <AutoPanel onRan={loadFixtures} />
       <section>
         <h2 className="section-title">Fixtures</h2>
         <p className="mt-1 text-sm text-muted">
-          A fixture is a planned match or a whole session. Markets hang off it; once the logs are uploaded, link it to the real match (or match day) to settle.
+          A fixture is a planned match or a whole session. Markets hang off it; once the logs are uploaded, it links to the real match (or match day) by itself, or link it here.
           Overall markets cover the season and need no fixture.
         </p>
         <div className="mt-3 flex flex-wrap gap-2">

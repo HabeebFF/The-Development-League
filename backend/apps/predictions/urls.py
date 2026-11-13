@@ -18,6 +18,11 @@ urlpatterns = [
     *router.urls,
     path("admin/predictions/auto", views.AutoSettingsView.as_view(), name="admin-predictions-auto"),
     path(
+        "admin/predictions/needs-you",
+        views.AutoSettleView.as_view(),
+        name="admin-predictions-needs-you",
+    ),
+    path(
         "admin/predictions/auto/run", views.AutoRunView.as_view(), name="admin-predictions-auto-run"
     ),
     path(

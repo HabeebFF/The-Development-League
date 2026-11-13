@@ -133,6 +133,9 @@ class Fixture(models.Model):
         related_name="+",
         help_text="Teams in the lobby. Empty: the session's teams, else every league team",
     )
+    attention = models.CharField(
+        max_length=300, blank=True, help_text="Why the site couldn't link it by itself"
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -204,6 +207,9 @@ class Market(models.Model):
     status = models.CharField(max_length=10, choices=Status.choices, default=Status.DRAFT)
     opens_at = models.DateTimeField()
     closes_at = models.DateTimeField()
+    attention = models.CharField(
+        max_length=300, blank=True, help_text="Why the site couldn't settle it by itself"
+    )
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+"
     )
@@ -461,6 +467,9 @@ class AutoSettings(models.Model):
     """How markets are made automatically each scrim day (one row). See ``auto.py``."""
 
     enabled = models.BooleanField(default=True)
+    settle_enabled = models.BooleanField(
+        default=True, help_text="Link uploaded matches and settle markets by themselves"
+    )
     weekdays = models.JSONField(default=every_day, help_text="Scrim days: 0 = Monday ... 6")
     skip_dates = models.JSONField(default=list, blank=True, help_text="Nights off, YYYY-MM-DD")
     last_run_at = models.DateTimeField(null=True, blank=True)
