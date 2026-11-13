@@ -18,6 +18,8 @@ class CardDesign(models.Model):
         RARE = "RARE", "Rare"
         EPIC = "EPIC", "Epic"
         LEGENDARY = "LEGENDARY", "Legendary"
+        VINTAGE = "VINTAGE", "Vintage"
+        DIAMOND = "DIAMOND", "Diamond"
 
     slug = models.SlugField(max_length=40, unique=True)
     name = models.CharField(max_length=60)
