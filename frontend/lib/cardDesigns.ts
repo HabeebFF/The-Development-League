@@ -8,7 +8,7 @@ export type CardDesign = {
   id: number;
   slug: string;
   name: string;
-  rarity: "COMMON" | "RARE" | "EPIC" | "LEGENDARY";
+  rarity: "COMMON" | "RARE" | "EPIC" | "LEGENDARY" | "VINTAGE" | "DIAMOND";
   parts: DesignParts;
   /** This copy's number for a limited design ("#7 of 20"). */
   copy_number: number | null;
@@ -38,6 +38,8 @@ export const PALETTES: Record<string, [string, string, string, string, string]> 
   lava: ["#ff6a1a", "#2a0600", "#fff3e6", "#ffb35a", "255 100 30"],
   holo: ["#c9d6ff", "#6f7fb8", "#10142a", "#ffffff", "200 210 255"],
   champion: ["#1a1206", "#050302", "#ffe7a3", "#f5b82e", "245 184 46"],
+  vintage: ["#e6d3a8", "#7a5a34", "#2b1b0c", "#fff4d6", "214 176 112"],
+  diamond: ["#f2fbff", "#8fb8dc", "#0b1a2a", "#ffffff", "190 232 255"],
 };
 
 /** Tailwind-free CSS backgrounds, layered over the palette gradient. */
@@ -51,6 +53,12 @@ export const PATTERNS: Record<string, string> = {
     "linear-gradient(90deg, rgb(34 227 255 / 0.12) 1px, transparent 1px) 0 0 / 1.5em 1.5em, linear-gradient(0deg, rgb(34 227 255 / 0.12) 1px, transparent 1px) 0 0 / 1.5em 1.5em",
   flames:
     "radial-gradient(ellipse 30% 55% at 20% 105%, rgb(255 140 30 / 0.55), transparent 70%), radial-gradient(ellipse 30% 60% at 55% 108%, rgb(255 90 20 / 0.5), transparent 70%), radial-gradient(ellipse 28% 50% at 85% 105%, rgb(255 180 40 / 0.5), transparent 70%)",
+  // An old printed card: speckles, a worn edge and a faded stripe.
+  paper:
+    "radial-gradient(circle at 20% 30%, rgb(90 60 20 / 0.12) 0 1px, transparent 2px) 0 0 / 0.7em 0.9em, radial-gradient(circle at 70% 60%, rgb(90 60 20 / 0.1) 0 1px, transparent 2px) 0 0 / 1.1em 0.8em, radial-gradient(ellipse at 50% 45%, transparent 55%, rgb(70 40 10 / 0.45) 100%), linear-gradient(0deg, transparent 62%, rgb(120 30 20 / 0.18) 62% 66%, transparent 66%)",
+  // Cut-stone facets.
+  facets:
+    "conic-gradient(from 30deg at 50% 38%, rgb(255 255 255 / 0.55), rgb(160 200 240 / 0.15) 15%, rgb(255 255 255 / 0.4) 30%, rgb(120 170 220 / 0.2) 45%, rgb(255 255 255 / 0.5) 60%, rgb(150 200 255 / 0.15) 75%, rgb(255 255 255 / 0.45) 90%, rgb(255 255 255 / 0.55))",
 };
 
 export const RARITY_COLORS: Record<CardDesign["rarity"], string> = {
@@ -58,6 +66,8 @@ export const RARITY_COLORS: Record<CardDesign["rarity"], string> = {
   RARE: "#38bdf8",
   EPIC: "#a855f7",
   LEGENDARY: "#f5b82e",
+  VINTAGE: "#d9b779",
+  DIAMOND: "#bfe9ff",
 };
 
 export const RARITY_LABELS: Record<CardDesign["rarity"], string> = {
@@ -65,6 +75,8 @@ export const RARITY_LABELS: Record<CardDesign["rarity"], string> = {
   RARE: "Rare",
   EPIC: "Epic",
   LEGENDARY: "Legendary",
+  VINTAGE: "Vintage",
+  DIAMOND: "Diamond",
 };
 
 /** The design's colours, or null for an unknown palette (the card then stays plain). */

@@ -40,6 +40,7 @@ export default function FanCard({ fan, size = 1 }: { fan: FanCardData; size?: nu
         {effect === "glow" && <span aria-hidden className="design-glow absolute inset-0" />}
         {effect === "shine" && <span aria-hidden className="design-shine absolute inset-0" />}
         {effect === "flame" && <span aria-hidden className="design-flame absolute inset-0" />}
+        {effect === "sparkle" && <span aria-hidden className="design-sparkle absolute inset-0" />}
         <span aria-hidden className="holo absolute inset-0" />
         <span className="absolute inset-[0.35em]" style={{ clipPath: CARD_SHAPE, boxShadow: `inset 0 0 0 0.08em ${look.line}` }} />
 
