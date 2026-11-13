@@ -47,6 +47,7 @@ INSTALLED_APPS = [
     "apps.analytics",
     "apps.protection",
     "apps.predictions",
+    "apps.scrims",
 ]
 
 MIDDLEWARE = [
