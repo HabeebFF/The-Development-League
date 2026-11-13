@@ -7,6 +7,7 @@ import { coins, METRICS, percent, type Leaderboard, type Metric } from "@/lib/pr
 import { useApi } from "@/lib/useApi";
 
 import PredictNav, { NotOpen } from "./PredictNav";
+import { Swatch } from "./ShopView";
 import { useWallet } from "./useWallet";
 
 /** Three separate tables (coins, accuracy, wins), each with what it measures. */
@@ -57,11 +58,16 @@ export default function LeaderboardView() {
                     <span className={`rank ${r.rank <= 3 ? `rank-${r.rank}` : ""}`}>{r.rank}</span>
                   </td>
                   <td className="font-semibold">
+                    {r.design && (
+                      <span className="mr-2 inline-flex align-[-2px]" title={`Card design: ${r.design.name}`}>
+                        <Swatch design={r.design} size="sm" />
+                      </span>
+                    )}
                     {r.name}
                     {r.is_me && <span className="ml-2 chip text-accent">You</span>}
                   </td>
                   <td className="text-right font-display text-lg">
-                    {metric === "balance" ? coins(r.balance) : metric === "accuracy" ? percent(r.accuracy) : r.won}
+                    {metric === "balance" ? coins(r.net ?? r.balance) : metric === "accuracy" ? percent(r.accuracy) : r.won}
                   </td>
                   <td className="hidden text-right text-muted sm:table-cell">
                     {r.won} / {r.lost}
