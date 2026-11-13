@@ -400,17 +400,17 @@ def test_leaderboard_ranks_by_net_dc_so_shopping_costs_no_place(fan):
 
 
 def test_daily_bonus_once_per_lagos_day(fan, settings, monkeypatch):
-    settings.PREDICTIONS_DAILY_BONUS = 20
+    settings.PREDICTIONS_DAILY_BONUS = 200
     from apps.predictions import services as coin
 
     c = as_user(fan)
     monkeypatch.setattr(coin, "lagos_today", lambda: dt.date(2026, 11, 13))
     first = c.get("/api/v1/predictions/wallet").json()
-    assert (first["balance"], first["bonus"]) == (START + 20, 20)
+    assert (first["balance"], first["bonus"]) == (START + 200, 200)
     again = c.get("/api/v1/predictions/wallet").json()
-    assert (again["balance"], again["bonus"]) == (START + 20, 0)
+    assert (again["balance"], again["bonus"]) == (START + 200, 0)
     monkeypatch.setattr(coin, "lagos_today", lambda: dt.date(2026, 11, 14))
-    assert c.get("/api/v1/predictions/wallet").json()["balance"] == START + 40
+    assert c.get("/api/v1/predictions/wallet").json()["balance"] == START + 400
     assert check_wallet(wallet_for(fan)) == []
 
 
