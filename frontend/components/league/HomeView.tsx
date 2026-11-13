@@ -18,6 +18,8 @@ import PlayerAvatar from "@/components/ui/PlayerAvatar";
 import SectionHeader from "@/components/ui/SectionHeader";
 import TrophyCard from "@/components/ui/TrophyCard";
 
+import ScrimLobby from "@/components/scrims/ScrimLobby";
+
 import CardCountdown from "./CardCountdown";
 import ExploreGrid from "./ExploreGrid";
 import { Skeleton, SkeletonRows } from "./Loading";
@@ -194,6 +196,8 @@ export default function HomeView() {
             )}
           </section>
         )}
+
+        <ScrimLobby />
 
         {season && <Stars />}
 
