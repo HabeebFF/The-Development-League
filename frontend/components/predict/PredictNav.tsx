@@ -68,8 +68,15 @@ function OddsSwitch() {
 export function Balance({ wallet }: { wallet: WalletState }) {
   if (wallet.kind === "ok")
     return (
-      <span className="num border border-lion/50 bg-lion/10 px-3 py-1 text-2xl text-accent-hot shadow-[0_0_14px_rgb(245_165_36/0.25)]" aria-label="Your Development Coins (DC)">
-        {coins(wallet.wallet.balance)}
+      <span className="flex items-center gap-2">
+        {wallet.wallet.bonus ? (
+          <span className="chip text-ok" title="Daily bonus: DC for your first visit each day">
+            +{wallet.wallet.bonus} today
+          </span>
+        ) : null}
+        <span className="num border border-lion/50 bg-lion/10 px-3 py-1 text-2xl text-accent-hot shadow-[0_0_14px_rgb(245_165_36/0.25)]" aria-label="Your Development Coins (DC)">
+          {coins(wallet.wallet.balance)}
+        </span>
       </span>
     );
   if (wallet.kind === "out")

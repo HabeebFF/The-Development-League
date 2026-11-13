@@ -2,6 +2,8 @@
 // The server works out every real number (balance, accepted odds, payouts); the
 // sums here only preview what the server will say.
 
+import type { CardDesign } from "./cardDesigns";
+
 export type PTeam = { id: number; name: string; tag: string; slug: string; logo: string | null; primary_color: string };
 
 export type Fixture = {
@@ -91,7 +93,14 @@ export type Multiple = {
   picks: MultiplePick[];
 };
 
-export type Wallet = { balance: number; starting_coins: number; created_at: string };
+export type Wallet = {
+  balance: number;
+  starting_coins: number;
+  created_at: string;
+  /** DC just given as today's daily bonus (0 when already given today). */
+  bonus?: number;
+  daily_bonus?: number;
+};
 
 export type Entry = {
   id: string;
@@ -111,6 +120,10 @@ export type LeaderRow = {
   name: string;
   is_me: boolean;
   balance: number;
+  /** DC spent in the card shop; ``net`` (balance + shop spend) is what the DC tab ranks by. */
+  shop_spent: number;
+  net: number;
+  design: CardDesign | null;
   won: number;
   lost: number;
   accuracy: number | null;
@@ -301,7 +314,12 @@ export function percent(accuracy: number | null): string {
 
 /** What each leaderboard tab measures, shown on the page. */
 export const METRICS: { key: Metric; label: string; explain: (min: number) => string }[] = [
-  { key: "balance", label: "DC", explain: () => "DC held now. Everyone started with the same amount, so this is total profit." },
+  {
+    key: "balance",
+    label: "DC",
+    explain: () =>
+      "DC held now plus DC spent in the card shop, so buying a design never costs a place. Everyone started with the same amount, so this is total profit.",
+  },
   {
     key: "accuracy",
     label: "Accuracy",
