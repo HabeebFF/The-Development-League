@@ -239,10 +239,11 @@ CELERY_BEAT_SCHEDULE = {
         "task": "apps.predictions.tasks.close_due_markets_task",
         "schedule": crontab(),  # every minute
     },
-    # Hourly; it acts from 10:00 Lagos time on scrim days and only fills in what's missing.
+    # Every 5 minutes, so markets follow scrim sign-up closing quickly; it acts from 10:00 Lagos
+    # time on scrim days and only fills in what's missing.
     "predictions-auto-markets": {
         "task": "apps.predictions.tasks.auto_markets_task",
-        "schedule": crontab(minute=5),
+        "schedule": crontab(minute="*/5"),
     },
     "predictions-check-wallets": {
         "task": "apps.predictions.tasks.check_wallets_task",

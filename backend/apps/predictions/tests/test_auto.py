@@ -25,6 +25,15 @@ def _on(settings):
     settings.PREDICTIONS_ENABLED = True
 
 
+@pytest.fixture(autouse=True)
+def _no_sign_up():
+    """These tests cover nights without scrim sign-up (lobby copied from the last session);
+    nights with sign-up are in ``test_scrim_lobby.py``."""
+    from apps.scrims.models import ScrimSettings
+
+    ScrimSettings.objects.update_or_create(pk=1, defaults={"weekdays": []})
+
+
 @pytest.fixture
 def staff():
     user = make_user("staff@tdl.test")
