@@ -16,3 +16,6 @@ PASSWORD_HASHERS = ["django.contrib.auth.hashers.MD5PasswordHasher"]
 AUTH_COOKIE_SECURE = False
 EMAIL_BACKEND = "django.core.mail.backends.locmem.EmailBackend"
 SIMPLE_JWT = {**SIMPLE_JWT, "SIGNING_KEY": SECRET_KEY}  # noqa: F405
+
+# The daily bonus would change every balance the older tests check; its own tests switch it on.
+PREDICTIONS_DAILY_BONUS = 0

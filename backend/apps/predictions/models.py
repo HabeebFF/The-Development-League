@@ -49,6 +49,9 @@ class LedgerEntry(models.Model):
         REFUND = "REFUND", "Refund (void)"
         CORRECTION = "CORRECTION", "Settlement correction"
         ADJUSTMENT = "ADJUSTMENT", "Staff adjustment"
+        DAILY_BONUS = "DAILY_BONUS", "Daily bonus"
+        PURCHASE = "PURCHASE", "Card shop purchase"
+        SHOP_REFUND = "SHOP_REFUND", "Card shop refund"
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     wallet = models.ForeignKey(Wallet, on_delete=models.PROTECT, related_name="entries")
