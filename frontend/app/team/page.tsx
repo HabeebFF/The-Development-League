@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
+import TeamScrims from "@/components/scrims/TeamScrims";
 import TeamIgl from "@/components/team/TeamIgl";
 import { api, type MatchDay, type Paged } from "@/lib/api";
 
@@ -44,6 +45,8 @@ export default function TeamHome() {
           </Link>
         )}
       </div>
+
+      {membership && <TeamScrims slug={membership.team.slug} />}
 
       {membership && <TeamIgl slug={membership.team.slug} canPick={membership.role === "MANAGER" || !!me.staff_role} />}
 
