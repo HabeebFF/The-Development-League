@@ -7,6 +7,7 @@ import SiteFooter from "@/components/SiteFooter";
 import SiteNav from "@/components/SiteNav";
 
 import "./globals.css";
+import "./card-fx.css";
 
 const body = Inter({ variable: "--font-body", subsets: ["latin"] });
 const display = Barlow_Condensed({ variable: "--font-display", weight: ["600", "700", "800", "900"], subsets: ["latin"] });
