@@ -8,35 +8,7 @@ import PlayerCard from "@/components/league/PlayerCard";
 import TiltCard from "@/components/league/TiltCard";
 import { designColors, RARITY_COLORS } from "@/lib/cardDesigns";
 import type { PlayerCard as Card } from "@/lib/cards";
-import { COLLECTION, shortDc, TIERS, type CollectionDesign } from "@/lib/playerDesigns";
-
-// A stand-in player so every design can be seen on a real card layout.
-const SAMPLE: Card = {
-  player_id: 0,
-  name: "Your name",
-  photo: null,
-  team: { id: 0, name: "Your team", tag: "TDL", slug: "", logo: null, primary_color: "#c81e3c" },
-  week: "2026-11-14",
-  role: "RUSHER",
-  role_label: "Rusher",
-  role_suggested: false,
-  suggested_role: "RUSHER",
-  overall: 88,
-  overall_change: 3,
-  tier: "gold",
-  totw: [],
-  stats: [
-    ["ENT", 91],
-    ["CQC", 89],
-    ["FIN", 86],
-    ["AIM", 84],
-    ["TRD", 80],
-    ["SUR", 77],
-  ].map(([key, rating]) => ({ key: key as string, label: key as string, rating: rating as number, change: null, stale: false, value: null, detail: "" })),
-  matches: 20,
-  week_matches: 6,
-  stale: false,
-};
+import { COLLECTION, SAMPLE_CARD as SAMPLE, shortDc, TIERS, type CollectionDesign } from "@/lib/playerDesigns";
 
 function cardFor(design: CollectionDesign): Card {
   return { ...SAMPLE, design };

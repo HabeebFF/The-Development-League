@@ -1,13 +1,14 @@
 import {
   BLANK_PHOTO,
   cardFooter,
+  flagEmoji,
   changeText,
   roleShort,
   TIER_COLORS,
   type CardStat,
   type PlayerCard as Card,
 } from "@/lib/cards";
-import { copyText, designColors, designPerks, PATTERNS } from "@/lib/cardDesigns";
+import { copyText, designColors, designPerks, PALETTES, PATTERNS } from "@/lib/cardDesigns";
 
 import CardFx, { CardFrame, FX_EFFECTS } from "./CardFx";
 import { CARD_SHAPE } from "./cardShape";
@@ -36,6 +37,10 @@ export default function PlayerCard({
   const copy = look ? copyText(card.design) : null;
   const fx = (FX_EFFECTS as readonly string[]).includes(effect);
   const perks = look ? designPerks(card.design) : designPerks(null);
+  // Player shop extras never go on special cards.
+  const shopExtras = plainTier ? card.extras : null;
+  const titleColor = shopExtras?.title_palette ? PALETTES[shopExtras.title_palette]?.[3] : undefined;
+  const ratingGlow = shopExtras?.glow ? PALETTES[shopExtras.glow]?.[4] : undefined;
   const main = card.stats.filter((s) => !s.extra);
   const extras = card.stats.filter((s) => s.extra);
   const totw = card.tier === "totw";
@@ -106,6 +111,13 @@ export default function PlayerCard({
 
         {/* Rating, role and team down the left; the photo on the right. */}
         <div className="absolute top-[1.4em] left-[1.5em] flex w-[3.2em] flex-col items-center">
+          {ratingGlow && (
+            <span
+              aria-hidden
+              className="fx-rating-glow absolute top-[-0.3em] h-[3.3em] w-[3.6em]"
+              style={{ ["--rg" as string]: ratingGlow }}
+            />
+          )}
           {look ? (
             // The tier (gold, silver, bronze) stays visible as the rating badge's colour.
             <span
@@ -178,6 +190,31 @@ export default function PlayerCard({
             loading="lazy"
           />
         </div>
+
+        {shopExtras && (shopExtras.number !== null || shopExtras.flag) && (
+          <div className="absolute top-[1.25em] right-[1.35em] flex flex-col items-end leading-none">
+            {shopExtras.number !== null && (
+              <span className="font-display text-[1.15em]" style={{ textShadow: "0 0 3px rgb(0 0 0 / 0.6)" }}>
+                {shopExtras.number}
+              </span>
+            )}
+            {shopExtras.flag && (
+              <span className="mt-[0.1em] text-[0.85em]" title={shopExtras.flag}>
+                {flagEmoji(shopExtras.flag)}
+              </span>
+            )}
+          </div>
+        )}
+        {shopExtras?.title && (
+          <div className="absolute inset-x-[0.8em] top-[7.95em]">
+            <p
+              className="truncate text-center font-display text-[0.62em] tracking-[0.3em] uppercase"
+              style={{ color: titleColor ?? ink, textShadow: "0 0 4px rgb(0 0 0 / 0.7)" }}
+            >
+              {shopExtras.title}
+            </p>
+          </div>
+        )}
 
         {/* Positions sit on plain wrappers: an em inside a resized text element is its own em. */}
         <div className="absolute inset-x-[0.8em] top-[8.75em]">

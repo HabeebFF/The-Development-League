@@ -29,3 +29,29 @@ export type Me = FanCardData & {
 };
 
 export type BuyResult = { owned: string; design: CardDesign; price_paid: number; balance: number; equipped: boolean };
+
+// -- Player shop (league players only, paid with DC) ---------------------------------------
+
+export type ItemKind = "FRAME" | "TITLE" | "NUMBER" | "GLOW";
+
+export type PlayerItem = ShopDesign & {
+  kind: ItemKind;
+  kind_label: string;
+  /** Milestone frames: earned by playing, never bought. */
+  unlock: { stat: string; target: number; label: string; progress: number } | null;
+};
+
+export type PlayerShop = {
+  signed_in: boolean;
+  staff: boolean;
+  /** The league player this account is linked to; null for fans and visitors. */
+  player: { id: number; name: string; country: string } | null;
+  can_buy: boolean;
+  balance: number | null;
+  items: PlayerItem[];
+  number: number | null;
+  flag: string | null;
+  owns_number: boolean;
+  progress: { kills: number; booyahs: number; totw: number } | null;
+  low_balance_warning: number;
+};

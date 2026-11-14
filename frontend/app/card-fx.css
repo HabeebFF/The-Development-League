@@ -203,3 +203,11 @@
 .fx-paused * { animation-play-state: paused !important; }
 .fx-paused .fx-enter, .fx-mini .fx-enter { animation: none; }
 .fx-mini .fx-enter-burst { display: none; }
+
+/* Player shop rating glow: a soft pulsing light behind the rating. */
+.fx-rating-glow {
+  pointer-events: none; border-radius: 50%;
+  background: radial-gradient(circle, rgb(var(--rg) / 0.85), transparent 65%);
+  animation: fx-breathe 1.8s ease-in-out infinite alternate;
+}
+@media (prefers-reduced-motion: reduce) { .fx-rating-glow { animation: none; } }

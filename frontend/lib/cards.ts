@@ -48,7 +48,24 @@ export type PlayerCard = {
   stale: boolean;
   /** A design the player bought in the shop (weekly cards only; never on specials). */
   design?: CardDesign | null;
+  /** Player shop extras: a title, a rating glow, shirt number and flag (weekly cards only). */
+  extras?: CardExtras | null;
 };
+
+export type CardExtras = {
+  title: string | null;
+  title_palette: string | null;
+  glow: string | null;
+  glow_effect: string | null;
+  number: number | null;
+  flag: string | null;
+};
+
+/** "NG" -> the flag emoji. */
+export function flagEmoji(code: string | null | undefined): string {
+  if (!code || !/^[A-Za-z]{2}$/.test(code)) return "";
+  return String.fromCodePoint(...[...code.toUpperCase()].map((c) => 0x1f1e6 + c.charCodeAt(0) - 65));
+}
 
 export type CardWeek = {
   week: string | null;
