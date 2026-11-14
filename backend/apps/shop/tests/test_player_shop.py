@@ -15,7 +15,7 @@ from apps.shop.models import CardDesign, Equipped, OwnedDesign
 
 pytestmark = pytest.mark.django_db
 PASSWORD = "a-Long-password-42"
-START = 100_000
+START = 200_000
 
 
 @pytest.fixture(autouse=True)
@@ -80,7 +80,7 @@ def buy(client, slug, **body):
 
 def test_player_items_are_not_in_the_fan_shop():
     fan_slugs = {r["slug"] for r in APIClient().get("/api/v1/shop/designs").json()["designs"]}
-    assert "pro-circuit" not in fan_slugs and "title-zone-king" not in fan_slugs
+    assert "carbon-strike" not in fan_slugs and "title-zone-king" not in fan_slugs
     assert "carbon-black" in fan_slugs
 
 
@@ -105,15 +105,15 @@ def test_player_shop_is_on_its_own_address_not_under_predictions():
 
 
 def test_a_league_player_buys_with_dc(pro):
-    resp = buy(as_user(pro), "pro-circuit", equip=True)
+    resp = buy(as_user(pro), "carbon-strike", equip=True)
     assert resp.status_code == 201, resp.content
-    assert resp.json()["balance"] == START - 5_000
-    assert Equipped.objects.get(user=pro).design == item("pro-circuit")
+    assert resp.json()["balance"] == START - 50_000
+    assert Equipped.objects.get(user=pro).design == item("carbon-strike")
     check_wallet(wallet_for(pro))
 
 
 def test_a_fan_cant_buy_player_items(fan):
-    resp = buy(as_user(fan), "pro-circuit")
+    resp = buy(as_user(fan), "carbon-strike")
     assert resp.status_code == 400
     assert "league players" in resp.json()["detail"]
     assert wallet_for(fan).balance == START
@@ -124,21 +124,21 @@ def test_staff_cant_buy_player_items(staff, team):
         game_uid=9, current_name_raw="BOSS", display_name="BOSS", search_name="boss",
         current_team=team, user=staff,
     )  # fmt: skip
-    assert buy(as_user(staff), "pro-circuit").status_code == 403
+    assert buy(as_user(staff), "carbon-strike").status_code == 403
 
 
 def test_signed_out_visitors_can_look_but_not_buy():
     assert APIClient().get("/api/v1/shop/player").status_code == 200
-    assert buy(APIClient(), "pro-circuit").status_code in (401, 403)
+    assert buy(APIClient(), "carbon-strike").status_code in (401, 403)
 
 
 def test_cant_buy_twice_or_go_below_zero(pro):
     c = as_user(pro)
-    assert buy(c, "night-ops").status_code == 201
-    assert buy(c, "night-ops").status_code == 400
-    resp = buy(c, "apex")  # 10,000,000 DC
+    assert buy(c, "neon-edge").status_code == 201
+    assert buy(c, "neon-edge").status_code == 400
+    resp = buy(c, "void-monarch")  # 10,000,000 DC
     assert resp.status_code == 400
-    assert not OwnedDesign.objects.filter(user=pro, design=item("apex")).exists()
+    assert not OwnedDesign.objects.filter(user=pro, design=item("void-monarch")).exists()
     check_wallet(wallet_for(pro))
 
 
@@ -163,12 +163,12 @@ def test_the_player_shop_page_shows_my_balance_and_owned_items(pro):
 
 def test_title_glow_and_frame_each_have_their_own_slot(pro):
     c = as_user(pro)
-    for slug in ("title-zone-king", "glow-gold", "pro-circuit"):
+    for slug in ("title-zone-king", "glow-gold", "carbon-strike"):
         assert buy(c, slug).status_code == 201
     for kind, slug in (
         ("TITLE", "title-zone-king"),
         ("GLOW", "glow-gold"),
-        ("FRAME", "pro-circuit"),
+        ("FRAME", "carbon-strike"),
     ):
         resp = c.post(
             "/api/v1/shop/player/equip", {"kind": kind, "design": item(slug).pk}, format="json"
@@ -178,7 +178,7 @@ def test_title_glow_and_frame_each_have_their_own_slot(pro):
     assert (eq.title.slug, eq.glow.slug, eq.design.slug) == (
         "title-zone-king",
         "glow-gold",
-        "pro-circuit",
+        "carbon-strike",
     )  # noqa: E501
     # A title can't go in the glow slot.
     resp = c.post(
@@ -240,8 +240,8 @@ def test_refund_takes_extras_off_the_card(pro, staff):
 
 def test_staff_can_only_gift_player_items_to_players(fan, pro, staff):
     with pytest.raises(services.ShopError):
-        services.gift(fan, item("booyah-gold").pk, staff)
-    assert services.gift(pro, item("booyah-gold").pk, staff).price_paid == 0
+        services.gift(fan, item("zone-king").pk, staff)
+    assert services.gift(pro, item("zone-king").pk, staff).price_paid == 0
 
 
 # -- milestones --------------------------------------------------------------------------------
@@ -309,3 +309,39 @@ def test_staff_add_a_player_title(staff):
     assert c.post("/api/v1/admin/shop/designs", bad, format="json").status_code == 400
     ok = {**body, "slug": "x3", "kind": "FRAME", "unlock": "kills:500", "price": 0}
     assert c.post("/api/v1/admin/shop/designs", ok, format="json").status_code == 201
+
+
+# -- the collection ----------------------------------------------------------------------------
+
+
+def test_the_collection_has_15_designs_in_five_tiers():
+    frames = CardDesign.objects.filter(players_only=True, kind="FRAME", unlock="")
+    assert frames.count() == 15
+    tiers = {}
+    for d in frames:
+        tiers.setdefault(d.rarity, []).append(d.price)
+    assert {k: (min(v), max(v)) for k, v in tiers.items()} == {
+        "COMMON": (5_000, 25_000),
+        "RARE": (50_000, 150_000),
+        "EPIC": (250_000, 750_000),
+        "LEGENDARY": (1_000_000, 3_000_000),
+        "MYTHIC": (5_000_000, 10_000_000),
+    }
+    assert all(d.copies for d in frames if d.rarity in ("LEGENDARY", "MYTHIC"))
+
+
+def test_parts_of_every_seeded_design_are_known():
+    from apps.shop import looks
+
+    for d in CardDesign.objects.all():
+        assert looks.clean_parts(d.parts) == d.parts, d.slug
+
+
+def test_mythic_wearers_get_a_name_aura(pro, staff):
+    player = Player.objects.get(user=pro)
+    assert APIClient().get("/api/v1/shop/auras").json() == {"auras": {}}
+    services.gift(pro, item("phoenix-rising").pk, staff)
+    services.equip(pro, item("phoenix-rising").pk)
+    assert APIClient().get("/api/v1/shop/auras").json() == {"auras": {str(player.pk): "phoenix"}}
+    services.equip(pro, None)
+    assert APIClient().get("/api/v1/shop/auras").json() == {"auras": {}}

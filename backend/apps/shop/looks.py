@@ -17,6 +17,21 @@ PALETTES = {
     "champion": "Champion gold",
     "vintage": "Vintage sepia",
     "diamond": "Diamond ice",
+    # Player shop collection
+    "steel": "Brushed steel",
+    "gunmetal": "Gunmetal",
+    "team": "Team colour",
+    "neon": "Neon",
+    "sniper": "Sniper green",
+    "ember": "Ember",
+    "rage": "Rage red",
+    "smoke": "Smoke",
+    "foil": "Holo foil",
+    "zone": "Zone",
+    "storm": "Storm",
+    "booyah": "Booyah gold",
+    "phoenix": "Phoenix",
+    "void": "Void",
 }
 
 PATTERNS = {
@@ -28,6 +43,8 @@ PATTERNS = {
     "flames": "Flames",
     "paper": "Aged paper",
     "facets": "Diamond facets",
+    "brushed": "Brushed metal",
+    "scope": "Scope marks",
 }
 
 EFFECTS = {
@@ -36,6 +53,18 @@ EFFECTS = {
     "shine": "Tilting shine",
     "flame": "Flame frame",
     "sparkle": "Sparkle",
+    "metal": "Metal shine",
+    "neon": "Neon edges",
+    "scope": "Scope and scan line",
+    "embers": "Rising embers",
+    "lightning": "Lightning",
+    "smoke": "Smoke and blast",
+    "foil": "Holo foil (tilt)",
+    "zone": "Closing zone",
+    "storm": "Storm",
+    "goldrain": "Gold rain",
+    "phoenix": "Phoenix wings",
+    "void": "Void vortex",
 }
 
 PARTS = {"palette": PALETTES, "pattern": PATTERNS, "effect": EFFECTS}

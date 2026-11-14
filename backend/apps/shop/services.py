@@ -302,3 +302,27 @@ def design_for_player(player, request=None) -> dict | None:
         cache = equipped_designs()
         request._shop_designs = cache
     return cache.get(player.user_id)
+
+
+def name_auras() -> dict[int, str]:
+    """``{player_id: palette}`` for league players wearing a Mythic design: their name glows
+    across the site (kill lists, ratings)."""
+    from apps.league.models import Player
+
+    users = {
+        e.user_id: e.design.parts.get("palette")
+        for e in Equipped.objects.filter(
+            design__rarity=CardDesign.Rarity.MYTHIC, design__players_only=True
+        ).select_related("design")
+        if OwnedDesign.objects.filter(
+            user_id=e.user_id, design_id=e.design_id, refunded_at__isnull=True
+        ).exists()
+    }
+    if not users:
+        return {}
+    return {
+        pid: users[uid]
+        for pid, uid in Player.objects.filter(user_id__in=users, hide_card=False).values_list(
+            "pk", "user_id"
+        )
+    }

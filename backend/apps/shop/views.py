@@ -131,6 +131,15 @@ class PlayerShopView(APIView):
         )
 
 
+class AurasView(APIView):
+    """GET: ``{"auras": {player_id: palette}}``, players whose name glows (a Mythic design)."""
+
+    permission_classes = [PublicRead]
+
+    def get(self, request):
+        return Response({"auras": services.name_auras()})
+
+
 class PlayerEquipView(APIView):
     """POST ``{"kind": "FRAME" | "TITLE" | "GLOW", "design": id | null}``."""
 

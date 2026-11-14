@@ -20,6 +20,7 @@ class CardDesign(models.Model):
         LEGENDARY = "LEGENDARY", "Legendary"
         VINTAGE = "VINTAGE", "Vintage"
         DIAMOND = "DIAMOND", "Diamond"
+        MYTHIC = "MYTHIC", "Mythic"
 
     class Kind(models.TextChoices):
         FRAME = "FRAME", "Card design"
