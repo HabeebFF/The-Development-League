@@ -19,7 +19,7 @@ from apps.predictions.views import CanPlay, PredictionsOn
 from common.pagination import DefaultPagination
 from common.permissions import IsStaff, PublicRead
 
-from . import looks, services
+from . import looks, milestones, services
 from .models import CardDesign, Equipped, OwnedDesign
 from .services import ShopError, available, design_data
 
@@ -60,6 +60,110 @@ def _mine(user) -> tuple[dict, int | None]:
     return owned, (eq.design_id if eq and eq.design_id in owned else None)
 
 
+# -- player shop -----------------------------------------------------------------------------
+
+
+def _player_item(design: CardDesign, owned: dict, eq: Equipped | None, stats, now) -> dict:
+    slot = services.SLOTS.get(design.kind)
+    on = bool(eq and slot and getattr(eq, f"{slot}_id") == design.pk and design.pk in owned)
+    parsed = milestones.parse(design.unlock)
+    return {
+        **shop_design(design, owned, None, now),
+        "kind": design.kind,
+        "kind_label": design.get_kind_display(),
+        "equipped": on,
+        "unlock": (
+            {
+                "stat": parsed[0],
+                "target": parsed[1],
+                "label": milestones.label(design.unlock),
+                "progress": stats.get(parsed[0], 0) if stats else 0,
+            }
+            if parsed
+            else None
+        ),
+    }
+
+
+class PlayerShopView(APIView):
+    """GET: the Player shop. Anyone can look; only an account linked to a league player can
+    buy (``can_buy``). Opening it also hands out any milestone frames the player has reached.
+    Buying goes through the same ``shop/designs/<id>/buy`` as the fan shop."""
+
+    permission_classes = [PredictionsOn, PublicRead]
+
+    def get(self, request):
+        now = timezone.now()
+        user = request.user
+        player = services.linked_player(user)
+        staff = user.is_authenticated and not can_play(user)
+        if player is not None and not staff:
+            milestones.grant(user, player)
+        stats = milestones.progress(player) if player is not None else None
+        owned, _ = _mine(user)
+        eq = Equipped.objects.filter(user=user).first() if user.is_authenticated else None
+        qs = (
+            CardDesign.objects.filter(players_only=True)
+            .annotate(sold=_sold())
+            .order_by("order", "price", "name")
+        )
+        items = [
+            _player_item(d, owned, eq, stats, now) for d in qs if available(d, now) or d.pk in owned
+        ]
+        return Response(
+            {
+                "signed_in": user.is_authenticated,
+                "staff": staff,
+                "player": (
+                    {"id": player.pk, "name": player.display_name, "country": player.country}
+                    if player
+                    else None
+                ),
+                "can_buy": player is not None and not staff,
+                "balance": wallet_for(user).balance if player and not staff else None,
+                "items": items,
+                "number": eq.shirt_number if eq else None,
+                "flag": (eq.flag if eq else "") or None,
+                "owns_number": bool(player) and services.owns_number(user),
+                "progress": stats,
+                "low_balance_warning": LOW_BALANCE_WARNING,
+            }
+        )
+
+
+class PlayerEquipView(APIView):
+    """POST ``{"kind": "FRAME" | "TITLE" | "GLOW", "design": id | null}``."""
+
+    permission_classes = [PredictionsOn, IsAuthenticated, CanPlay]
+
+    def post(self, request):
+        kind = request.data.get("kind", CardDesign.Kind.FRAME)
+        design_id = request.data.get("design")
+        if design_id is not None and not isinstance(design_id, int):
+            raise ValidationError({"design": "Send a design id or null."})
+        try:
+            eq = services.equip(request.user, design_id, kind)
+        except ShopError as exc:
+            return _refused(exc)
+        return Response({"frame": eq.design_id, "title": eq.title_id, "glow": eq.glow_id})
+
+
+class PlayerNumberView(APIView):
+    """POST ``{"number": 0-99 | null, "flag": "NG" | ""}`` (needs Number and flag)."""
+
+    permission_classes = [PredictionsOn, IsAuthenticated, CanPlay]
+
+    def post(self, request):
+        number = request.data.get("number")
+        if number is not None and (isinstance(number, bool) or not isinstance(number, int)):
+            raise ValidationError({"number": "Send a number from 0 to 99, or null."})
+        try:
+            eq = services.set_number(request.user, number, request.data.get("flag") or "")
+        except ShopError as exc:
+            return _refused(exc)
+        return Response({"number": eq.shirt_number, "flag": eq.flag or None})
+
+
 class DesignListView(APIView):
     """GET: every design on sale, plus any the viewer owns that went off sale."""
 
@@ -68,7 +172,11 @@ class DesignListView(APIView):
     def get(self, request):
         now = timezone.now()
         owned, equipped_id = _mine(request.user)
-        qs = CardDesign.objects.annotate(sold=_sold()).order_by("order", "price", "name")
+        qs = (
+            CardDesign.objects.filter(players_only=False)
+            .annotate(sold=_sold())
+            .order_by("order", "price", "name")
+        )
         designs = [
             shop_design(d, owned, equipped_id, now)
             for d in qs
@@ -92,7 +200,7 @@ class BuyView(APIView):
         except ShopError as exc:
             return _refused(exc)
         if request.data.get("equip"):
-            services.equip(request.user, owned.design_id)
+            services.equip_any(request.user, owned.design)
         return Response(
             {
                 "owned": str(owned.pk),
@@ -219,6 +327,9 @@ class DesignAdminSerializer(serializers.ModelSerializer):
             "id",
             "slug",
             "name",
+            "kind",
+            "players_only",
+            "unlock",
             "rarity",
             "price",
             "parts",
@@ -237,10 +348,28 @@ class DesignAdminSerializer(serializers.ModelSerializer):
         except ValueError as exc:
             raise serializers.ValidationError(str(exc)) from exc
 
-    def validate_price(self, value):
-        if value < 1:
-            raise serializers.ValidationError("A design costs at least 1 DC.")
+    def validate_unlock(self, value):
+        if value and milestones.parse(value) is None:
+            raise serializers.ValidationError(
+                "Use kills:<n>, booyahs:<n> or totw:<n>, or leave empty."
+            )
         return value
+
+    def validate(self, attrs):
+        get = lambda k, d=None: attrs.get(k, getattr(self.instance, k, d))  # noqa: E731
+        if not get("unlock", "") and (get("price", 0) or 0) < 1:
+            raise serializers.ValidationError({"price": "A design costs at least 1 DC."})
+        if get("unlock", "") and not get("players_only", False):
+            raise serializers.ValidationError(
+                {"unlock": "Milestone items are for players: tick Players only."}
+            )
+        if get("kind", CardDesign.Kind.FRAME) != CardDesign.Kind.FRAME and not get(
+            "players_only", False
+        ):
+            raise serializers.ValidationError(
+                {"kind": "Titles, numbers and glows are Player shop items: tick Players only."}
+            )
+        return attrs
 
     def validate_copies(self, value):
         if value is not None and value < 1:

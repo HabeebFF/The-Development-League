@@ -21,8 +21,28 @@ class CardDesign(models.Model):
         VINTAGE = "VINTAGE", "Vintage"
         DIAMOND = "DIAMOND", "Diamond"
 
+    class Kind(models.TextChoices):
+        FRAME = "FRAME", "Card design"
+        TITLE = "TITLE", "Card title"
+        NUMBER = "NUMBER", "Number and flag"
+        GLOW = "GLOW", "Rating glow"
+
     slug = models.SlugField(max_length=40, unique=True)
-    name = models.CharField(max_length=60)
+    name = models.CharField(max_length=60, help_text="For a card title, the words on the card")
+    kind = models.CharField(
+        max_length=8,
+        choices=Kind.choices,
+        default=Kind.FRAME,
+        help_text="Titles, number and flag, and rating glows are player shop extras",
+    )
+    players_only = models.BooleanField(
+        default=False, help_text="In the Player shop: only league players can buy it"
+    )
+    unlock = models.CharField(
+        max_length=20,
+        blank=True,
+        help_text="Earned, not bought: kills:100, booyahs:10 or totw:1 (see milestones.py)",
+    )
     rarity = models.CharField(max_length=10, choices=Rarity.choices, default=Rarity.COMMON)
     price = models.PositiveIntegerField(help_text="DC")
     parts = models.JSONField(default=dict, help_text="palette, pattern, effect (see looks.py)")
@@ -112,6 +132,15 @@ class Equipped(models.Model):
     favourite_team = models.ForeignKey(
         "league.Team", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
     )
+    # Player shop extras, shown on a linked player's FUT card only.
+    title = models.ForeignKey(
+        CardDesign, on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+    glow = models.ForeignKey(
+        CardDesign, on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+    shirt_number = models.PositiveSmallIntegerField(null=True, blank=True)
+    flag = models.CharField(max_length=2, blank=True, help_text="Country code, e.g. NG")
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self) -> str:
