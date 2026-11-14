@@ -35,6 +35,14 @@ from common.pagination import DefaultPagination
 from common.permissions import IsStaff, IsSuperAdmin, PublicRead
 
 from . import auto, autosettle, settlement
+from .fans import (
+    ACCURACY_MIN_SETTLED,
+    NET_ORDER,
+    _settled,
+    fan_name,
+    fan_zone,
+    ranked_wallets,
+)
 from .markets import (
     MarketError,
     PlayerRules,
@@ -1142,23 +1150,7 @@ class OutcomeAdminView(APIView):
 
 # -- leaderboard ---------------------------------------------------------------------------------
 
-ACCURACY_MIN_SETTLED = 10
 LEADERBOARD_SIZE = 50
-
-
-def _name(wallet: Wallet) -> str:
-    return wallet.user.display_name or f"Player {wallet.pk}"
-
-
-def _settled(model, status_: str):
-    """How many of a wallet owner's single bets or multiples ended with ``status_``."""
-    rows = (
-        model.objects.filter(user=OuterRef("user"), status=status_)
-        .values("user")
-        .annotate(n=Count("pk"))
-        .values("n")
-    )
-    return Coalesce(Subquery(rows, output_field=IntegerField()), Value(0))
 
 
 class LeaderboardView(APIView):
@@ -1175,23 +1167,9 @@ class LeaderboardView(APIView):
 
     def get(self, request):
         metric = request.query_params.get("metric", "balance")
-        qs = Wallet.objects.select_related("user").annotate(
-            won=_settled(Bet, Bet.Status.WON) + _settled(Multiple, Bet.Status.WON),
-            lost=_settled(Bet, Bet.Status.LOST) + _settled(Multiple, Bet.Status.LOST),
-        )
-        spent = (
-            LedgerEntry.objects.filter(
-                wallet=OuterRef("pk"), kind__in=[Kind.PURCHASE, Kind.SHOP_REFUND]
-            )
-            .values("wallet")
-            .annotate(n=Sum("amount"))
-            .values("n")
-        )
-        qs = qs.annotate(
-            shop_spent=-Coalesce(Subquery(spent, output_field=IntegerField()), Value(0))
-        ).annotate(net=F("balance") + F("shop_spent"))
+        qs = ranked_wallets()
         if metric == "balance":
-            qs = qs.order_by("-net", "created_at")
+            qs = qs.order_by(*NET_ORDER)
         elif metric == "accuracy":
             qs = qs.annotate(settled=F("won") + F("lost")).filter(settled__gte=ACCURACY_MIN_SETTLED)
             qs = qs.annotate(
@@ -1211,7 +1189,7 @@ class LeaderboardView(APIView):
             rows.append(
                 {
                     "rank": n,
-                    "name": _name(w),
+                    "name": fan_name(w),
                     "is_me": request.user.is_authenticated and w.user_id == request.user.pk,
                     "balance": w.balance,
                     "shop_spent": w.shop_spent,
@@ -1225,6 +1203,16 @@ class LeaderboardView(APIView):
         return Response(
             {"metric": metric, "accuracy_min_settled": ACCURACY_MIN_SETTLED, "rows": rows}
         )
+
+
+class FanZoneView(APIView):
+    """The home page's Fan zone: fan numbers this week, top fan cards, big wins, the crowd's
+    picks, the rarest designs, and the signed-in fan's own card (see ``fans.fan_zone``)."""
+
+    permission_classes = [PredictionsOn, PublicRead]
+
+    def get(self, request):
+        return Response(fan_zone(request.user))
 
 
 # -- staff: automatic markets ----------------------------------------------------------------------

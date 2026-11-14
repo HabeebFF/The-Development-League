@@ -48,6 +48,7 @@ urlpatterns = [
         views.LeaderboardView.as_view(),
         name="predictions-leaderboard",
     ),
+    path("predictions/fan-zone", views.FanZoneView.as_view(), name="predictions-fan-zone"),
     path("predictions/bets/<uuid:pk>", views.BetDetailView.as_view(), name="predictions-bet"),
     path("predictions/multiples", views.MultiplesView.as_view(), name="predictions-multiples"),
     path(

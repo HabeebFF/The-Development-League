@@ -22,6 +22,7 @@ import ScrimLobby from "@/components/scrims/ScrimLobby";
 
 import CardCountdown from "./CardCountdown";
 import ExploreGrid from "./ExploreGrid";
+import FanZone from "./FanZone";
 import { Skeleton, SkeletonRows } from "./Loading";
 import MatchDayCard from "./MatchDayCard";
 import WeekStars from "./WeekStars";
@@ -206,6 +207,8 @@ export default function HomeView() {
           <CardCountdown />
           <WeekStars />
         </section>
+
+        <FanZone />
 
         {season && <WeekAwards />}
 
