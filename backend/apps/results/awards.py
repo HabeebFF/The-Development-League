@@ -7,6 +7,10 @@
 - Top sniper: kills with weapons staff class as snipers; their longest such kill is shown.
 - Top grenader: kills with grenades and explosive launchers (M79, MGL140, FGL-24...).
 
+Rusher, sniper and grenader are for players of that role only (``ROLE_ONLY``): the role
+staff set on the player, else the role on their latest player card up to the end of the
+period. A player with neither (too few matches for a card yet) can't win them.
+
 Kills carry a weapon number from the logs; staff name each number once (Staff > Coach >
 Weapons). Until any weapon has the class an award needs, that award says so instead of
 naming a winner.
@@ -50,6 +54,8 @@ TOP = 3  # winner plus runners-up
 MIN_MATCHES = {"week": 4, "month": 8}  # for the MVP and Best IGL
 SNIPER, THROWABLE, EXPLOSIVE = "SNIPER", "THROWABLE", "EXPLOSIVE"
 GRENADER = {THROWABLE, EXPLOSIVE}
+# Awards only players of one role can win (the role values of Player.CardRole).
+ROLE_ONLY = {"rusher": "RUSHER", "sniper": "SNIPER", "grenader": "GRENADER"}
 
 
 @dataclass
@@ -228,19 +234,19 @@ AWARDS = [
     {
         "key": "rusher",
         "title": "Top rusher",
-        "rule": f"Knocks from {CLOSE_M:g} m or closer, plus fights they opened with the first"
-        " knock or kill.",
+        "rule": f"Rushers only. Knocks from {CLOSE_M:g} m or closer, plus fights they opened"
+        " with the first knock or kill.",
     },
     {
         "key": "sniper",
         "title": "Top sniper",
-        "rule": "Most kills with sniper rifles.",
+        "rule": "Snipers only. Most kills with sniper rifles.",
         "needs": {SNIPER},
     },
     {
         "key": "grenader",
         "title": "Top grenader",
-        "rule": "Most kills with grenades, launchers and other explosives.",
+        "rule": "Grenaders only. Most kills with grenades, launchers and other explosives.",
         "needs": GRENADER,
     },
 ]
@@ -269,6 +275,21 @@ def _numbers(key: str, ln: Line) -> tuple[int, str]:
     return ln.throwable_kills, f"{ln.throwable_kills} explosive kills"
 
 
+def roles_at(players: dict[int, Player], end: date) -> dict[int, str]:
+    """Each player's role for a period ending ``end``: the one staff set on the player, else
+    the role on their latest card from a week starting on or before ``end``."""
+    from .models import PlayerCard
+
+    roles: dict[int, str] = {}
+    cards = PlayerCard.objects.filter(player_id__in=list(players), week__lte=end).order_by(
+        "player_id", "-week"
+    )
+    for pid, role in cards.values_list("player_id", "role"):
+        roles.setdefault(pid, role)
+    roles.update({pid: p.card_role for pid, p in players.items() if p.card_role})
+    return roles
+
+
 def awards(kind: str, day: date, between: tuple[date, date] | None = None) -> dict:
     """``between`` overrides the period (the player cards' Saturday to Friday week)."""
     start, end = between or period_of(kind, day)
@@ -288,6 +309,7 @@ def awards(kind: str, day: date, between: tuple[date, date] | None = None) -> di
     players = {p.pk: p for p in Player.objects.filter(pk__in=ids)}
     team_ids = {t.teams.most_common(1)[0][0] for t in totals.values() if t.teams}
     teams = {t.pk: t for t in Team.objects.filter(pk__in=team_ids)}
+    roles = roles_at(players, end)
 
     def person(pid: int, key: str) -> dict:
         t = totals[pid]
@@ -314,8 +336,14 @@ def awards(kind: str, day: date, between: tuple[date, date] | None = None) -> di
         if needs and not needs & have:
             entry["blocked"] = "Needs weapon names: staff haven't marked which weapons count yet."
         else:
+            role = ROLE_ONLY.get(a["key"])
             ranked = sorted(
-                (pid for pid in totals if _score(a["key"], totals[pid].line)[0] > 0),
+                (
+                    pid
+                    for pid in totals
+                    if _score(a["key"], totals[pid].line)[0] > 0
+                    and (role is None or roles.get(pid) == role)
+                ),
                 key=lambda pid: _score(a["key"], totals[pid].line),
                 reverse=True,
             )
