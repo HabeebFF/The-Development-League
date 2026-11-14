@@ -55,6 +55,7 @@ export const GROUPS: NavGroup[] = [
   { href: "/teams", label: "Teams", blurb: "Teams and Protection Points", icon: ICON.teams, items: TEAM_PAGES },
   { href: "/predict", label: "Predict", blurb: "Bet free DC on matches, no real money", icon: ICON.predict, flag: "predictions" },
   { href: "/shop", label: "Shop", blurb: "Buy card designs with your DC", icon: ICON.shop, flag: "predictions" },
+  { href: "/player-shop", label: "Player shop", blurb: "Card looks only league players can buy", icon: ICON.cards, flag: "predictions" },
 ];
 
 export const MENU_ICON = ICON.menu;

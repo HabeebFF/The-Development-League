@@ -51,7 +51,7 @@ export async function cardImage(card: PlayerCard): Promise<Blob | null> {
     getComputedStyle(document.body).getPropertyValue("--font-body").trim() ||
     "sans-serif";
   const plainTier = card.tier === "gold" || card.tier === "silver" || card.tier === "bronze";
-  const look = plainTier ? designColors(card.design) : null;
+  const look = plainTier ? designColors(card.design, card.team?.primary_color) : null;
   const tierColors = TIER_COLORS[card.tier];
   const [top, bottom, ink, line] = look
     ? [look.top, look.bottom, look.ink, look.line]

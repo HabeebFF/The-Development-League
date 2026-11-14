@@ -20,4 +20,8 @@ urlpatterns = [
     path("shop/designs/<int:pk>/buy", views.BuyView.as_view(), name="shop-buy"),
     path("shop/equip", views.EquipView.as_view(), name="shop-equip"),
     path("shop/me", views.MeView.as_view(), name="shop-me"),
+    path("shop/auras", views.AurasView.as_view(), name="shop-auras"),
+    path("shop/player", views.PlayerShopView.as_view(), name="shop-player"),
+    path("shop/player/equip", views.PlayerEquipView.as_view(), name="shop-player-equip"),
+    path("shop/player/number", views.PlayerNumberView.as_view(), name="shop-player-number"),
 ]

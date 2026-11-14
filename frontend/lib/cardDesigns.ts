@@ -8,7 +8,7 @@ export type CardDesign = {
   id: number;
   slug: string;
   name: string;
-  rarity: "COMMON" | "RARE" | "EPIC" | "LEGENDARY" | "VINTAGE" | "DIAMOND";
+  rarity: "COMMON" | "RARE" | "EPIC" | "LEGENDARY" | "VINTAGE" | "DIAMOND" | "MYTHIC";
   parts: DesignParts;
   /** This copy's number for a limited design ("#7 of 20"). */
   copy_number: number | null;
@@ -40,6 +40,22 @@ export const PALETTES: Record<string, [string, string, string, string, string]> 
   champion: ["#1a1206", "#050302", "#ffe7a3", "#f5b82e", "245 184 46"],
   vintage: ["#e6d3a8", "#7a5a34", "#2b1b0c", "#fff4d6", "214 176 112"],
   diamond: ["#f2fbff", "#8fb8dc", "#0b1a2a", "#ffffff", "190 232 255"],
+  // Player shop collection.
+  steel: ["#e4e8ee", "#5d6573", "#0d1016", "#ffffff", "210 218 230"],
+  gunmetal: ["#3b4049", "#0b0d11", "#f6e7c1", "#f5b82e", "245 184 46"],
+  // "team" is the player's own team colour (see designColors); this is the fallback.
+  team: ["#2a3550", "#07090f", "#f2f4fa", "#9fb2e0", "150 170 230"],
+  neon: ["#0b1220", "#020409", "#e6fdff", "#22e3ff", "34 227 255"],
+  sniper: ["#15291d", "#030a06", "#eaffee", "#5cff8f", "92 255 143"],
+  ember: ["#3d1206", "#0a0201", "#fff2e2", "#ff8a3d", "255 122 40"],
+  rage: ["#520a14", "#0b0103", "#fff0f1", "#ff3b4f", "255 59 79"],
+  smoke: ["#3a4048", "#0d0f12", "#f3f6f0", "#b8f25c", "184 242 92"],
+  foil: ["#1c1f33", "#07080f", "#ffffff", "#e9e4ff", "205 195 255"],
+  zone: ["#1c0b33", "#05020c", "#fff6e8", "#7fb2ff", "110 160 255"],
+  storm: ["#1d2c40", "#03060b", "#eaf4ff", "#a6d6ff", "140 200 255"],
+  booyah: ["#3b2804", "#0b0702", "#fff4c8", "#ffd34d", "255 200 60"],
+  phoenix: ["#5c1500", "#0c0200", "#fff5de", "#ffb02e", "255 140 30"],
+  void: ["#16072b", "#020006", "#f5ecff", "#c084fc", "176 110 255"],
 };
 
 /** Tailwind-free CSS backgrounds, layered over the palette gradient. */
@@ -57,6 +73,12 @@ export const PATTERNS: Record<string, string> = {
   paper:
     "radial-gradient(circle at 20% 30%, rgb(90 60 20 / 0.12) 0 1px, transparent 2px) 0 0 / 0.7em 0.9em, radial-gradient(circle at 70% 60%, rgb(90 60 20 / 0.1) 0 1px, transparent 2px) 0 0 / 1.1em 0.8em, radial-gradient(ellipse at 50% 45%, transparent 55%, rgb(70 40 10 / 0.45) 100%), linear-gradient(0deg, transparent 62%, rgb(120 30 20 / 0.18) 62% 66%, transparent 66%)",
   // Cut-stone facets.
+  // Brushed metal: fine horizontal grain.
+  brushed:
+    "repeating-linear-gradient(0deg, rgb(255 255 255 / 0.06) 0 1px, transparent 1px 3px), repeating-linear-gradient(0deg, rgb(0 0 0 / 0.06) 0 1px, transparent 1px 5px)",
+  // A sniper scope's range marks.
+  scope:
+    "radial-gradient(circle at 66% 26%, transparent 0 2.6em, rgb(92 255 143 / 0.28) 2.6em 2.68em, transparent 2.7em 3.9em, rgb(92 255 143 / 0.16) 3.9em 3.96em, transparent 4em), repeating-linear-gradient(0deg, rgb(92 255 143 / 0.05) 0 1px, transparent 1px 4px)",
   facets:
     "conic-gradient(from 30deg at 50% 38%, rgb(255 255 255 / 0.55), rgb(160 200 240 / 0.15) 15%, rgb(255 255 255 / 0.4) 30%, rgb(120 170 220 / 0.2) 45%, rgb(255 255 255 / 0.5) 60%, rgb(150 200 255 / 0.15) 75%, rgb(255 255 255 / 0.45) 90%, rgb(255 255 255 / 0.55))",
 };
@@ -68,6 +90,7 @@ export const RARITY_COLORS: Record<CardDesign["rarity"], string> = {
   LEGENDARY: "#f5b82e",
   VINTAGE: "#d9b779",
   DIAMOND: "#bfe9ff",
+  MYTHIC: "#ff3d7f",
 };
 
 export const RARITY_LABELS: Record<CardDesign["rarity"], string> = {
@@ -77,15 +100,29 @@ export const RARITY_LABELS: Record<CardDesign["rarity"], string> = {
   LEGENDARY: "Legendary",
   VINTAGE: "Vintage",
   DIAMOND: "Diamond",
+  MYTHIC: "Mythic",
 };
 
-/** The design's colours, or null for an unknown palette (the card then stays plain). */
-export function designColors(design: CardDesign | null | undefined) {
+/** The design's colours, or null for an unknown palette (the card then stays plain).
+ *  The "team" palette paints the card in the player's own team colour. */
+export function designColors(design: CardDesign | null | undefined, teamColor?: string | null) {
   if (!design) return null;
   const p = PALETTES[design.parts.palette];
   if (!p) return null;
   const [top, bottom, ink, line, glow] = p;
+  if (design.parts.palette === "team" && teamColor && /^#[0-9a-f]{6}$/i.test(teamColor)) {
+    const rgb = [1, 3, 5].map((i) => parseInt(teamColor.slice(i, i + 2), 16)).join(" ");
+    return { top: teamColor, bottom, ink, line: `color-mix(in srgb, ${teamColor} 55%, white)`, glow: rgb };
+  }
   return { top, bottom, ink, line, glow };
+}
+
+/** What a design's rarity adds on top of its look: a glowing frame and an entrance
+ *  animation from Legendary up, and a name aura (on the card and across the site) for Mythic. */
+export function designPerks(design: CardDesign | null | undefined) {
+  const r = design?.rarity;
+  const big = r === "LEGENDARY" || r === "MYTHIC";
+  return { frame: big, entrance: big, aura: r === "MYTHIC" };
 }
 
 export function copyText(design: CardDesign | null | undefined): string | null {

@@ -1,17 +1,20 @@
 import {
   BLANK_PHOTO,
   cardFooter,
+  flagEmoji,
   changeText,
   roleShort,
   TIER_COLORS,
   type CardStat,
   type PlayerCard as Card,
 } from "@/lib/cards";
-import { copyText, designColors, PATTERNS } from "@/lib/cardDesigns";
+import { copyText, designColors, designPerks, PALETTES, PATTERNS } from "@/lib/cardDesigns";
+
+import CardFx, { CardFrame, FX_EFFECTS } from "./CardFx";
+import { CARD_SHAPE } from "./cardShape";
 
 // The card's outline: a FUT style shield with cut top corners and a pointed base.
-export const CARD_SHAPE =
-  "polygon(12% 0, 88% 0, 100% 7%, 100% 90%, 50% 100%, 0 90%, 0 7%)";
+export { CARD_SHAPE };
 
 /** A player's FUT style card. Everything is sized in em, so ``size`` scales it all. */
 export default function PlayerCard({
@@ -26,12 +29,18 @@ export default function PlayerCard({
 }) {
   const plainTier = card.tier === "gold" || card.tier === "silver" || card.tier === "bronze";
   // A shop design repaints a plain card; the tier stays on the rating badge.
-  const look = plainTier ? designColors(card.design) : null;
+  const look = plainTier ? designColors(card.design, card.team?.primary_color) : null;
   const tierColors = TIER_COLORS[card.tier];
   const [top, bottom, ink, line] = look ? [look.top, look.bottom, look.ink, look.line] : tierColors;
   const effect = look ? card.design!.parts.effect : "none";
   const pattern = look ? PATTERNS[card.design!.parts.pattern] : undefined;
   const copy = look ? copyText(card.design) : null;
+  const fx = (FX_EFFECTS as readonly string[]).includes(effect);
+  const perks = look ? designPerks(card.design) : designPerks(null);
+  // Player shop extras never go on special cards.
+  const shopExtras = plainTier ? card.extras : null;
+  const titleColor = shopExtras?.title_palette ? PALETTES[shopExtras.title_palette]?.[3] : undefined;
+  const ratingGlow = shopExtras?.glow ? PALETTES[shopExtras.glow]?.[4] : undefined;
   const main = card.stats.filter((s) => !s.extra);
   const extras = card.stats.filter((s) => s.extra);
   const totw = card.tier === "totw";
@@ -40,7 +49,7 @@ export default function PlayerCard({
   const icon = card.tier === "icon";
   return (
     <div
-      className="holo-host relative aspect-[5/7] w-[15em] select-none"
+      className={`holo-host relative aspect-[5/7] w-[15em] select-none ${perks.entrance ? "fx-enter" : ""}`}
       style={{
         fontSize: `${size * 16}px`,
         color: ink,
@@ -73,6 +82,7 @@ export default function PlayerCard({
         ) : (
           <span className="absolute inset-0 bg-[repeating-linear-gradient(60deg,rgb(255_255_255/0.05)_0_2px,transparent_2px_12px)]" />
         )}
+        {fx && <CardFx effect={effect} />}
         {effect === "glow" && <span aria-hidden className="design-glow absolute inset-0" />}
         {effect === "shine" && <span aria-hidden className="design-shine absolute inset-0" />}
         {effect === "flame" && <span aria-hidden className="design-flame absolute inset-0" />}
@@ -101,6 +111,13 @@ export default function PlayerCard({
 
         {/* Rating, role and team down the left; the photo on the right. */}
         <div className="absolute top-[1.4em] left-[1.5em] flex w-[3.2em] flex-col items-center">
+          {ratingGlow && (
+            <span
+              aria-hidden
+              className="fx-rating-glow absolute top-[-0.3em] h-[3.3em] w-[3.6em]"
+              style={{ ["--rg" as string]: ratingGlow }}
+            />
+          )}
           {look ? (
             // The tier (gold, silver, bronze) stays visible as the rating badge's colour.
             <span
@@ -174,9 +191,37 @@ export default function PlayerCard({
           />
         </div>
 
+        {shopExtras && (shopExtras.number !== null || shopExtras.flag) && (
+          <div className="absolute top-[1.25em] right-[1.35em] flex flex-col items-end leading-none">
+            {shopExtras.number !== null && (
+              <span className="font-display text-[1.15em]" style={{ textShadow: "0 0 3px rgb(0 0 0 / 0.6)" }}>
+                {shopExtras.number}
+              </span>
+            )}
+            {shopExtras.flag && (
+              <span className="mt-[0.1em] text-[0.85em]" title={shopExtras.flag}>
+                {flagEmoji(shopExtras.flag)}
+              </span>
+            )}
+          </div>
+        )}
+        {shopExtras?.title && (
+          <div className="absolute inset-x-[0.8em] top-[7.95em]">
+            <p
+              className="truncate text-center font-display text-[0.62em] tracking-[0.3em] uppercase"
+              style={{ color: titleColor ?? ink, textShadow: "0 0 4px rgb(0 0 0 / 0.7)" }}
+            >
+              {shopExtras.title}
+            </p>
+          </div>
+        )}
+
         {/* Positions sit on plain wrappers: an em inside a resized text element is its own em. */}
         <div className="absolute inset-x-[0.8em] top-[8.75em]">
-          <p className="truncate text-center font-display text-[1.45em] leading-none tracking-wide uppercase">
+          <p
+            className={`truncate text-center font-display text-[1.45em] leading-none tracking-wide uppercase ${perks.aura ? "fx-aura" : ""}`}
+            style={perks.aura && look ? ({ ["--aura" as string]: look.glow }) : undefined}
+          >
             {card.name}
           </p>
         </div>
@@ -210,7 +255,19 @@ export default function PlayerCard({
             {copy && <span className="ml-[0.6em]">{copy}</span>}
           </p>
         </div>
+        {perks.aura && copy && (
+          <div className="absolute inset-x-0 top-[0.2em] flex justify-center">
+            <span
+              className="px-[0.6em] py-[0.1em] font-display text-[0.55em] tracking-[0.2em] uppercase"
+              style={{ background: "rgb(0 0 0 / 0.55)", boxShadow: `0 0 0 1px ${line}`, color: line }}
+            >
+              {copy}
+            </span>
+          </div>
+        )}
       </div>
+      {look && perks.frame && <CardFrame color={line} glow={look.glow} />}
+      {look && perks.entrance && <span aria-hidden className="fx-enter-burst" />}
     </div>
   );
 }

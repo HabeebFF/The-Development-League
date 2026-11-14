@@ -24,6 +24,11 @@ type StaffDesign = {
   on_sale: boolean;
   order: number;
   sold: number;
+  /** Player shop: titles, number and flag, and rating glows are extras; FRAME is a design. */
+  kind: "FRAME" | "TITLE" | "NUMBER" | "GLOW";
+  players_only: boolean;
+  /** Milestone items are earned, not bought: kills:100, booyahs:10, totw:1. */
+  unlock: string;
 };
 type Parts = Record<keyof DesignParts, { key: string; label: string }[]>;
 type Sale = {
@@ -50,6 +55,9 @@ const BLANK: Omit<StaffDesign, "id" | "sold"> = {
   sale_ends: null,
   on_sale: true,
   order: 100,
+  kind: "FRAME",
+  players_only: false,
+  unlock: "",
 };
 
 function when(iso: string): string {
@@ -166,7 +174,15 @@ export default function CardShopManager() {
             <tbody>
               {designs.map((d) => (
                 <tr key={d.id} className={d.on_sale ? "" : "opacity-60"}>
-                  <td className="font-semibold">{d.name}</td>
+                  <td className="font-semibold">
+                    {d.name}
+                    {d.players_only && (
+                      <span className="ml-2 text-[10px] font-bold tracking-wider text-accent uppercase">
+                        Player shop{d.kind !== "FRAME" ? ` · ${d.kind.toLowerCase()}` : ""}
+                        {d.unlock ? ` · ${d.unlock}` : ""}
+                      </span>
+                    )}
+                  </td>
                   <td style={{ color: RARITY_COLORS[d.rarity] }}>
                     {RARITY_LABELS[d.rarity]}
                   </td>
@@ -296,6 +312,48 @@ export default function CardShopManager() {
                 </select>
               </Field>
             ))}
+            <Field label="Shop">
+              <select
+                className="input"
+                value={editing.players_only ? "players" : "fans"}
+                onChange={(e) =>
+                  setEditing({
+                    ...editing,
+                    players_only: e.target.value === "players",
+                    ...(e.target.value === "fans" ? { kind: "FRAME" as const, unlock: "" } : {}),
+                  })
+                }
+              >
+                <option value="fans">Fan card shop (everyone)</option>
+                <option value="players">Player shop (league players only)</option>
+              </select>
+            </Field>
+            {editing.players_only && (
+              <>
+                <Field label="Type">
+                  <select
+                    className="input"
+                    value={editing.kind}
+                    onChange={(e) =>
+                      setEditing({ ...editing, kind: e.target.value as StaffDesign["kind"] })
+                    }
+                  >
+                    <option value="FRAME">Card design</option>
+                    <option value="TITLE">Card title (the name is the words)</option>
+                    <option value="NUMBER">Number and flag</option>
+                    <option value="GLOW">Rating glow (uses the palette)</option>
+                  </select>
+                </Field>
+                <Field label="Milestone (earned, not bought)">
+                  <input
+                    className="input"
+                    placeholder="kills:100, booyahs:10 or totw:1"
+                    value={editing.unlock}
+                    onChange={(e) => setEditing({ ...editing, unlock: e.target.value.trim() })}
+                  />
+                </Field>
+              </>
+            )}
             <Field label="Off sale after (optional)">
               <input
                 className="input"

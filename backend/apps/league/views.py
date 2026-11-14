@@ -720,7 +720,7 @@ def _card(card, request) -> dict:
     """A card in its plain gold, silver or bronze. The special versions (Team of the Week and
     Month, Rising Star, Icon) only show on their own tabs, which set ``tier`` themselves."""
     from apps.results.cards import ROLE_LABELS, STATS, tier
-    from apps.shop.services import design_for_player
+    from apps.shop.services import design_for_player, extras_for_player
 
     team, player = card.team, card.player
     return {
@@ -760,6 +760,8 @@ def _card(card, request) -> dict:
         # A card design the player bought in the shop (looks only). Special cards set
         # this back to None: they always keep their own look.
         "design": design_for_player(player, request),
+        # Player shop extras (title, rating glow, number and flag); None on special cards too.
+        "extras": extras_for_player(player, request),
     }
 
 
@@ -957,7 +959,12 @@ class CardSpecialsView(APIView):
         for s in team_of_week(week):
             c = s.pop("card")
             team.append(
-                {**s, "card": {**_card(c, request), "tier": "totw", "design": None} if c else None}
+                {
+                    **s,
+                    "card": {**_card(c, request), "tier": "totw", "design": None, "extras": None}
+                    if c
+                    else None,
+                }
             )
         mine = PlayerCard.objects.filter(week=week, player__hide_card=False).select_related(
             "player", "team"
@@ -975,8 +982,14 @@ class CardSpecialsView(APIView):
                 # The newest cards start face down on the site.
                 "newest": not newer,
                 "team_of_week": team,
-                "rising": [{**_card(c, request), "tier": "rising", "design": None} for c in rising],
-                "icons": [{**_card(c, request), "tier": "icon", "design": None} for c in icons],
+                "rising": [
+                    {**_card(c, request), "tier": "rising", "design": None, "extras": None}
+                    for c in rising
+                ],
+                "icons": [
+                    {**_card(c, request), "tier": "icon", "design": None, "extras": None}
+                    for c in icons
+                ],
                 "hall": hall,
                 # What it takes: staff can change these.
                 "bars": thresholds(),
@@ -1020,6 +1033,7 @@ class TeamOfMonthView(APIView):
                         "tier": "totm",
                         "totm": s["award"],
                         "design": None,
+                        "extras": None,
                     }
                     if card
                     else None,

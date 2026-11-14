@@ -1,5 +1,6 @@
 "use client";
 
+import { aura, useAuras } from "@/lib/auras";
 import Link from "next/link";
 import { useState } from "react";
 
@@ -16,6 +17,7 @@ const FIRST = 15; // rows shown before "Show all"
 /** Every player's kills, knocks, headshot knocks and damage dealt, best first. */
 export default function KillTable({ list, showMatches = true, query = "" }: { list: KillList; showMatches?: boolean; query?: string }) {
   const [all, setAll] = useState(false);
+  const auras = useAuras();
   if (!list.players.length) return <p className="text-sm text-muted">No kills to show.</p>;
   const found = matchPlayers(list.players, query);
   if (!found.length) return <p className="text-sm text-muted">No player or team matches &ldquo;{query.trim()}&rdquo; here.</p>;
@@ -49,7 +51,9 @@ export default function KillTable({ list, showMatches = true, query = "" }: { li
                   <span className="flex min-w-0 items-center gap-2.5">
                     {p.team && <TeamMark team={p.team} />}
                     <span className="min-w-0">
-                      <span className="block truncate font-display text-base font-extrabold uppercase">{p.player}</span>
+                      <span className={`block truncate font-display text-base font-extrabold uppercase ${aura(auras, p.player_id).className}`} style={aura(auras, p.player_id).style}>
+                        {p.player}
+                      </span>
                       {p.team && (
                         <Link href={`/teams/${p.team.slug}`} className="block truncate text-xs text-muted hover:text-accent">
                           {p.team.name}
