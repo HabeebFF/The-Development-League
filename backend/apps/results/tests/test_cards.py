@@ -195,6 +195,19 @@ def test_cards_rate_roles_from_how_they_play(league):
     assert ace.role == "ALL_ROUNDER" and stat(ace, "AWR")["value"] == "100%"
 
 
+def test_role_awards_follow_the_cards_role_and_can_be_refreshed(league):
+    from django.core.management import call_command
+
+    cards.build_week(WEEK_A)
+    assert card(league, "RUSH").totw == ["rusher"]
+    # Staff make RUSH a sniper: they can't stay top rusher once the badges are refreshed.
+    Player.objects.filter(pk=league.p["RUSH"].pk).update(card_role="SNIPER")
+    out = io.StringIO()
+    call_command("refresh_award_winners", stdout=out)
+    assert "rusher" not in card(league, "RUSH").totw
+    assert "Done:" in out.getvalue()
+
+
 def test_grenade_counts_knocks_and_ranks_naders_among_naders(league):
     # NADE also knocks with a grenade; RUSH knocks once with one too.
     m = league.match(WEEK_A + dt.timedelta(days=4))

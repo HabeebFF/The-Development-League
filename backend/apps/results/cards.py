@@ -591,7 +591,6 @@ def build_week(week: date) -> int:
     }
     places = rate_windows(rated, naders)
     ws = weights()
-    winners = _week_winners(week)
     previous = {}
     for card in PlayerCard.objects.filter(player__in=list(windows), week__lt=week).order_by(
         "player", "-week"
@@ -620,7 +619,7 @@ def build_week(week: date) -> int:
                         team_id=team, role=before.role, role_suggested=before.role_suggested,
                         suggested_role=before.suggested_role, overall=before.overall,
                         overall_change=0, stats=stats, matches=w.n, week_matches=w.week_n,
-                        stale=True, totw=winners.get(pid, []), rules=RULES,
+                        stale=True, rules=RULES,
                     ),
                 )  # fmt: skip
                 built += 1
@@ -659,13 +658,28 @@ def build_week(week: date) -> int:
                     team_id=team, role=role, role_suggested=not player.card_role,
                     suggested_role=suggested, overall=ovr,
                     overall_change=ovr - before.overall if before else None, stats=stats,
-                    matches=w.n, week_matches=w.week_n, stale=False,
-                    totw=winners.get(pid, []), rules=RULES,
+                    matches=w.n, week_matches=w.week_n, stale=False, rules=RULES,
                 ),
             )  # fmt: skip
             built += 1
+        # After the cards: the role awards go by the role on this week's cards.
+        mark_award_winners(week)
     mark_specials(week)
     return built
+
+
+def mark_award_winners(week: date) -> int:
+    """Write the week's award winners onto its cards (``totw``); returns the cards changed."""
+    week = card_week(week)
+    winners = _week_winners(week)
+    changed = []
+    for card in PlayerCard.objects.filter(week=week):
+        won = winners.get(card.player_id, [])
+        if card.totw != won:
+            card.totw = won
+            changed.append(card)
+    PlayerCard.objects.bulk_update(changed, ["totw"])
+    return len(changed)
 
 
 # -- Rising Stars and Icons -----------------------------------------------------------------

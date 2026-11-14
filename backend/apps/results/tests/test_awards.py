@@ -37,6 +37,8 @@ def league():
     day = MatchDay.objects.create(stage=stage, number=1, date=dt.date(2026, 10, 6))
     alpha, bravo = Team.objects.create(name="Alpha"), Team.objects.create(name="Bravo")
     ace, rush, nade = player(1, "ACE"), player(2, "RUSH"), player(3, "NADE")
+    for p, role in ((ace, "SNIPER"), (rush, "RUSHER"), (nade, "GRENADER")):
+        Player.objects.filter(pk=p.pk).update(card_role=role)
     foe1, foe2 = player(4, "FOE1"), player(5, "FOE2")
     started = dt.datetime(2026, 10, 6, 19, 0, tzinfo=dt.UTC)
     match = Match.objects.create(
@@ -124,3 +126,40 @@ def test_drafts_and_other_weeks_do_not_count(league):
 def test_private_site_needs_sign_in(league):
     with override_settings(PUBLIC_SITE=False):
         assert APIClient().get("/api/v1/awards").status_code in (401, 403)
+
+
+def test_role_awards_are_for_that_role_only(league):
+    """A sniper with the best rush numbers can't be top rusher; the rushers' best wins."""
+    WeaponName.objects.create(weapon_id=SNIPER_GUN, name="AWM", weapon_class="SNIPER")
+    WeaponName.objects.create(weapon_id=GRENADE, name="M79", weapon_class="EXPLOSIVE")
+    Player.objects.filter(display_name="RUSH").update(card_role="SNIPER")
+    Player.objects.filter(display_name="ACE").update(card_role="")
+    awards, _ = get()
+    # RUSH (now a sniper) leads on rush points, ACE has no role: nobody is top rusher.
+    assert awards["rusher"]["top"] == []
+    assert awards["rusher"]["rule"].startswith("Rushers only")
+    # ACE has the only sniper kill but no role, so no sniper award either.
+    assert awards["sniper"]["top"] == []
+    assert [p["player"] for p in awards["grenader"]["top"]] == ["NADE"]
+    # Top player is open to every role.
+    assert awards["player"]["top"][0]["player"] == "ACE"
+
+
+def test_role_comes_from_the_latest_card_when_staff_set_none(league):
+    from apps.results.models import PlayerCard
+
+    Player.objects.filter(display_name="RUSH").update(card_role="")
+    rush = Player.objects.get(display_name="RUSH")
+
+    def card(week, role):
+        PlayerCard.objects.create(player=rush, week=week, role=role, overall=70, stats=[],
+                                  matches=4)  # fmt: skip
+
+    card(dt.date(2026, 9, 26), "RUSHER")
+    card(dt.date(2026, 10, 3), "SNIPER")  # the latest card up to the week's end
+    card(dt.date(2026, 10, 17), "RUSHER")  # after the week: doesn't count
+    awards, _ = get()
+    assert awards["rusher"]["top"] == []
+    PlayerCard.objects.filter(player=rush, week=dt.date(2026, 10, 3)).update(role="RUSHER")
+    awards, _ = get()
+    assert awards["rusher"]["top"][0]["player"] == "RUSH"
