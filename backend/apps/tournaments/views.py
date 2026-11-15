@@ -184,6 +184,8 @@ def _apply(t: Tournament, data: dict) -> Tournament:
         t.season.name = t.name
         t.season.save(update_fields=["name", "updated_at"])
     if "teams" in data:
+        if t.confirmed_at:
+            raise ValidationError({"teams": "The prizes were already paid."})
         teams = list(Team.objects.filter(pk__in=data["teams"]))
         if len(teams) != len(set(data["teams"])):
             raise ValidationError({"teams": "Some of those teams don't exist."})
