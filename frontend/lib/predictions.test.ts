@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { byFixture, closesIn, coins, percent, profit, signedCoins, stakeProblem, totalReturn, type Market } from "./predictions.ts";
+import { byFixture, closesIn, coins, percent, profit, signedCoins, slipMaxStake, stakeProblem, totalReturn, type Market, type SlipPick } from "./predictions.ts";
 
 test("return and profit match the server's rounding down", () => {
   assert.equal(totalReturn(100, "2.50"), 250);
@@ -22,6 +22,18 @@ test("stake checks", () => {
   assert.equal(stakeProblem("501", 1000), "The biggest stake is 500 DC.");
   assert.equal(stakeProblem("300", 200), "You only have 200 DC.");
   assert.equal(stakeProblem("300", null), null);
+  // A big night with no cap: only the wallet limits it.
+  assert.equal(stakeProblem("5000", 6000, null), null);
+  assert.equal(stakeProblem("7000", 6000, null), "You only have 6,000 DC.");
+});
+
+test("the slip's cap: singles follow their market, multiples keep 500", () => {
+  const pick = (market: number, maxStake?: number | null): SlipPick => ({
+    market, marketTitle: "", fixture: null, season: 1, outcome: market, label: "", odds: "2.00", maxStake,
+  });
+  assert.equal(slipMaxStake([pick(1, null)]), null);
+  assert.equal(slipMaxStake([pick(1)]), 500); // saved before caps were sent
+  assert.equal(slipMaxStake([pick(1, null), pick(2, null)]), 500);
 });
 
 test("closing countdown", () => {

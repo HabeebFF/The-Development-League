@@ -154,6 +154,10 @@ type Auto = {
   enabled: boolean;
   weekdays: number[];
   skip_dates: string[];
+  /** "2026-11-16 10PM" -> matches that night (a 6-map tournament night). */
+  long_sessions: Record<string, number>;
+  /** Sessions whose single predictions have no 500 DC cap. */
+  uncapped_sessions: string[];
   last_run_at: string | null;
   last_report: Partial<AutoReport>;
   today: string;
@@ -162,11 +166,62 @@ type Auto = {
 };
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
+type Big = { date: string; session: string; matches: string; uncapped: boolean };
+
+/** Big nights (a tournament final): more matches in a session, and no 500 DC cap on single
+ * predictions. Set them before the day's markets are made. */
+function BigNights({ conf, big, setBig, save }: { conf: Auto; big: Big; setBig: (b: Big) => void; save: (c: Partial<Auto>) => void }) {
+  const keys = [...new Set([...Object.keys(conf.long_sessions), ...conf.uncapped_sessions])].sort();
+  function remove(key: string) {
+    const long = { ...conf.long_sessions };
+    delete long[key];
+    save({ long_sessions: long, uncapped_sessions: conf.uncapped_sessions.filter((k) => k !== key) });
+  }
+  function add() {
+    const key = `${big.date} ${big.session}`;
+    const n = Number(big.matches);
+    const long = { ...conf.long_sessions };
+    if (n && n !== 5) long[key] = n;
+    else delete long[key];
+    const others = conf.uncapped_sessions.filter((k) => k !== key);
+    save({ long_sessions: long, uncapped_sessions: big.uncapped ? [...others, key] : others });
+    setBig({ ...big, date: "" });
+  }
+  return (
+    <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
+      <span className="text-muted">Big nights</span>
+      {keys.length === 0 && <span className="text-muted">none</span>}
+      {keys.map((k) => (
+        <button key={k} type="button" className="btn px-2 py-1 text-xs" title="Remove" onClick={() => remove(k)}>
+          {k}: {conf.long_sessions[k] ?? 5} matches{conf.uncapped_sessions.includes(k) ? ", no cap" : ""} &times;
+        </button>
+      ))}
+      <input type="date" min={conf.today} value={big.date} onChange={(e) => setBig({ ...big, date: e.target.value })} className="input w-auto py-1" aria-label="Big night" />
+      <select className="input w-auto py-1" value={big.session} onChange={(e) => setBig({ ...big, session: e.target.value })} aria-label="Session">
+        <option>8PM</option>
+        <option>10PM</option>
+      </select>
+      <label className="flex items-center gap-1">
+        <input type="number" min={1} max={12} className="input w-16 py-1" value={big.matches} onChange={(e) => setBig({ ...big, matches: e.target.value })} />
+        <span className="text-muted">matches</span>
+      </label>
+      <label className="flex items-center gap-1">
+        <input type="checkbox" checked={big.uncapped} onChange={(e) => setBig({ ...big, uncapped: e.target.checked })} />
+        <span className="text-muted">no 500 DC cap</span>
+      </label>
+      <button type="button" disabled={!big.date} className="btn px-3 py-1 text-xs" onClick={add}>
+        Add big night
+      </button>
+    </div>
+  );
+}
+
 /** Markets the site makes by itself each scrim day: the switch, the days, nights off, and a
  * button to make tonight's now. */
 function AutoPanel({ onRan }: { onRan: () => void }) {
   const [conf, setConf] = useState<Auto | null>(null);
   const [skip, setSkip] = useState("");
+  const [big, setBig] = useState({ date: "", session: "10PM", matches: "6", uncapped: true });
   const [day, setDay] = useState("");
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
@@ -267,6 +322,7 @@ function AutoPanel({ onRan }: { onRan: () => void }) {
           Add night off
         </button>
       </div>
+      <BigNights conf={conf} big={big} setBig={setBig} save={save} />
       <div className="mt-4 flex flex-wrap items-center gap-3">
         <label className="flex items-center gap-2 text-sm">
           <span className="text-muted">Day</span>

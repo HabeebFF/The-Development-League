@@ -245,18 +245,20 @@ def _lobby_mismatch(market: Market) -> str | None:
 
 
 def _session_ready(market: Market, now) -> str | None:
-    """Session markets wait for all 5 matches; returns why they're waiting (or None)."""
+    """Session markets wait for all the session's matches (5, or what staff set for that
+    night); returns why they're waiting (or None)."""
     fixture = market.fixture
+    need = auto.matches_in(fixture.date, fixture.session)
     published = Match.objects.filter(
         match_day=fixture.match_day_id, status=Match.Status.PUBLISHED
     ).count()
-    if published >= auto.MATCHES:
+    if published >= need:
         return None
     if fixture.session in auto.SESSIONS and now >= (
         auto.session_start(fixture.date, fixture.session) + CHASE_AFTER
     ):
         return (
-            f"Only {published} of {auto.MATCHES} matches are published. Upload the rest, or "
+            f"Only {published} of {need} matches are published. Upload the rest, or "
             "confirm the result by hand if that's all that was played."
         )
     return ""  # still uploading: wait quietly
@@ -282,7 +284,7 @@ def _range_ready(market: Market, now) -> bool:
         published = Match.objects.filter(
             match_day=whole.match_day_id, status=Match.Status.PUBLISHED
         ).count()
-        if published < auto.MATCHES:
+        if published < auto.matches_in(whole.date, whole.session):
             return False
     return True
 

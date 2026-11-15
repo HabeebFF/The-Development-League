@@ -31,6 +31,8 @@ export type Market = {
   category_label: string;
   season: { id: number; name: string };
   fixture: Fixture | null;
+  /** The most one single prediction can take; null on a big night with no cap. */
+  max_stake?: number | null;
   status: MarketStatus;
   accepting: boolean;
   opens_at: string;
@@ -197,6 +199,8 @@ export type SlipPick = {
   outcome: number;
   label: string;
   odds: string;
+  /** The market's most for one single prediction; null = no cap (a big night). */
+  maxStake?: number | null;
 };
 
 /** Most picks from one match in a bet builder. */
@@ -254,7 +258,16 @@ export function toPick(m: Market, o: Outcome): SlipPick {
     outcome: o.id,
     label: o.label,
     odds: o.odds,
+    maxStake: m.max_stake === undefined ? MAX_STAKE : m.max_stake,
   };
+}
+
+/** The most the slip can take: a single uses its market's cap (none on a big night),
+ * a multiple always the usual cap. */
+export function slipMaxStake(picks: SlipPick[]): number | null {
+  if (picks.length !== 1) return MAX_STAKE;
+  const cap = picks[0].maxStake;
+  return cap === undefined ? MAX_STAKE : cap;
 }
 
 export function profit(stake: number, odds: string): number {
@@ -262,11 +275,11 @@ export function profit(stake: number, odds: string): number {
 }
 
 /** Why a stake can't be used, or null when it can. */
-export function stakeProblem(text: string, balance: number | null): string | null {
+export function stakeProblem(text: string, balance: number | null, max: number | null = MAX_STAKE): string | null {
   if (!/^\d+$/.test(text.trim())) return "Enter a whole number of DC.";
   const stake = Number(text);
   if (stake < MIN_STAKE) return `The smallest stake is ${MIN_STAKE} DC.`;
-  if (stake > MAX_STAKE) return `The biggest stake is ${MAX_STAKE} DC.`;
+  if (max !== null && stake > max) return `The biggest stake is ${max} DC.`;
   if (balance !== null && stake > balance) return `You only have ${coins(balance)}.`;
   return null;
 }

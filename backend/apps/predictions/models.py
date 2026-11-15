@@ -475,6 +475,16 @@ class AutoSettings(models.Model):
     )
     weekdays = models.JSONField(default=every_day, help_text="Scrim days: 0 = Monday ... 6")
     skip_dates = models.JSONField(default=list, blank=True, help_text="Nights off, YYYY-MM-DD")
+    long_sessions = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text='Sessions with more (or fewer) than 5 matches, e.g. {"2026-11-16 10PM": 6}',
+    )
+    uncapped_sessions = models.JSONField(
+        default=list,
+        blank=True,
+        help_text='Sessions whose single predictions have no 500 DC cap, e.g. ["2026-11-16 10PM"]',
+    )
     last_run_at = models.DateTimeField(null=True, blank=True)
     last_report = models.JSONField(default=dict, blank=True)
     updated_by = models.ForeignKey(

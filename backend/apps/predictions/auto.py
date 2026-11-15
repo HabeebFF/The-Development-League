@@ -58,6 +58,15 @@ RECENT = 20  # recent published matches used to rank teams and players
 SYSTEM_EMAIL = "auto-markets@tdl.invalid"
 
 
+def matches_in(date: dt.date, session: str | None) -> int:
+    """Matches in a session: 5, unless staff set another number for that night (a 6-map
+    tournament night) on Staff > Predictions."""
+    if session not in SESSIONS:
+        return MATCHES
+    n = (AutoSettings.get().long_sessions or {}).get(f"{date.isoformat()} {session}")
+    return int(n) if n else MATCHES
+
+
 def local_tz() -> ZoneInfo:
     return ZoneInfo(settings.ANALYTICS_TIME_ZONE)
 
@@ -331,7 +340,7 @@ class Run:
             Fixture.objects.get_or_create(
                 **common, match_number=n, defaults={"scheduled_at": starts}
             )[0]
-            for n in range(1, MATCHES + 1)
+            for n in range(1, matches_in(self.date, session) + 1)
         ]
         line = kills_line(self.season)
         names = dict(Team.objects.filter(pk__in=teams).values_list("pk", "name"))

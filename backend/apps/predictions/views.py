@@ -7,6 +7,7 @@ Balances are only ever read here; the one write (a staff adjustment) goes throug
 import datetime as dt
 
 from django.conf import settings
+from django.core.cache import cache
 from django.db import transaction
 from django.db.models import (
     Count,
@@ -44,6 +45,7 @@ from .fans import (
     ranked_wallets,
 )
 from .markets import (
+    UNCAPPED_CACHE,
     MarketError,
     PlayerRules,
     accepting_bets,
@@ -51,6 +53,7 @@ from .markets import (
     place_bet,
     set_active,
     set_odds,
+    stake_cap,
     transition,
 )
 from .models import (
@@ -344,6 +347,8 @@ def market_data(market: Market, now=None) -> dict:
         "category_label": market.get_category_display(),
         "season": {"id": market.season_id, "name": market.season.name},
         "fixture": _fixture(market.fixture),
+        # The most one single prediction can take here; null on a night with no cap.
+        "max_stake": stake_cap(market),
         "status": shown_status(market, now),
         "accepting": accepting_bets(market, now),
         "opens_at": market.opens_at,
@@ -1228,6 +1233,8 @@ class AutoSettingsSerializer(serializers.ModelSerializer):
             "settle_enabled",
             "weekdays",
             "skip_dates",
+            "long_sessions",
+            "uncapped_sessions",
             "last_run_at",
             "last_report",
             "updated_by",
@@ -1252,6 +1259,40 @@ class AutoSettingsSerializer(serializers.ModelSerializer):
         # Nights off already past are dropped, so the list stays short.
         return sorted(d.isoformat() for d in dates if d >= auto.today())
 
+    def validate_long_sessions(self, value):
+        if not isinstance(value, dict):
+            raise ValidationError('Give sessions like {"2026-11-16 10PM": 6}.')
+        kept = {}
+        for key, n in value.items():
+            day, _, session = str(key).partition(" ")
+            try:
+                date = dt.date.fromisoformat(day)
+            except ValueError as exc:
+                raise ValidationError("Dates look like 2026-11-16.") from exc
+            if session not in auto.SESSIONS:
+                raise ValidationError("The session is 8PM or 10PM.")
+            if not isinstance(n, int) or isinstance(n, bool) or not 1 <= n <= 12:
+                raise ValidationError("A session has 1 to 12 matches.")
+            if date >= auto.today() - dt.timedelta(days=7):  # old nights are dropped
+                kept[f"{date.isoformat()} {session}"] = n
+        return dict(sorted(kept.items()))
+
+    def validate_uncapped_sessions(self, value):
+        if not isinstance(value, list):
+            raise ValidationError('Give sessions like ["2026-11-16 10PM"].')
+        kept = set()
+        for key in value:
+            day, _, session = str(key).partition(" ")
+            try:
+                date = dt.date.fromisoformat(day)
+            except ValueError as exc:
+                raise ValidationError("Dates look like 2026-11-16.") from exc
+            if session not in auto.SESSIONS:
+                raise ValidationError("The session is 8PM or 10PM.")
+            if date >= auto.today() - dt.timedelta(days=7):
+                kept.add(f"{date.isoformat()} {session}")
+        return sorted(kept)
+
 
 class AutoSettingsView(APIView):
     """GET/PATCH how markets are made automatically; POST .../run makes them now."""
@@ -1275,6 +1316,7 @@ class AutoSettingsView(APIView):
         data = AutoSettingsSerializer(conf, data=request.data, partial=True)
         data.is_valid(raise_exception=True)
         data.save(updated_by=request.user)
+        cache.delete(UNCAPPED_CACHE)
         return self.get(request)
 
 
