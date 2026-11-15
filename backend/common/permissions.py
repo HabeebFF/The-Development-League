@@ -87,3 +87,14 @@ class IsTeamMemberOrStaff(BasePermission):
         if user.is_league_staff:
             return True
         return user.memberships.filter(team=view.get_team(), is_active=True).exists()
+
+
+class CanWatchReplays(BasePermission):
+    """Live replays: league staff, and members of a league team (players need their account
+    linked to their game UID). See ``User.can_watch_replays``."""
+
+    message = "Replays are for league teams only."
+
+    def has_permission(self, request, view) -> bool:
+        user = _user(request)
+        return bool(user and user.can_watch_replays())

@@ -80,6 +80,20 @@ class User(AbstractUser):
     def has_feature(self, code: str) -> bool:
         return code in self.features()
 
+    def can_watch_replays(self) -> bool:
+        """Replays are for league teams: staff, managers on a league team, and players on a
+        league team whose account is linked to their game UID (player card)."""
+        if self.is_league_staff:
+            return True
+        roles = set(
+            self.memberships.filter(is_active=True, team__is_league_member=True).values_list(
+                "role", flat=True
+            )
+        )
+        if Membership.Role.MANAGER in roles:
+            return True
+        return bool(roles) and hasattr(self, "player") and self.player is not None
+
     def manages(self, team) -> bool:
         return self.memberships.filter(
             team=team, role=Membership.Role.MANAGER, is_active=True
