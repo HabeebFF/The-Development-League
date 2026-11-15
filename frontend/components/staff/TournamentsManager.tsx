@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
-import { api, ApiError } from "@/lib/api";
+import { api, ApiError, type Paged, type TeamRef } from "@/lib/api";
 import { dc, naira, type Paid, type Preview, type Tournament } from "@/lib/tournaments";
 
 type Staff = Tournament & { match_days: { id: number; title: string; date: string | null; number: number }[] };
@@ -174,8 +174,11 @@ function Manage({ slug, onChanged }: { slug: string; onChanged: () => void }) {
             </button>
           )}
         </div>
-        <p className="mt-2 text-sm">{t.teams.length ? t.teams.map((x) => x.name).join(", ") : <span className="text-muted">No teams yet.</span>}</p>
-        <p className="mt-1 text-xs text-muted">Fills the list from the league standings as they are now. It won&apos;t change by itself after that.</p>
+        <TeamEditor t={t} base={base} run={run} locked={done} />
+        <p className="mt-2 text-xs text-muted">
+          &quot;Invite the top 12&quot; fills the list from the league standings as they are now. Add or remove teams by hand after that; to swap
+          one, remove it and add the other.
+        </p>
       </section>
 
       <PrizeTable t={t} base={base} run={run} />
@@ -383,5 +386,69 @@ function Payout({ t, base, run }: { t: Staff; base: string; run: (fn: () => Prom
       </button>
       <p className="mt-1 text-xs text-muted">Pays once and can&apos;t be undone. Check the table first.</p>
     </section>
+  );
+}
+
+function TeamEditor({ t, base, run, locked }: { t: Staff; base: string; run: (fn: () => Promise<unknown>) => void; locked: boolean }) {
+  const [all, setAll] = useState<TeamRef[]>([]);
+  const [pick, setPick] = useState("");
+  useEffect(() => {
+    if (locked) return;
+    api<Paged<TeamRef>>("/teams?page_size=100")
+      .then((p) => setAll(p.results))
+      .catch(() => setAll([]));
+  }, [locked]);
+  const ids = t.teams.map((x) => x.id);
+  const save = (next: number[]) => run(() => api(base, { method: "PATCH", body: { teams: next } }));
+  const others = all.filter((x) => !ids.includes(x.id)).sort((a, b) => a.name.localeCompare(b.name));
+  return (
+    <>
+      {t.teams.length ? (
+        <ul className="mt-3 flex flex-wrap gap-2">
+          {t.teams.map((x) => (
+            <li key={x.id} className="chip gap-1.5">
+              {x.name}
+              {!locked && (
+                <button
+                  type="button"
+                  aria-label={`Remove ${x.name}`}
+                  className="-mr-1 rounded px-1 text-muted hover:text-bad"
+                  onClick={() => {
+                    if (window.confirm(`Remove ${x.name} from ${t.name}?`)) save(ids.filter((id) => id !== x.id));
+                  }}
+                >
+                  ×
+                </button>
+              )}
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="mt-2 text-sm text-muted">No teams yet.</p>
+      )}
+      {!locked && (
+        <form
+          className="mt-3 flex flex-wrap gap-2"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (!pick) return;
+            save([...ids, Number(pick)]);
+            setPick("");
+          }}
+        >
+          <select className="input max-w-xs" value={pick} onChange={(e) => setPick(e.target.value)} aria-label="Team to add">
+            <option value="">Pick a team to add…</option>
+            {others.map((x) => (
+              <option key={x.id} value={x.id}>
+                {x.name}
+              </option>
+            ))}
+          </select>
+          <button type="submit" className="btn px-3 py-1.5 text-sm" disabled={!pick}>
+            Add team
+          </button>
+        </form>
+      )}
+    </>
   );
 }

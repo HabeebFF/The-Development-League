@@ -248,3 +248,19 @@ def test_predictions_link_a_cup_night_from_the_tournament_season(lg, cup):
     fixture.refresh_from_db()
     assert fixture.match == match
     assert Tournament.objects.get(pk=cup.pk).season.tournament == cup
+
+
+def test_staff_can_add_remove_and_swap_teams(lg, cup):
+    staff = client(user("staff@tdl.test", staff=True))
+    url = f"/api/v1/admin/tournaments/{cup.slug}"
+    ids = list(cup.teams.order_by("name").values_list("pk", flat=True))
+    t13, t14 = lg["teams"]["T13"].pk, lg["teams"]["T14"].pk
+    res = staff.patch(url, {"teams": [*ids[1:], t13]}, format="json")  # swap T01 for T13
+    names = [x["name"] for x in res.json()["teams"]]
+    assert "T01" not in names and "T13" in names and len(names) == 12
+    res = staff.patch(url, {"teams": [*ids[1:], t13, t14]}, format="json")  # add one
+    assert len(res.json()["teams"]) == 13
+    assert staff.patch(url, {"teams": [999999]}, format="json").status_code == 400
+    cup.confirmed_at = dt.datetime(2026, 11, 18, tzinfo=dt.UTC)
+    cup.save()
+    assert staff.patch(url, {"teams": ids}, format="json").status_code == 400
