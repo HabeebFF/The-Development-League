@@ -235,9 +235,14 @@ class LinkUidSerializer(serializers.Serializer):
             raise serializers.ValidationError("A game UID is digits only.")
         uid = int(value)
         user = self.context["request"].user
-        taken = Player.objects.filter(game_uid=uid, user__isnull=False).exclude(user=user)
-        if taken.exists():
-            raise serializers.ValidationError("This UID is already linked to another account.")
+        mine = Player.objects.filter(user=user).first()
+        if mine is not None and mine.game_uid != uid:
+            raise serializers.ValidationError(
+                f"You're already linked to {mine.display_name}. Ask league staff to change it."
+            )
+        if mine is not None:
+            raise serializers.ValidationError("You're already linked to this UID.")
+        # Another account having it is fine: the claim then waits for staff to decide.
         return uid
 
 
@@ -257,6 +262,8 @@ class PlayerClaimSerializer(serializers.ModelSerializer):
             "game_uid",
             "player_name",
             "status",
+            "switched",
+            "voided_bets",
             "reviewed_by",
             "reviewed_at",
             "created_at",

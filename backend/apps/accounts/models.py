@@ -206,6 +206,13 @@ class PlayerClaim(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="player_claims")
     game_uid = models.BigIntegerField()
     status = models.CharField(max_length=10, choices=Status.choices, default=Status.PENDING)
+    switched = models.BooleanField(
+        default=False,
+        help_text="Given from My account by someone who signed up as a fan (not at sign-up)",
+    )
+    voided_bets = models.PositiveSmallIntegerField(
+        default=0, help_text="Open predictions on themselves or their team refunded on linking"
+    )
     reviewed_by = models.ForeignKey(
         User, on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
     )

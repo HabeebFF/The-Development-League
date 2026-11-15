@@ -87,7 +87,31 @@ export type Me = {
   staff_role: "SUPER_ADMIN" | "STAFF" | "ANALYST" | null;
   features: string[];
   memberships: Membership[];
+  /** The league player this account is linked to (by game UID), if any. */
+  player: { game_uid: string; display_name: string } | null;
+  /** A game UID waiting for staff (another account had it). */
+  pending_uid_claim: string | null;
 };
+
+/** GET /me/link-uid?uid=: who a game UID is, and what linking to it would do. */
+export type UidPreview = {
+  game_uid: string;
+  player: {
+    name: string;
+    team: { name: string; tag: string; slug: string } | null;
+    role: string | null;
+    overall: number | null;
+    matches: number;
+    last_played: string | null;
+  } | null;
+  /** Another account has it: linking waits for staff. */
+  taken: boolean;
+  /** Open predictions that would be refunded (on themselves, their team or a team-mate). */
+  voids: { kind: "single" | "multiple"; id: string; title: string; stake: number }[];
+  refund: number;
+};
+
+export type UidClaim = { id: number; game_uid: string; player_name: string | null; status: "PENDING" | "APPROVED" | "REJECTED"; switched: boolean; voided_bets: number };
 
 export type Role = "MANAGER" | "PLAYER";
 

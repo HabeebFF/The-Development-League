@@ -592,7 +592,9 @@ def _apply(market: Market, settlement: Settlement, late_from) -> dict:
     n = settlement.version
     now = timezone.now()
     counts: Counter = Counter()
-    for bet in market.bets.select_related("user").order_by("placed_at", "pk"):
+    # A pick refunded when its account linked a game UID (``withdraw_blocked``) stays out.
+    bets = market.bets.filter(withdrawn_at__isnull=True)
+    for bet in bets.select_related("user").order_by("placed_at", "pk"):
         status, payout = _target(
             bet, settlement.kind, winners, voids, late_from, settlement.dead_heat
         )

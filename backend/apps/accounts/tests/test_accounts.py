@@ -346,7 +346,8 @@ def test_uid_links_straight_away(staff, team):
 
     thief = make_user("thief@tdl.test")
     taken = as_user(thief).post("/api/v1/me/link-uid", {"game_uid": "2063288734"}, format="json")
-    assert taken.status_code == 400
+    assert taken.status_code == 201 and taken.json()["status"] == "PENDING"  # staff decide
+    assert Player.objects.get(game_uid=2063288734).user == user
 
 
 def test_uid_for_unknown_player_creates_one():

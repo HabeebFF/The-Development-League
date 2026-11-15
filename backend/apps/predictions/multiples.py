@@ -288,7 +288,8 @@ def apply_legs(
 
     n = settlement.version
     now = timezone.now()
-    for leg in market.legs.select_related("multiple").order_by("multiple_id"):
+    legs = market.legs.filter(multiple__withdrawn_at__isnull=True)  # see ``withdraw_blocked``
+    for leg in legs.select_related("multiple").order_by("multiple_id"):
         # Locked in id order: two markets settling at once can't wait on each other.
         multiple = Multiple.objects.select_for_update().get(pk=leg.multiple_id)
         if settlement.kind == Settlement.Kind.VOID or leg.outcome_id in voids:

@@ -22,6 +22,7 @@ from .models import (
     Fixture,
     Market,
     MarketEvent,
+    Multiple,
     OddsChange,
     Outcome,
 )
@@ -518,6 +519,21 @@ class PlayerRules:
             user and user.is_authenticated and user.player_claims.filter(status="PENDING").exists()
         )
 
+    @classmethod
+    def as_player(cls, user, player: Player | None) -> PlayerRules:
+        """The rules ``user`` gets once linked to ``player`` (which may not be linked yet):
+        to see which of their open picks that would close."""
+        rules = cls.__new__(cls)
+        rules.teams = set(user.memberships.filter(is_active=True).values_list("team_id", flat=True))
+        if player is not None and player.current_team_id:
+            rules.teams.add(player.current_team_id)
+        rules.player = player.pk if player is not None and player.pk else None
+        rules.uid_pending = False
+        return rules
+
+    def blocks(self, market: Market, outcome: Outcome) -> bool:
+        return bool(self.reason(market) or self.outcome_reason(outcome))
+
     def reason(self, market: Market) -> str | None:
         """Why this user can't predict on ``market`` at all, or None when they can (some of
         its choices may still be closed to them: see ``outcome_reason``)."""
@@ -559,6 +575,92 @@ class PlayerRules:
         if why:
             code = "uid_pending" if self.uid_pending else "not_allowed"
             raise MarketError(why, code, market=market.pk)
+
+
+def blocked_open_picks(user, player: Player | None) -> tuple[list[Bet], list[Multiple]]:
+    """``user``'s open predictions that would be on themselves, their team or a team-mate
+    once linked to ``player``: a single on such a choice, or a multiple with such a pick
+    still to settle."""
+    rules = PlayerRules.as_player(user, player)
+    if not rules.teams and rules.player is None:
+        return [], []
+    bets = [
+        b
+        for b in Bet.objects.filter(user=user, status=Bet.Status.PENDING, withdrawn_at=None)
+        .select_related("market", "outcome__player")
+        .order_by("placed_at")
+        if rules.blocks(b.market, b.outcome)
+    ]
+    multiples = [
+        m
+        for m in Multiple.objects.filter(user=user, status=Bet.Status.PENDING, withdrawn_at=None)
+        .prefetch_related("legs__market", "legs__outcome__player")
+        .order_by("placed_at")
+        if any(
+            leg.status == Bet.Status.PENDING and rules.blocks(leg.market, leg.outcome)
+            for leg in m.legs.all()
+        )
+    ]
+    return bets, multiples
+
+
+def open_pick_summary(bets: list[Bet], multiples: list[Multiple]) -> list[dict]:
+    rows = [
+        {
+            "kind": "single",
+            "id": str(b.pk),
+            "title": f"{b.outcome.label} in {b.market.title}",
+            "stake": b.stake,
+        }
+        for b in bets
+    ]
+    rows += [
+        {
+            "kind": "multiple",
+            "id": str(m.pk),
+            "title": f"{len(m.legs.all())}-pick multiple",
+            "stake": m.stake,
+        }
+        for m in multiples
+    ]
+    return rows
+
+
+def withdraw_blocked(user, player: Player) -> list[dict]:
+    """Refund ``user``'s open predictions that their new link to ``player`` closes to them
+    (see ``PlayerRules``): each comes back as a void with its stake returned, once, and
+    settling its market later leaves it alone. Settled predictions are never touched."""
+    with transaction.atomic():
+        bets, multiples = blocked_open_picks(user, player)
+        done_bets, done_multiples = [], []
+        now = timezone.now()
+        why = f"Linked to {player.display_name}: can't predict on yourself or your team"
+        for shown in bets:
+            b = Bet.objects.select_for_update().get(pk=shown.pk)
+            if b.status != Bet.Status.PENDING or b.withdrawn_at:
+                continue
+            done_bets.append(shown)
+            post_entry(
+                wallet_for(user), Kind.REFUND, b.stake, f"withdraw:{b.pk}", bet=b, reason=why
+            )
+            b.status, b.payout, b.settled_at, b.withdrawn_at = Bet.Status.VOID, b.stake, now, now
+            b.save(update_fields=["status", "payout", "settled_at", "withdrawn_at"])
+        for shown in multiples:
+            m = Multiple.objects.select_for_update().get(pk=shown.pk)
+            if m.status != Bet.Status.PENDING or m.withdrawn_at:
+                continue
+            done_multiples.append(shown)
+            post_entry(
+                wallet_for(user),
+                Kind.REFUND,
+                m.stake,
+                f"withdraw:multiple:{m.pk}",
+                multiple=m,
+                reason=why,
+            )
+            m.status, m.payout, m.settled_at, m.withdrawn_at = Bet.Status.VOID, m.stake, now, now
+            m.save(update_fields=["status", "payout", "settled_at", "withdrawn_at"])
+    return open_pick_summary(done_bets, done_multiples)
 
 
 # -- placing a bet -------------------------------------------------------------------------------

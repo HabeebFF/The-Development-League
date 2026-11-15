@@ -11,6 +11,10 @@ type Claim = {
   game_uid: string;
   player_name: string | null;
   status: "PENDING" | "APPROVED" | "REJECTED";
+  /** Given from My account by someone who signed up as a fan. */
+  switched: boolean;
+  /** Open predictions on themselves or their team refunded when it was linked. */
+  voided_bets: number;
   reviewed_by: string | null;
   reviewed_at: string | null;
   created_at: string;
@@ -99,9 +103,11 @@ export default function UidRequests() {
                   )}
                 </p>
                 <p className="mt-1 text-xs text-muted">
+                  {c.switched && <span className="chip chip-gold mr-2 align-middle">Switched from fan</span>}
                   Asked {when(c.created_at)}
                   {c.reviewed_at &&
                     ` · ${c.status === "APPROVED" ? "approved" : "rejected"} ${when(c.reviewed_at)}${c.reviewed_by ? ` by ${c.reviewed_by}` : ""}`}
+                  {c.voided_bets > 0 && ` · ${c.voided_bets} prediction${c.voided_bets === 1 ? "" : "s"} on their own team refunded`}
                 </p>
               </div>
               {c.status === "PENDING" ? (

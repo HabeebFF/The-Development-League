@@ -219,6 +219,19 @@ function Gate({ shop }: { shop: PlayerShop }) {
             ? "Players: sign in with the account linked to your in-game name to buy. Everyone can look."
             : "Your account isn't linked to a league player. Fans can buy designs in the fan card shop."}
       </p>
+      {shop.signed_in && !shop.staff && (
+        <>
+          <p className="mt-3">Do you play in the league? Link your Free Fire UID to unlock your cards and this shop.</p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Link href="/account" className="btn btn-primary px-4 py-1.5 text-xs">
+              I&apos;m a player: link my UID
+            </Link>
+            <Link href="/shop" className="btn px-4 py-1.5 text-xs">
+              Fan card shop
+            </Link>
+          </div>
+        </>
+      )}
       {!shop.signed_in && (
         <Link href="/auth/login?next=/player-shop" className="btn btn-primary mt-3 inline-block px-4 py-1.5 text-xs">
           Sign in
