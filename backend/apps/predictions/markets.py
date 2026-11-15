@@ -7,17 +7,29 @@ import uuid
 from decimal import ROUND_FLOOR, Decimal, InvalidOperation
 
 from django.conf import settings
+from django.core.cache import cache
 from django.db import IntegrityError, transaction
 from django.db.models import Sum
 from django.utils import timezone
 
 from apps.league.models import Player, Team
 
-from .models import MAX_ODDS, MIN_ODDS, Bet, Fixture, Market, MarketEvent, OddsChange, Outcome
+from .models import (
+    MAX_ODDS,
+    MIN_ODDS,
+    AutoSettings,
+    Bet,
+    Fixture,
+    Market,
+    MarketEvent,
+    OddsChange,
+    Outcome,
+)
 from .services import CoinError, Kind, can_play, post_entry, wallet_for
 
 C = Market.Category
 S = Market.Status
+UNCAPPED_CACHE = "predictions:uncapped-sessions"
 
 # Which status can follow which. SETTLED and VOID are reached through settlement (step 3),
 # CLOSED -> OPEN only when nothing has been settled and the window is moved later.
@@ -552,19 +564,45 @@ class PlayerRules:
 # -- placing a bet -------------------------------------------------------------------------------
 
 
-def clean_stake(stake) -> int:
-    lo, hi = settings.PREDICTIONS_MIN_STAKE, settings.PREDICTIONS_MAX_STAKE
+def uncapped_sessions() -> set[str]:
+    """Sessions ("2026-11-16 10PM") staff took the stake cap off, for big nights such as a
+    tournament final. Read at most every 30 seconds."""
+    keys = cache.get(UNCAPPED_CACHE)
+    if keys is None:
+        keys = list(AutoSettings.get().uncapped_sessions or [])
+        cache.set(UNCAPPED_CACHE, keys, 30)
+    return set(keys)
+
+
+def stake_cap(market: Market, uncapped: set[str] | None = None) -> int | None:
+    """The most one single prediction (and one person's total on one choice) can take on
+    this market; None on an uncapped night, where only the wallet limits it."""
+    f = market.fixture
+    if f is not None and f.session:
+        keys = uncapped_sessions() if uncapped is None else uncapped
+        if f"{f.date.isoformat()} {f.session}" in keys:
+            return None
+    return settings.PREDICTIONS_MAX_STAKE
+
+
+def clean_stake(stake, cap: int | None = -1) -> int:
+    """Checks a stake. ``cap`` -1 means the usual most (multiples), None means no most."""
+    lo = settings.PREDICTIONS_MIN_STAKE
+    hi = settings.PREDICTIONS_MAX_STAKE if cap == -1 else cap
     if not isinstance(stake, int) or isinstance(stake, bool):
         raise MarketError("The stake must be a whole number of coins.", "stake")
-    if not lo <= stake <= hi:
-        raise MarketError(f"The stake must be between {lo} and {hi} coins.", "stake")
+    if stake < lo or (hi is not None and stake > hi):
+        top = f"between {lo} and {hi}" if hi is not None else f"at least {lo}"
+        raise MarketError(f"The stake must be {top} coins.", "stake")
     return stake
 
 
-def check_pick_total(user, outcome: Outcome, stake: int) -> None:
+def check_pick_total(user, outcome: Outcome, stake: int, cap: int | None = -1) -> None:
     """Repeat predictions on the same choice are fine, but one person's single predictions
     on one choice can't add up to more than the most one prediction can take."""
-    cap = settings.PREDICTIONS_MAX_STAKE
+    cap = settings.PREDICTIONS_MAX_STAKE if cap == -1 else cap
+    if cap is None:
+        return
     before = Bet.objects.filter(user=user, outcome=outcome).exclude(status=Bet.Status.VOID)
     before = before.aggregate(total=Sum("stake"))["total"] or 0
     if before + stake > cap:
@@ -588,7 +626,7 @@ def place_bet(
     """
     if not can_play(user):
         raise MarketError("League staff can't play predictions.", "not_allowed")
-    stake = clean_stake(stake)
+    stake = clean_stake(stake, None)  # the most is checked once the market is known
 
     def same(bet: Bet) -> tuple[Bet, bool]:
         if (bet.market_id, bet.outcome_id, bet.stake) != (market_id, outcome_id, stake):
@@ -612,7 +650,9 @@ def place_bet(
             if not outcome.is_active:
                 raise MarketError("That choice is no longer available.", "outcome")
             PlayerRules(user).check(market, outcome)
-            check_pick_total(user, outcome, stake)
+            cap = stake_cap(market)
+            clean_stake(stake, cap)
+            check_pick_total(user, outcome, stake, cap)
             if expected_odds is not None and clean_odds(expected_odds) != outcome.odds:
                 raise MarketError(
                     f"The odds changed to {outcome.odds}. Check and confirm again.",

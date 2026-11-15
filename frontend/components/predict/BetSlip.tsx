@@ -12,12 +12,12 @@ import {
   MAX_PER_MATCH,
   MAX_PICKS,
   MAX_RETURN,
-  MAX_STAKE,
   MIN_STAKE,
   multipleReturn,
   newKey,
   showOdds,
   slipProblem,
+  slipMaxStake,
   stakeProblem,
   type Bet,
   type Multiple,
@@ -32,6 +32,7 @@ import { useSlip } from "./slip";
 import { useWallet } from "./useWallet";
 
 const QUICK = [10, 50, 100, 250, 500];
+const BIG_QUICK = [100, 500, 1000, 5000, 10000];
 
 type Review = { picks: SlipPick[]; stake: number; key: string };
 type Placed = { kind: "single"; bet: Bet } | { kind: "multiple"; multiple: Multiple };
@@ -86,7 +87,8 @@ export default function BetSlip() {
   const pricing = builder && !price;
   const shown = pricing ? "…" : showOdds(multiple ? combinedOdds(odds) : (odds[0] ?? "1.00"), format);
   const kind = builder ? "Bet builder" : multiple ? "Multiple" : "Single";
-  const stakeNote = stakeProblem(stake, balance);
+  const maxStake = slipMaxStake(picks);
+  const stakeNote = stakeProblem(stake, balance, maxStake);
   const picksNote = slipProblem(picks) ?? price?.error ?? null;
   const marked = [...flagged, ...(price?.markets ?? [])];
   const amount = stakeNote ? 0 : Number(stake);
@@ -234,12 +236,12 @@ export default function BetSlip() {
                     <>
                       <label className="block">
                         <span className="text-muted">
-                          Stake ({MIN_STAKE} to {MAX_STAKE} DC)
+                          {maxStake === null ? `Stake (${MIN_STAKE} DC or more, no cap tonight)` : `Stake (${MIN_STAKE} to ${maxStake} DC)`}
                         </span>
                         <input className="input mt-1" inputMode="numeric" value={stake} onChange={(e) => setStake(e.target.value)} aria-invalid={!!stakeNote} />
                       </label>
                       <div className="flex flex-wrap gap-1">
-                        {QUICK.map((q) => (
+                        {(maxStake === null ? BIG_QUICK : QUICK).map((q) => (
                           <button key={q} type="button" className="btn px-2 py-1 text-xs" onClick={() => setStake(String(q))}>
                             {q}
                           </button>
