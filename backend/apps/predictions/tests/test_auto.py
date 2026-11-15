@@ -281,6 +281,9 @@ def test_switch_days_and_nights_off(lg, settings):
 
 def test_mondays_add_the_weekly_market(lg):
     date = next_weekday(0)
+    # The weekly market ranks teams that played in the 2 weeks before that Monday, which can
+    # be up to 8 days ahead: date the sessions a week before it so the test holds every day.
+    MatchDay.objects.update(date=date - dt.timedelta(days=7))
     auto.run(date)
     week = Market.objects.get(category=C.RANGE_WINNER)
     assert week.fixture is None and week.status == S.OPEN
