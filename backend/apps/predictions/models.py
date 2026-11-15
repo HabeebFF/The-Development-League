@@ -319,6 +319,12 @@ class Bet(models.Model):
     client_key = models.UUIDField(help_text="One per tap on Confirm, so a resend is not a new bet")
     placed_at = models.DateTimeField(auto_now_add=True, db_index=True)
     settled_at = models.DateTimeField(null=True, blank=True)
+    withdrawn_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Refunded when the account linked its game UID and this became a pick on "
+        "themselves or their team; settlements leave it alone",
+    )
 
     class Meta:
         ordering = ["-placed_at"]
@@ -411,6 +417,12 @@ class Multiple(models.Model):
     client_key = models.UUIDField(help_text="One per tap on Confirm, so a resend is not a new bet")
     placed_at = models.DateTimeField(auto_now_add=True, db_index=True)
     settled_at = models.DateTimeField(null=True, blank=True)
+    withdrawn_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Refunded when the account linked its game UID and this became a pick on "
+        "themselves or their team; settlements leave it alone",
+    )
 
     class Meta:
         ordering = ["-placed_at"]

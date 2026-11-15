@@ -351,10 +351,21 @@ class MeView(generics.RetrieveUpdateAPIView):
 
 
 class LinkUidView(APIView):
-    """Link this account to a game UID: straight away, or for staff to decide when another
-    account already has it."""
+    """Link this account to a game UID (a fan switching to player, from My account): straight
+    away, or for staff to decide when another account already has it.
+
+    GET ?uid= shows who that UID is and what linking would do, before they confirm. An account
+    already linked to a player changes UID only through staff.
+    """
 
     permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        data = LinkUidSerializer(
+            data={"game_uid": request.query_params.get("uid", "")}, context={"request": request}
+        )
+        data.is_valid(raise_exception=True)
+        return Response(uid_preview(request.user, data.validated_data["game_uid"]))
 
     def post(self, request):
         data = LinkUidSerializer(data=request.data, context={"request": request})
@@ -364,10 +375,45 @@ class LinkUidView(APIView):
                 status=PlayerClaim.Status.REJECTED, reviewed_at=timezone.now()
             )
             claim = PlayerClaim.objects.create(
-                user=request.user, game_uid=data.validated_data["game_uid"]
+                user=request.user, game_uid=data.validated_data["game_uid"], switched=True
             )
             link_claim(claim)  # automatic unless another account has this UID
         return Response(PlayerClaimSerializer(claim).data, status=status.HTTP_201_CREATED)
+
+
+def uid_preview(user: User, uid: int) -> dict:
+    """Who game UID ``uid`` is, and what linking ``user`` to it would do."""
+    from apps.predictions.markets import blocked_open_picks, open_pick_summary
+    from apps.results.models import PlayerCard, PlayerMatchResult
+
+    player = Player.objects.select_related("current_team").filter(game_uid=uid).first()
+    taken = bool(player and player.user_id and player.user_id != user.pk)
+    about = None
+    if player is not None:
+        played = PlayerMatchResult.objects.filter(player=player)
+        last = (
+            played.order_by("-match__match_day__date")
+            .values_list("match__match_day__date", flat=True)
+            .first()
+        )
+        card = PlayerCard.objects.filter(player=player).order_by("-week").first()
+        team = player.current_team
+        about = {
+            "name": player.display_name,
+            "team": {"name": team.name, "tag": team.tag, "slug": team.slug} if team else None,
+            "role": (card.role if card else player.card_role) or None,
+            "overall": card.overall if card else None,
+            "matches": played.count(),
+            "last_played": last,
+        }
+    picks = [] if taken else open_pick_summary(*blocked_open_picks(user, player))
+    return {
+        "game_uid": str(uid),
+        "player": about,
+        "taken": taken,
+        "voids": picks,
+        "refund": sum(p["stake"] for p in picks),
+    }
 
 
 # -- invites and members ---------------------------------------------------------------------------
@@ -550,10 +596,14 @@ def link_claim(claim: PlayerClaim, reviewer: User | None = None) -> bool:
             )
         player.user = claim.user
         player.save()
+        # Open predictions on themselves, their team or a team-mate come back as refunds.
+        from apps.predictions.markets import withdraw_blocked
+
+        claim.voided_bets = len(withdraw_blocked(claim.user, player))
         claim.status = PlayerClaim.Status.APPROVED
         claim.reviewed_by = reviewer
         claim.reviewed_at = timezone.now()
-        claim.save(update_fields=["status", "reviewed_by", "reviewed_at"])
+        claim.save(update_fields=["status", "reviewed_by", "reviewed_at", "voided_bets"])
     return True
 
 

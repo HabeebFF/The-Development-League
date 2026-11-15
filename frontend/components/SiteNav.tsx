@@ -16,6 +16,7 @@ import PlayerAvatar from "./ui/PlayerAvatar";
 import { useAuth } from "./Auth";
 
 const MORE = [
+  { href: "/account", label: "Account" },
   { href: "/team", label: "My team" },
   { href: "/staff", label: "Staff" },
 ];
@@ -74,7 +75,7 @@ export default function SiteNav() {
               <Link
                 key={l.href}
                 href={l.href}
-                className={`flex min-h-11 items-center px-2.5 font-display text-sm font-bold tracking-[0.08em] uppercase transition-colors ${
+                className={`flex min-h-11 items-center px-2.5 font-display text-sm font-bold tracking-[0.08em] whitespace-nowrap uppercase transition-colors ${
                   active(path, l.href) ? "text-accent" : "text-muted hover:text-text"
                 }`}
               >

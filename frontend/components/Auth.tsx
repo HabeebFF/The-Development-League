@@ -17,11 +17,13 @@ type Auth = {
   /** Switches from the server: open sign-up and predictions (false until known). */
   site: Site;
   signOut: () => Promise<void>;
+  /** Fetch /me again (after linking a game UID, say). */
+  refresh: () => Promise<void>;
 };
 type Site = { public: boolean; signup: boolean; predictions: boolean; google_client_id: string | null };
 const NO_SITE: Site = { public: false, signup: false, predictions: false, google_client_id: null };
 
-const AuthContext = createContext<Auth>({ me: null, status: "loading", publicSite: null, site: NO_SITE, signOut: async () => {} });
+const AuthContext = createContext<Auth>({ me: null, status: "loading", publicSite: null, site: NO_SITE, signOut: async () => {}, refresh: async () => {} });
 
 export function useAuth(): Auth {
   return useContext(AuthContext);
@@ -80,8 +82,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [router]);
 
+  const refresh = useCallback(async () => {
+    try {
+      setMe(await api<Me>("/me"));
+    } catch {
+      /* keep what we had */
+    }
+  }, []);
+
   const current: Status = status === "in" || checked === path ? status : "loading";
-  return <AuthContext.Provider value={{ me, status: current, publicSite, site, signOut }}>{children}</AuthContext.Provider>;
+  return <AuthContext.Provider value={{ me, status: current, publicSite, site, signOut, refresh }}>{children}</AuthContext.Provider>;
 }
 
 /** Signed-in members only, except sign-in and invite pages, and the league pages while the site is public. */

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 
+import LinkUidPrompt from "@/components/account/LinkUidPrompt";
 import CardsView from "@/components/league/CardsView";
 import PageHeader from "@/components/league/PageHeader";
 
@@ -13,6 +14,7 @@ export default function CardsPage() {
         midnight.
       </PageHeader>
       <section className="mx-auto max-w-6xl px-4 py-8">
+        <LinkUidPrompt />
         <CardsView />
       </section>
     </>
