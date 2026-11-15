@@ -9,6 +9,8 @@ import { mapName, ordinal, plural, shortDate, type MatchDetail } from "@/lib/lea
 import { clock } from "@/lib/replay";
 import { useApi } from "@/lib/useApi";
 
+import { useAuth } from "../Auth";
+
 import KillTable from "./KillTable";
 import Loading from "./Loading";
 import MatchMvp from "./MatchMvp";
@@ -22,6 +24,7 @@ export default function MatchView({ id }: { id: number }) {
   const kills = useApi<KillList>(`/kills?match=${id}`);
   const ratings = useApi<Ratings>(`/ratings?match=${id}`);
   const [open, setOpen] = useState<Set<number>>(new Set());
+  const canWatch = !!useAuth().me?.can_watch_replays;
   if (!match.data)
     return (
       <div className="mx-auto max-w-6xl px-4 py-8">
@@ -51,7 +54,7 @@ export default function MatchView({ id }: { id: number }) {
             </a>
           )}
           <Link href={`/matches/${m.id}/replay`} className="btn flex w-fit">
-            Live replay
+            {canWatch ? "Live replay" : "🔒 Live replay · teams only"}
           </Link>
           <Link href={`/matches/${m.id}/rotations`} className="btn flex w-fit">
             Rotations

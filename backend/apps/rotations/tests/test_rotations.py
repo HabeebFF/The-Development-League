@@ -4,7 +4,7 @@ import pytest
 from rest_framework.test import APIClient
 
 from apps.accounts.models import Membership, User
-from apps.league.models import Match, MatchDay, ScoringRule, Season, Stage, Team
+from apps.league.models import Match, MatchDay, Player, ScoringRule, Season, Stage, Team
 from apps.maps.models import Map, MapArea
 from apps.results.models import MatchEvent, TeamMatchResult, ZonePhase
 from apps.rotations.auto import draft_rotations
@@ -166,11 +166,12 @@ def test_read_zones_and_rotations_needs_the_feature(match, settings):
     assert alpha_player.get(f"/api/v1/matches/{match.pk}/rotations").status_code == 404
 
 
-def test_replays_and_rotations_are_public_for_now(match):
+def test_rotations_are_public_for_now_but_replays_are_for_teams(match):
     draft_rotations(match)
     anon = APIClient()
-    for part in ("zones", "rotations", "replay"):
+    for part in ("zones", "rotations"):
         assert anon.get(f"/api/v1/matches/{match.pk}/{part}").status_code == 200, part
+    assert anon.get(f"/api/v1/matches/{match.pk}/replay").status_code == 401
     outsider = team_client(Team.objects.create(name="Guest", is_league_member=False))
     assert outsider.get(f"/api/v1/matches/{match.pk}/rotations").status_code == 200
     # Staff tools stay staff only, and unpublished matches stay hidden.
@@ -286,3 +287,48 @@ def test_admin_match_list_shows_plotting_progress(match, staff):
     row = staff.get("/api/v1/admin/matches").json()["results"][0]
     assert row["rotations"] == {"AUTO": 1, "DRAFT": 0, "CONFIRMED": 1}
     assert row["label"] == str(match)
+
+
+# -- live replays: league teams only ----------------------------------------------------------
+
+
+def account(email: str, team: Team | None = None, role=Membership.Role.PLAYER, uid=None):
+    user = User.objects.create_user(email=email)
+    if team is not None:
+        Membership.objects.create(user=user, team=team, role=role)
+    if uid is not None:
+        Player.objects.create(
+            game_uid=uid, current_name_raw=email, display_name=email, search_name=email, user=user
+        )
+    client = APIClient()
+    client.force_authenticate(user)
+    return client
+
+
+def test_replays_are_for_league_team_members(match, staff):
+    url = f"/api/v1/matches/{match.pk}/replay"
+    alpha, bravo = Team.objects.get(name="Alpha"), Team.objects.get(name="Bravo")
+    guest = Team.objects.create(name="Guest", is_league_member=False)
+    allowed = {
+        "staff": staff,
+        "linked player": account("p@tdl.test", alpha, uid=1),
+        "other team's linked player": account("q@tdl.test", bravo, uid=2),  # every team's
+        "manager without a UID": account("m@tdl.test", alpha, Membership.Role.MANAGER),
+    }
+    refused = {
+        "visitor": (APIClient(), 401),
+        "fan": (account("fan@tdl.test"), 403),
+        "linked player not on a team": (account("solo@tdl.test", uid=3), 403),
+        "team player without a UID": (account("nouid@tdl.test", alpha), 403),
+        "guest team player": (account("g@tdl.test", guest, uid=4), 403),
+    }
+    for who, client in allowed.items():
+        assert client.get(url).status_code == 200, who
+        assert client.get("/api/v1/me").json().get("can_watch_replays", True) is True, who
+    for who, (client, code) in refused.items():
+        assert client.get(url).status_code == code, who
+    assert refused["fan"][0].get("/api/v1/me").json()["can_watch_replays"] is False
+
+    # A player removed from the team loses it.
+    Membership.objects.filter(user__email="p@tdl.test").update(is_active=False)
+    assert allowed["linked player"].get(url).status_code == 403

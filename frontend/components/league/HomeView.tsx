@@ -10,6 +10,7 @@ import { killsLabel, killsPath, type KillList } from "@/lib/kills";
 import { GROUPS, PLAYER_PAGES, TEAM_PAGES } from "@/lib/nav";
 import type { DayRatings } from "@/lib/ratings";
 import { useApi } from "@/lib/useApi";
+import { useAuth } from "@/components/Auth";
 import { useCountUp } from "@/lib/useCountUp";
 import EmptyState from "@/components/ui/EmptyState";
 import LionMark from "@/components/ui/LionMark";
@@ -67,6 +68,7 @@ function Count({ value }: { value: number }) {
 
 /** The front page: lion hero, podium, results ticker, top fragger, Saturday's cards and the week's awards. */
 export default function HomeView() {
+  const canWatch = !!useAuth().me?.can_watch_replays; // replays are for league teams
   const seasons = useApi<Paged<Season>>("/seasons?page_size=100");
   const season = seasons.data ? currentSeason(rows(seasons.data)) : null;
   const slug = season ? encodeURIComponent(season.slug) : null;
@@ -227,7 +229,7 @@ export default function HomeView() {
 
         {replays.length > 0 && (
           <section>
-            <SectionHeader title="Watch replays" href={`/matches/${replays[0].id}/replay`} link="Latest 2D replay" />
+            <SectionHeader title="Watch replays" href={`/matches/${replays[0].id}/replay`} link={canWatch ? "Latest 2D replay" : "2D replays · teams only"} />
             <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
               {replays.map((m) => (
                 <MatchCard
@@ -236,7 +238,7 @@ export default function HomeView() {
                   map={m.map}
                   label={`M${m.number}`}
                   booyah={m.booyah?.name}
-                  footer={m.vod_url ? "Watch video" : "2D replay"}
+                  footer={m.vod_url ? "Watch video" : canWatch ? "2D replay" : "2D replay · teams only"}
                 />
               ))}
             </div>

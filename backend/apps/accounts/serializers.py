@@ -30,6 +30,7 @@ class MeSerializer(serializers.ModelSerializer):
     features = serializers.SerializerMethodField()
     player = serializers.SerializerMethodField()
     pending_uid_claim = serializers.SerializerMethodField()
+    can_watch_replays = serializers.SerializerMethodField()
 
     class Meta:
         model = User
@@ -44,6 +45,7 @@ class MeSerializer(serializers.ModelSerializer):
             "features",
             "player",
             "pending_uid_claim",
+            "can_watch_replays",
         ]
         read_only_fields = ["id", "email"]
 
@@ -66,6 +68,9 @@ class MeSerializer(serializers.ModelSerializer):
         if not player:
             return None
         return {"game_uid": str(player.game_uid), "display_name": player.display_name}
+
+    def get_can_watch_replays(self, user: User) -> bool:
+        return user.can_watch_replays()
 
     def get_pending_uid_claim(self, user: User) -> str | None:
         claim = user.player_claims.filter(status=PlayerClaim.Status.PENDING).first()

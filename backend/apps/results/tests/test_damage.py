@@ -3,8 +3,8 @@
 import datetime as dt
 
 import pytest
+from django.contrib.auth import get_user_model
 from django.core.management import call_command
-from django.test import override_settings
 from rest_framework.test import APIClient
 
 from apps.ingest.parsers import replay_bin
@@ -95,8 +95,9 @@ def test_build_damage_fills_players_and_replay_hits(match):
     hits = MatchDamage.objects.get(match=match).hits
     assert hits[0] == [10.0, A1, B1, 90] and len(hits) == 5  # no team-mate or zone hits
 
-    with override_settings(PUBLIC_SITE=True):
-        data = APIClient().get(f"/api/v1/matches/{match.pk}/replay").json()
+    client = APIClient()  # replays are for league teams: watch as staff
+    client.force_authenticate(get_user_model().objects.create_user(email="s@t.t", is_staff=True))
+    data = client.get(f"/api/v1/matches/{match.pk}/replay").json()
     assert data["hits"] == hits
     ace = PlayerResultSerializer(PlayerMatchResult.objects.get(match=match, entity_id=A1)).data
     assert (ace["damage_dealt"], ace["damage_taken"], ace["zone_damage"]) == (160, 40, 0)

@@ -1,5 +1,5 @@
 """Rotation API: team accounts with rotations.view read (anyone while the site is public);
-staff plot and confirm."""
+live replays are for league team members only; staff plot and confirm."""
 
 from django.db import transaction
 from django.db.models import Q
@@ -19,7 +19,7 @@ from apps.results.models import (
     TeamMatchResult,
     ZonePhase,
 )
-from common.permissions import HasFeature, IsStaff
+from common.permissions import CanWatchReplays, HasFeature, IsStaff
 
 from .auto import draft_rotations
 from .models import PlayerTrack, ReplayObject, RotationPoint, TeamRotation
@@ -113,7 +113,7 @@ class MatchReplayView(APIView):
     every team is included. Tracks are ``[x, z]`` in world decimetres every ``step_s``.
     """
 
-    permission_classes = [HasFeature("rotations.view", public=True)]
+    permission_classes = [CanWatchReplays]  # league teams only, never public
     EVENT_KINDS = [MatchEvent.Kind.KILL, MatchEvent.Kind.KNOCK]
 
     def get(self, request, pk: int):
