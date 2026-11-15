@@ -96,7 +96,10 @@ def system_user() -> User:
 
 
 def current_season() -> Season | None:
-    return Season.objects.filter(is_active=True).first() or Season.objects.first()
+    return (
+        Season.objects.filter(is_active=True).first()
+        or Season.objects.filter(tournament__isnull=True).first()
+    )
 
 
 def is_scrim_day(conf: AutoSettings, date: dt.date) -> bool:

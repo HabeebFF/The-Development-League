@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 
 import { api, ApiError, type Paged } from "@/lib/api";
+import { tournamentFor, type TournamentSummary } from "@/lib/tournaments";
 import {
   canOpenFolder,
   fromFileList,
@@ -153,6 +154,7 @@ export default function UploadMatches() {
   const [now, setNow] = useState(() => Date.now());
 
   const [stages, setStages] = useState<Stage[]>([]);
+  const [cups, setCups] = useState<TournamentSummary[]>([]);
   const [matchDays, setMatchDays] = useState<Day[]>([]);
   const [plans, setPlans] = useState<Record<string, Plan>>({});
   const [rows, setRows] = useState<Record<string, Row>>({});
@@ -183,10 +185,12 @@ export default function UploadMatches() {
     Promise.all([
       api<Paged<Stage>>("/admin/stages?page_size=100"),
       api<Paged<Day>>("/admin/match-days?page_size=100"),
+      api<TournamentSummary[]>("/tournaments").catch(() => []),
     ])
-      .then(([s, d]) => {
+      .then(([s, d, t]) => {
         setStages(s.results);
         setMatchDays(d.results);
+        setCups(t);
       })
       .catch((e) => setError(e.message));
     // An upload cut off by a refresh or a closed tab: offer to carry on.
@@ -368,13 +372,19 @@ export default function UploadMatches() {
       (m) => m.ready,
     );
     const today = localDate(new Date());
-    const stage = stages.length ? String(stages[stages.length - 1].id) : "";
+    // New match days go to the league season, or to a tournament when the room or session
+    // name has its keyword ("TDL CUP DAY 1 10PM").
+    const cupStages = new Set(cups.map((c) => c.stage));
+    const league = stages.filter((st) => !cupStages.has(st.id));
+    const leagueStage = league.length ? String(league[league.length - 1].id) : stages.length ? String(stages[stages.length - 1].id) : "";
     let next = Math.max(0, ...matchDays.map((d) => d.number));
     const out: Record<string, Plan> = {};
     const numbers: Record<string, number> = {};
     const include: Record<string, boolean> = {};
     for (const session of sessionsOf(ordered)) {
       const date = playedOn(session.matches) ?? today;
+      const cup = tournamentFor(`${session.name} ${session.matches[0]?.room_name ?? ""}`, cups);
+      const stage = cup ? String(cup.stage) : leagueStage;
       const known = session.name
         ? matchDays.find((d) => sameDayName(d.title, session.name))
         : undefined;
@@ -479,6 +489,8 @@ export default function UploadMatches() {
   }
 
   const stageName = (id: number) => {
+    const cup = cups.find((c) => c.stage === id);
+    if (cup) return cup.name;
     const s = stages.find((x) => x.id === id);
     return s ? `${s.season} · ${s.name}` : "";
   };
@@ -850,7 +862,7 @@ export default function UploadMatches() {
                         </label>
                         {stages.length > 1 && (
                           <label className="text-sm">
-                            <span className="text-muted">Season</span>
+                            <span className="text-muted">Counts for</span>
                             <select
                               className="input mt-1"
                               value={plan.stage}
@@ -860,7 +872,8 @@ export default function UploadMatches() {
                             >
                               {stages.map((st) => (
                                 <option key={st.id} value={st.id}>
-                                  {st.season} · {st.name}
+                                  {stageName(st.id)}
+                                  {cups.some((c) => c.stage === st.id) ? " (tournament)" : " (scrims)"}
                                 </option>
                               ))}
                             </select>

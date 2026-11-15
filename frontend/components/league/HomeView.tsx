@@ -25,6 +25,7 @@ import ExploreGrid from "./ExploreGrid";
 import FanZone from "./FanZone";
 import { Skeleton, SkeletonRows } from "./Loading";
 import MatchDayCard from "./MatchDayCard";
+import TournamentBanner from "./TournamentBanner";
 import WeekStars from "./WeekStars";
 import RatingBadge from "./RatingBadge";
 import { TeamMark } from "./TeamBadge";
@@ -107,6 +108,7 @@ export default function HomeView() {
             Free Fire&apos;s proving ground. 8PM and 10PM scrims, the full table, every result, each player&apos;s kills and rating, and
             every match again as a 2D replay.
           </p>
+          <TournamentBanner />
           <div className="mt-7 flex flex-wrap gap-3">
             <Link href="/standings" className="btn btn-primary px-6 text-base">
               View standings <span aria-hidden>&rarr;</span>
