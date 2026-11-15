@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 
-from .models import Feature, Invite, Membership, Plan, PlayerClaim, StaffProfile, User
+from .models import Feature, Invite, JoinRequest, Membership, Plan, PlayerClaim, StaffProfile, User
 
 
 @admin.register(User)
@@ -51,4 +51,10 @@ class InviteAdmin(admin.ModelAdmin):
 @admin.register(PlayerClaim)
 class PlayerClaimAdmin(admin.ModelAdmin):
     list_display = ["user", "game_uid", "status", "reviewed_by", "created_at"]
+    list_filter = ["status"]
+
+
+@admin.register(JoinRequest)
+class JoinRequestAdmin(admin.ModelAdmin):
+    list_display = ["user", "team", "status", "created_at", "reviewed_by"]
     list_filter = ["status"]

@@ -1,11 +1,17 @@
 from django.urls import path
 from rest_framework.routers import SimpleRouter
 
-from . import views
+from . import joins, views
 
 router = SimpleRouter(trailing_slash=False)
 router.register(r"teams/(?P<slug>[-\w]+)/invites", views.TeamInviteViewSet, basename="team-invite")
 router.register(r"teams/(?P<slug>[-\w]+)/members", views.TeamMemberViewSet, basename="team-member")
+router.register(
+    r"teams/(?P<slug>[-\w]+)/join-requests",
+    joins.TeamJoinRequestViewSet,
+    basename="team-join-request",
+)
+router.register("admin/join-requests", joins.StaffJoinRequestViewSet, basename="join-request")
 router.register("admin/player-claims", views.PlayerClaimViewSet, basename="player-claim")
 router.register("admin/staff", views.StaffViewSet, basename="staff")
 
@@ -25,6 +31,7 @@ urlpatterns = [
     ),
     path("me", views.MeView.as_view(), name="me"),
     path("me/link-uid", views.LinkUidView.as_view(), name="me-link-uid"),
+    path("me/join-team", joins.MyJoinRequestView.as_view(), name="me-join-team"),
     path("invites/<str:token>", views.InviteView.as_view(), name="invite"),
     *router.urls,
 ]

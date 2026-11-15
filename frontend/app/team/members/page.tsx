@@ -1,13 +1,16 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
 
+import JoinRequests from "@/components/team/JoinRequests";
 import TeamPeople from "@/components/team/TeamPeople";
 
 import { useTeam } from "../TeamGate";
 
 export default function TeamMembers() {
   const { me, membership } = useTeam();
+  const [answered, setAnswered] = useState(0); // reloads the member list after an accept
   if (!membership) {
     return (
       <section className="mx-auto max-w-3xl px-4 py-10">
@@ -26,7 +29,9 @@ export default function TeamMembers() {
       </Link>
       <h1 className="mt-2 font-display text-5xl leading-none font-extrabold uppercase">{membership.team.name}</h1>
       <div className="mt-6">
+        {(membership.role === "MANAGER" || staff) && <JoinRequests slug={membership.team.slug} onAnswered={() => setAnswered((n) => n + 1)} />}
         <TeamPeople
+          key={answered}
           slug={membership.team.slug}
           canManage={membership.role === "MANAGER" || staff}
           canInviteManagers={staff}

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 
 import TeamEditor, { type AdminTeam } from "@/components/staff/TeamEditor";
+import JoinRequests from "@/components/team/JoinRequests";
 import TeamPeople from "@/components/team/TeamPeople";
 import { api, type Paged } from "@/lib/api";
 
@@ -31,6 +32,9 @@ export default function StaffTeams() {
         Teams are created from in-game names when matches are uploaded. Give each one its proper name, logo
         and colour, merge spellings of the same team, and invite each team&apos;s manager.
       </p>
+      <div className="mt-6">
+        <JoinRequests />
+      </div>
       {error && <p className="mt-6 text-bad">{error}</p>}
       {!teams && !error && <p className="mt-6 text-muted">Loading...</p>}
       <ul className="mt-6 space-y-2">

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { createContext, useContext, useEffect } from "react";
 
+import JoinTeam from "@/components/account/JoinTeam";
 import type { Me, Membership } from "@/lib/api";
 import { useMe } from "@/lib/useMe";
 
@@ -32,8 +33,19 @@ export default function TeamGate({ children }: { children: React.ReactNode }) {
   const membership = me.memberships.find((m) => m.is_active) ?? null;
   if (!membership && !me.staff_role) {
     return (
-      <div className="mx-auto max-w-xl p-6">
-        <p>Your account isn&apos;t on a team yet. Ask your team manager to send you an invite.</p>
+      <div className="mx-auto max-w-xl space-y-4 p-6">
+        <p>Your account isn&apos;t on a team yet. Ask to join below, or ask your team manager to send you an invite.</p>
+        {me.player ? (
+          <JoinTeam />
+        ) : (
+          <p className="text-sm text-muted">
+            First link your Free Fire UID on{" "}
+            <Link href="/account" className="text-accent">
+              My account
+            </Link>
+            , so your manager can see who&apos;s asking.
+          </p>
+        )}
         <Link href="/" className="mt-4 inline-block text-accent">
           Back home
         </Link>
