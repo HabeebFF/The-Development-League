@@ -85,6 +85,19 @@ def _flag(obj, note: str) -> None:
 # -- linking -------------------------------------------------------------------------------------
 
 
+def fixture_season(day: MatchDay) -> int:
+    """The season a match day's predictions are in: its own, or for a tournament's match day
+    (a cup night) the league season, where the night's automatic markets are made."""
+    from apps.tournaments.services import is_tournament_season
+
+    season_id = day.stage.season_id
+    if is_tournament_season(season_id):
+        league = auto.current_season()
+        if league is not None:
+            return league.pk
+    return season_id
+
+
 def link_match(match: Match) -> str:
     """Link the fixture about ``match`` (and its session's fixture to the match day).
     Returns what happened, for the report."""
@@ -93,7 +106,7 @@ def link_match(match: Match) -> str:
     if Fixture.objects.filter(match=match).exists():
         return f"{match}: already linked."
     day = match.match_day
-    season_id = day.stage.season_id
+    season_id = fixture_season(day)
     date, session = date_of(day), session_of(day)
     if date is None or session is None:
         why = "doesn't say 8PM or 10PM" if session is None else "has no date"

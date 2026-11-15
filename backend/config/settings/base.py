@@ -49,6 +49,7 @@ INSTALLED_APPS = [
     "apps.predictions",
     "apps.scrims",
     "apps.shop",
+    "apps.tournaments",
 ]
 
 MIDDLEWARE = [

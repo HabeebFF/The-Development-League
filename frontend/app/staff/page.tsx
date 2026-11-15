@@ -11,6 +11,7 @@ export default function StaffHome() {
     { href: "/staff/matches", title: "Plot rotations", text: "Check each team's auto route, fix it and confirm." },
     { href: "/staff/uid", title: "Game UIDs", text: "Who is linked to which player. UIDs link automatically at sign-up; unlink one that isn't theirs." },
     { href: "/staff/teams", title: "Teams", text: "Name teams, add logos, merge spellings of the same team and invite managers." },
+    { href: "/staff/tournaments", title: "Tournaments", text: "Cups with their own table: invite teams, set prizes, and pay the DC once the final is in." },
     { href: "/staff/seasons", title: "Seasons", text: "Set up the season and its stages, and move match days into it." },
     { href: "/staff/pp", title: "Protection Points", text: "Each day's tasks, starting PP and adjustments. Teams' PP is worked out from the logs." },
     { href: "/staff/cards", title: "Player cards", text: "Player photos, card roles and how the weekly ratings are weighted." },

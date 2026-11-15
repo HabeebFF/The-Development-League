@@ -53,6 +53,7 @@ export const GROUPS: NavGroup[] = [
   { href: "/results", label: "Results", blurb: "Every match day, map by map, with replays", icon: ICON.results },
   { href: "/players", label: "Players", blurb: "Kills, ratings, cards and awards", icon: ICON.players, items: PLAYER_PAGES },
   { href: "/teams", label: "Teams", blurb: "Teams and Protection Points", icon: ICON.teams, items: TEAM_PAGES },
+  { href: "/tournaments", label: "Tournaments", blurb: "Cups and finals, with prizes", icon: ICON.awards },
   { href: "/predict", label: "Predict", blurb: "Bet free DC on matches, no real money", icon: ICON.predict, flag: "predictions" },
   { href: "/shop", label: "Shop", blurb: "Buy card designs with your DC", icon: ICON.shop, flag: "predictions" },
   { href: "/player-shop", label: "Player shop", blurb: "Card looks only league players can buy", icon: ICON.cards, flag: "predictions" },
