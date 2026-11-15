@@ -626,7 +626,7 @@ def open_pick_summary(bets: list[Bet], multiples: list[Multiple]) -> list[dict]:
     return rows
 
 
-def withdraw_blocked(user, player: Player) -> list[dict]:
+def withdraw_blocked(user, player: Player | None, why: str = "") -> list[dict]:
     """Refund ``user``'s open predictions that their new link to ``player`` closes to them
     (see ``PlayerRules``): each comes back as a void with its stake returned, once, and
     settling its market later leaves it alone. Settled predictions are never touched."""
@@ -634,7 +634,7 @@ def withdraw_blocked(user, player: Player) -> list[dict]:
         bets, multiples = blocked_open_picks(user, player)
         done_bets, done_multiples = [], []
         now = timezone.now()
-        why = f"Linked to {player.display_name}: can't predict on yourself or your team"
+        why = why or f"Linked to {player.display_name}: can't predict on yourself or your team"
         for shown in bets:
             b = Bet.objects.select_for_update().get(pk=shown.pk)
             if b.status != Bet.Status.PENDING or b.withdrawn_at:

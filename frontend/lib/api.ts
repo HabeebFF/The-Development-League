@@ -111,6 +111,34 @@ export type UidPreview = {
   refund: number;
 };
 
+type JoinTeamRef = { id: number; name: string; tag: string; slug: string };
+
+/** A player asking to join a team; the team's manager (or staff) answers. */
+export type JoinRequest = {
+  id: number;
+  user_name: string;
+  email: string;
+  team: JoinTeamRef;
+  player: { name: string; game_uid: string; matches_for_team: number; current_team: JoinTeamRef | null } | null;
+  note: string;
+  status: "PENDING" | "ACCEPTED" | "REJECTED" | "CANCELLED";
+  voided_bets: number;
+  reviewed_by: string | null;
+  reviewed_at: string | null;
+  created_at: string;
+  /** Staff list only: false when nobody manages the team, so staff answer it. */
+  team_has_manager?: boolean;
+};
+
+/** GET /me/join-team */
+export type MyJoin = {
+  player: { name: string; game_uid: string } | null;
+  on_team: JoinTeamRef | null;
+  suggested: (JoinTeamRef & { matches: number }) | null;
+  teams: JoinTeamRef[];
+  request: JoinRequest | null;
+};
+
 export type UidClaim = { id: number; game_uid: string; player_name: string | null; status: "PENDING" | "APPROVED" | "REJECTED"; switched: boolean; voided_bets: number };
 
 export type Role = "MANAGER" | "PLAYER";

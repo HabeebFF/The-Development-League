@@ -2,13 +2,15 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useState } from "react";
+import { useCallback, useState } from "react";
 
 import { api, ApiError, type UidClaim, type UidPreview } from "@/lib/api";
 import { useApi } from "@/lib/useApi";
 
 import { useAuth } from "../Auth";
 import { SkeletonRows } from "../league/Loading";
+
+import JoinTeam from "./JoinTeam";
 
 const dc = (n: number) => `${n.toLocaleString("en-GB")} DC`;
 const ROLE: Record<string, string> = { RUSHER: "Rusher", GRENADER: "Grenader", SNIPER: "Sniper", ALL_ROUNDER: "All-rounder" };
@@ -25,6 +27,9 @@ export default function AccountView() {
   const [done, setDone] = useState<{ claim: UidClaim; refund: number } | null>(null);
   // Asked again after linking, since refunds change the balance.
   const wallet = useApi<{ balance: number }>(status === "in" && site.predictions ? `/predictions/wallet${done ? `?after=${done.claim.id}` : ""}` : null);
+
+  // Once a manager accepts, the menu's My team needs the new membership.
+  const onJoined = useCallback(() => void refresh(), [refresh]);
 
   if (status !== "in" || !me) return <SkeletonRows count={4} />;
   const isStaff = !!me.staff_role;
@@ -69,6 +74,8 @@ export default function AccountView() {
           </div>
         )}
       </div>
+
+      {player && !isStaff && <JoinTeam onJoined={onJoined} />}
 
       {player ? (
         <div className="card p-4 text-sm">

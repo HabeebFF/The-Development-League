@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import TeamScrims from "@/components/scrims/TeamScrims";
+import JoinRequests from "@/components/team/JoinRequests";
 import TeamIgl from "@/components/team/TeamIgl";
 import { api, type MatchDay, type Paged } from "@/lib/api";
 
@@ -45,6 +46,8 @@ export default function TeamHome() {
           </Link>
         )}
       </div>
+
+      {membership?.role === "MANAGER" && <JoinRequests slug={membership.team.slug} compact />}
 
       {membership && <TeamScrims slug={membership.team.slug} />}
 

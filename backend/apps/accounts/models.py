@@ -231,3 +231,40 @@ class PlayerClaim(models.Model):
 
     def __str__(self) -> str:
         return f"{self.user} claims {self.game_uid} ({self.status})"
+
+
+class JoinRequest(models.Model):
+    """A player asking to join a team (from My account); the team's manager, or staff when
+    the team has none, accepts or rejects it. Only accounts linked to a game UID can ask."""
+
+    class Status(models.TextChoices):
+        PENDING = "PENDING", "Waiting"
+        ACCEPTED = "ACCEPTED", "Accepted"
+        REJECTED = "REJECTED", "Rejected"
+        CANCELLED = "CANCELLED", "Cancelled"
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="join_requests")
+    team = models.ForeignKey("league.Team", on_delete=models.CASCADE, related_name="join_requests")
+    note = models.CharField(max_length=200, blank=True)
+    status = models.CharField(max_length=10, choices=Status.choices, default=Status.PENDING)
+    reviewed_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    voided_bets = models.PositiveSmallIntegerField(
+        default=0, help_text="Open predictions on the team refunded on accepting"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["user"],
+                condition=models.Q(status="PENDING"),
+                name="one_pending_join_request_per_user",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.user} asks to join {self.team} ({self.status})"
