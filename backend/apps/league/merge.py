@@ -128,6 +128,9 @@ def merge_players(source: Player, target: Player) -> dict:
         + MatchEvent.objects.filter(target_player=source).update(target_player=target),
         "ratings": PlayerMatchRating.objects.filter(player=source).update(player=target),
     }
+    from apps.dc.models import MatchReward
+
+    MatchReward.objects.filter(player=source).update(player=target)
     PlayerTrack.objects.filter(player=source).update(player=target)
     ReplayObject.objects.filter(player=source).update(player=target)
     # One roster entry per player and season: the kept player's wins.

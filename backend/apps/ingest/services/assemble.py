@@ -138,6 +138,7 @@ def assemble(assignment: Assignment, *, batch: UploadBatch | None = None, user=N
     schedule_rebuild(old_season_id, match.match_day.stage.season_id)
     _schedule_reviews(match.pk)
     _schedule_predictions(match.pk)
+    _schedule_rewards(match.pk)
     return run
 
 
@@ -153,6 +154,13 @@ def _schedule_predictions(match_id: int) -> None:
     from apps.predictions.tasks import auto_settle_task
 
     transaction.on_commit(lambda: auto_settle_task.delay(match_id))
+
+
+def _schedule_rewards(match_id: int) -> None:
+    """Pay the match's DC (kills, Booyah, MVP, played) after commit."""
+    from apps.dc.tasks import sync_match_task
+
+    transaction.on_commit(lambda: sync_match_task.delay(match_id))
 
 
 # Any fixed number, shared by every assembly; the value only has to be unique in this app.

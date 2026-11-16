@@ -19,3 +19,6 @@ SIMPLE_JWT = {**SIMPLE_JWT, "SIGNING_KEY": SECRET_KEY}  # noqa: F405
 
 # The daily bonus would change every balance the older tests check; its own tests switch it on.
 PREDICTIONS_DAILY_BONUS = 0
+
+# DC for playing would change the balances older tests check; its own tests switch it on.
+DC_MATCH_REWARDS = False

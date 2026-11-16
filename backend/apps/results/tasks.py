@@ -32,6 +32,11 @@ def refresh_ratings_task(season_id: int | None = None, force: bool = False) -> i
     if season_id is not None:
         matches = list(Match.objects.filter(match_day__stage__season_id=season_id))
     rated = refresh(matches, force=force)
+    # The match MVP comes from the ratings, so DC for MVP follows them.
+    if season_id is not None:
+        from apps.dc.tasks import sync_season_task
+
+        sync_season_task.delay(season_id)
     # Daily cards show the day's rating, and the matches may be new too.
     refresh_day_cards_task.delay(season_id)
     return rated

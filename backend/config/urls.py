@@ -16,6 +16,7 @@ urlpatterns = [
     path("api/v1/", include("apps.predictions.urls")),
     path("api/v1/", include("apps.scrims.urls")),
     path("api/v1/", include("apps.shop.urls")),
+    path("api/v1/", include("apps.dc.urls")),
     path("api/v1/", include("apps.tournaments.urls")),
 ]
 

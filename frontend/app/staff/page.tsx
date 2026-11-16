@@ -20,6 +20,7 @@ export default function StaffHome() {
     { href: "/staff/coach", title: "Coach", text: "Weekly team reports, and what the coach knows: utility, weapons, the zone and named drop spots." },
     { href: "/staff/scrims", title: "Scrims", text: "Who signed up for 8PM and 10PM, add or remove teams for a session, and suspend teams." },
     { href: "/staff/shop", title: "Card shop", text: "Card designs bought with DC: add, price and hide designs, see sales, refund and gift." },
+    { href: "/staff/dc", title: "DC for players", text: "What a kill, a Booyah, match MVP and playing pay in DC after each upload, and back-pay for earlier matches." },
     { href: "/staff/predictions", title: "Predictions", text: "Fixtures, markets and odds, settling from the match result, corrections and coin wallets." },
     ...(me.is_super_admin ? [{ href: "/staff/maps", title: "Map images and calibration", text: "Upload map images and line them up with the game." }] : []),
   ];

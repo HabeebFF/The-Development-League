@@ -50,6 +50,7 @@ INSTALLED_APPS = [
     "apps.scrims",
     "apps.shop",
     "apps.tournaments",
+    "apps.dc",
 ]
 
 MIDDLEWARE = [
@@ -224,6 +225,9 @@ CELERY_TASK_ACKS_LATE = True
 CELERY_WORKER_PREFETCH_MULTIPLIER = 1
 CELERY_TASK_TIME_LIMIT = 30 * 60
 # Run inside the worker (started with -B). Hours are UTC: 5 is 6 am in Lagos.
+# Pay DC for kills, Booyahs, MVP and playing after each upload (rates in Staff > DC settings).
+DC_MATCH_REWARDS = env("DC_MATCH_REWARDS", "true").lower() in ("1", "true", "yes")
+
 CELERY_BEAT_SCHEDULE = {
     "coach-weekly-reports": {
         "task": "apps.coach.tasks.weekly_reports_task",
@@ -257,6 +261,11 @@ CELERY_BEAT_SCHEDULE = {
     "predictions-check-wallets": {
         "task": "apps.predictions.tasks.check_wallets_task",
         "schedule": crontab(minute=50, hour=3),
+    },
+    # DC earned by playing: recent matches (MVP can move once ratings are in) + waiting DC.
+    "dc-rewards-sweep": {
+        "task": "apps.dc.tasks.sweep_task",
+        "schedule": crontab(minute="4-59/5"),
     },
     "coach-catch-up-reviews": {
         "task": "apps.coach.tasks.catch_up_reviews_task",
