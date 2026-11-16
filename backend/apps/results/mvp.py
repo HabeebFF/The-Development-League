@@ -22,6 +22,29 @@ def _media(f) -> str | None:
     return f.url if f else None
 
 
+def pick(results: dict, ratings: dict) -> int | None:
+    """The MVP's player id: best rating, then kills, knocks, damage. None if nobody was rated
+    and nobody got a kill. ``results`` maps player id to PlayerMatchResult."""
+    if not results:
+        return None
+
+    def key(pid: int) -> tuple:
+        r = results[pid]
+        return (ratings.get(pid, 0.0), r.kills, r.knocks or 0, r.damage_dealt or 0)
+
+    pid = max(results, key=key)
+    if not ratings and not results[pid].kills:
+        return None
+    return pid
+
+
+def mvp_id(match: Match) -> int | None:
+    """Just the MVP's player id (what DC rewards use)."""
+    results = {r.player_id: r for r in PlayerMatchResult.objects.filter(match=match)}
+    ratings = dict(PlayerMatchRating.objects.filter(match=match).values_list("player_id", "rating"))
+    return pick(results, ratings)
+
+
 def for_match(match: Match) -> dict | None:
     results = {
         r.player_id: r
@@ -31,17 +54,10 @@ def for_match(match: Match) -> dict | None:
         r.player_id: r.rating
         for r in PlayerMatchRating.objects.filter(match=match, player_id__in=list(results))
     }
-    if not results:
+    pid = pick(results, ratings)
+    if pid is None:
         return None
-
-    def key(pid: int) -> tuple:
-        r = results[pid]
-        return (ratings.get(pid, 0.0), r.kills, r.knocks or 0, r.damage_dealt or 0)
-
-    pid = max(results, key=key)
     r = results[pid]
-    if not ratings and not r.kills:
-        return None
     used = weapons.by_weapon([match.pk], [pid]).get(pid, {})
     listed = weapons.listing(
         Counter({w: n["kills"] + n["knocks"] for w, n in used.items()}),

@@ -52,6 +52,7 @@ class LedgerEntry(models.Model):
         DAILY_BONUS = "DAILY_BONUS", "Daily bonus"
         PURCHASE = "PURCHASE", "Card shop purchase"
         SHOP_REFUND = "SHOP_REFUND", "Card shop refund"
+        MATCH_REWARD = "MATCH_REWARD", "Earned in a match"
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     wallet = models.ForeignKey(Wallet, on_delete=models.PROTECT, related_name="entries")

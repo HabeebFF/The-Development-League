@@ -10,6 +10,8 @@ import { useApi } from "@/lib/useApi";
 import { useAuth } from "../Auth";
 import { SkeletonRows } from "../league/Loading";
 
+import MatchEarnings from "../dc/MatchEarnings";
+
 import JoinTeam from "./JoinTeam";
 
 const dc = (n: number) => `${n.toLocaleString("en-GB")} DC`;
@@ -74,6 +76,8 @@ export default function AccountView() {
           </div>
         )}
       </div>
+
+      {player && !isStaff && <MatchEarnings />}
 
       <DisplayName current={me.display_name} nextChange={me.display_name_next_change} onSaved={refresh} />
 

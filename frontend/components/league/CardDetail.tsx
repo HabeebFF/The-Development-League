@@ -14,6 +14,8 @@ import {
 } from "@/lib/cards";
 import { useApi } from "@/lib/useApi";
 
+import WaitingDc from "../dc/WaitingDc";
+
 import { cardImage } from "./cardImage";
 import Loading from "./Loading";
 import PlayerCard from "./PlayerCard";
@@ -102,6 +104,7 @@ export default function CardDetail({
             Icon: {card.streak} weeks in a row at the top
           </p>
         )}
+        <WaitingDc playerId={card.player_id} />
         {card.stale && (
           <p className="mt-2 text-sm text-muted">
             Not enough matches this week, so these are the numbers from their

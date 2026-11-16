@@ -604,6 +604,10 @@ def link_claim(claim: PlayerClaim, reviewer: User | None = None) -> bool:
         claim.reviewed_by = reviewer
         claim.reviewed_at = timezone.now()
         claim.save(update_fields=["status", "reviewed_by", "reviewed_at", "voided_bets"])
+        # DC they earned in matches before linking is paid now.
+        from apps.dc.tasks import pay_waiting_task
+
+        transaction.on_commit(lambda pid=player.pk: pay_waiting_task.delay(pid))
     return True
 
 
