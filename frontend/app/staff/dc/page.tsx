@@ -1,5 +1,6 @@
 "use client";
 
+import DcRanksManager from "@/components/staff/DcRanksManager";
 import DcSettingsManager from "@/components/staff/DcSettingsManager";
 
 export default function StaffDc() {
@@ -10,6 +11,7 @@ export default function StaffDc() {
         Players earn DC for every match they play, paid automatically after the upload. A re-upload pays or takes back only the difference.
       </p>
       <DcSettingsManager />
+      <DcRanksManager />
     </section>
   );
 }
