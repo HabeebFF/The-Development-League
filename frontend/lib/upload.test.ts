@@ -224,3 +224,23 @@ test("a session's match day date is the day it was played, not today", () => {
   assert.equal(playedOn([{ started_at: null }, { started_at: at(29, 22) }, { started_at: at(30, 0) }]), "2026-09-29");
   assert.equal(playedOn([{ started_at: null }]), null);
 });
+
+test("a long 10pm night that runs past midnight stays one session", () => {
+  const at = (d: number, h: number, mi: number) => new Date(2026, 10, d, h, mi).toISOString();
+  const m = (id: string, started: string) =>
+    ({ game_match_id: id, started_at: started, room_name: "TDL CUP GF DAY1" }) as PreviewMatch;
+  const order = [
+    m("1", at(16, 22, 3)),
+    m("2", at(16, 22, 26)),
+    m("3", at(16, 22, 48)),
+    m("4", at(16, 23, 11)),
+    m("5", at(16, 23, 33)),
+    m("6", at(16, 23, 54)),
+  ];
+  const s = sessionsOf(order);
+  assert.equal(s.length, 1);
+  assert.equal(s[0].matches.length, 6);
+  // A 6-map night that starts at 8pm still splits from the 10pm one by slot length.
+  const early = ["20:00", "20:30", "21:00", "21:30", "21:55"].map((t, i) => m(`e${i}`, at(16, +t.slice(0, 2), +t.slice(3))));
+  assert.equal(sessionsOf(early).length, 2);
+});

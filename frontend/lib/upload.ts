@@ -169,6 +169,15 @@ export function isLeagueRoom(room: string): boolean {
   return tidy(room) === "" || /^TDL\b/i.test(tidy(room));
 }
 
+/** True when a sitting starts in the night's last slot (the 10pm scrims, from 9:30pm, or after
+ * midnight): nothing follows it, so a long night (6 maps) running past midnight stays one
+ * session and only a real break splits it. */
+function isLastSlot(ms: number): boolean {
+  const d = new Date(ms);
+  const minutes = d.getHours() * 60 + d.getMinutes();
+  return minutes >= 21 * 60 + 30 || minutes < 6 * 60;
+}
+
 /** Splits one room's matches (in play order) into sittings, by breaks and slot length. */
 function splitByTime(
   ordered: PreviewMatch[],
@@ -183,7 +192,7 @@ function splitByTime(
     const fresh =
       !groups.length ||
       (at != null && last != null && (at - last) / 60000 >= breakMinutes) ||
-      (at != null && first != null && (at - first) / 60000 >= sessionMinutes);
+      (at != null && first != null && !isLastSlot(first) && (at - first) / 60000 >= sessionMinutes);
     if (fresh) {
       groups.push([]);
       first = at;
