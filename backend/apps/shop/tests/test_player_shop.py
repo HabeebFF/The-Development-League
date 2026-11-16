@@ -267,7 +267,7 @@ def test_progress_counts_kills_booyahs_and_totw(pro, team):
     _played(player, team, 60, 1, 1)
     _played(player, team, 45, 3, 2)
     PlayerCard.objects.filter(player=player).update(totw=["MVP"])
-    assert milestones.progress(player) == {"kills": 105, "booyahs": 1, "totw": 1}
+    assert milestones.progress(player) == {"kills": 105, "booyahs": 1, "totw": 1, "dcking": 0}
 
 
 def test_opening_the_shop_hands_out_reached_milestones_once(pro, team):
