@@ -83,6 +83,8 @@ export type Me = {
   id: number;
   email: string;
   display_name: string;
+  /** When they can rename themselves again (once a week), or null if they can now. */
+  display_name_next_change: string | null;
   is_super_admin: boolean;
   staff_role: "SUPER_ADMIN" | "STAFF" | "ANALYST" | null;
   features: string[];

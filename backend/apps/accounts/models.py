@@ -37,6 +37,8 @@ class User(AbstractUser):
     username = None
     email = models.EmailField(unique=True)
     display_name = models.CharField(max_length=80, blank=True)
+    # When the person last renamed themselves from My account (staff edits don't count).
+    display_name_changed_at = models.DateTimeField(null=True, blank=True)
     preferred_language = models.CharField(max_length=10, default="en")
 
     USERNAME_FIELD = "email"

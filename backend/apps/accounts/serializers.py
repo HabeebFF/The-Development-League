@@ -1,7 +1,9 @@
 from django.conf import settings
 from django.contrib.auth import password_validation
 from django.core.exceptions import ValidationError as DjangoValidationError
+from django.db.models import Q
 from django.db.models.functions import Lower
+from django.utils import timezone
 from rest_framework import serializers
 
 from apps.league.models import Player, Team
@@ -31,6 +33,7 @@ class MeSerializer(serializers.ModelSerializer):
     player = serializers.SerializerMethodField()
     pending_uid_claim = serializers.SerializerMethodField()
     can_watch_replays = serializers.SerializerMethodField()
+    display_name_next_change = serializers.SerializerMethodField()
 
     class Meta:
         model = User
@@ -38,6 +41,7 @@ class MeSerializer(serializers.ModelSerializer):
             "id",
             "email",
             "display_name",
+            "display_name_next_change",
             "preferred_language",
             "is_super_admin",
             "staff_role",
@@ -76,10 +80,60 @@ class MeSerializer(serializers.ModelSerializer):
         claim = user.player_claims.filter(status=PlayerClaim.Status.PENDING).first()
         return str(claim.game_uid) if claim else None
 
+    def get_display_name_next_change(self, user: User) -> str | None:
+        """When they can rename again, if they're still waiting."""
+        if user.is_league_staff or not user.display_name_changed_at:
+            return None
+        when = user.display_name_changed_at + RENAME_COOLDOWN
+        return when.isoformat() if when > timezone.now() else None
+
     def validate_preferred_language(self, value: str) -> str:
         if value not in dict(settings.LANGUAGES):
             raise serializers.ValidationError("Unsupported language.")
         return value
+
+    def validate_display_name(self, value: str) -> str:
+        user: User = self.instance
+        name = " ".join(value.split())
+        if name == user.display_name:
+            return name
+        check_display_name(name, user)
+        if self.get_display_name_next_change(user):
+            raise serializers.ValidationError(
+                f"You can change your name once every {RENAME_COOLDOWN.days} days."
+            )
+        return name
+
+    def update(self, instance: User, validated_data):
+        if validated_data.get("display_name", instance.display_name) != instance.display_name:
+            instance.display_name_changed_at = timezone.now()
+        return super().update(instance, validated_data)
+
+
+RENAME_COOLDOWN = timezone.timedelta(days=7)
+# Words only staff accounts may use in their name, so nobody poses as the league.
+RESERVED_WORDS = ("staff", "admin", "official", "moderator", "referee")
+
+
+def _staff_users():
+    return User.objects.filter(
+        Q(is_superuser=True) | Q(is_staff=True) | Q(staff_profile__isnull=False)
+    )
+
+
+def check_display_name(name: str, user: User | None = None) -> None:
+    """A display name people see on the DC leaderboard, fan zone and shop: 2-30 characters,
+    nobody else has it (any case), and fans can't pose as league staff."""
+    if not 2 <= len(name) <= 30:
+        raise serializers.ValidationError("Use 2 to 30 characters.")
+    others = User.objects.exclude(pk=user.pk) if user and user.pk else User.objects.all()
+    if others.filter(display_name__iexact=name).exists():
+        raise serializers.ValidationError("That name is taken. Pick another.")
+    if user and user.pk and user.is_league_staff:
+        return
+    folded = name.casefold()
+    if any(word in folded for word in RESERVED_WORDS):
+        raise serializers.ValidationError("That name is kept for league staff. Pick another.")
 
 
 class LoginSerializer(serializers.Serializer):
@@ -105,8 +159,7 @@ class SignupSerializer(serializers.Serializer):
 
     def validate_display_name(self, value: str) -> str:
         name = " ".join(value.split())
-        if User.objects.filter(display_name__iexact=name).exists():
-            raise serializers.ValidationError("That name is taken. Pick another.")
+        check_display_name(name)
         return name
 
     def validate(self, attrs):
