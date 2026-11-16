@@ -112,8 +112,8 @@ def test_cookie_auth_requires_csrf_on_writes():
         format="json",
         HTTP_X_CSRFTOKEN=csrf,
     )
-    assert client.patch("/api/v1/me", {"display_name": "x"}, format="json").status_code == 403
-    ok = client.patch("/api/v1/me", {"display_name": "x"}, format="json", HTTP_X_CSRFTOKEN=csrf)
+    assert client.patch("/api/v1/me", {"display_name": "Xavi"}, format="json").status_code == 403
+    ok = client.patch("/api/v1/me", {"display_name": "Xavi"}, format="json", HTTP_X_CSRFTOKEN=csrf)
     assert ok.status_code == 200
 
 
@@ -608,3 +608,72 @@ def test_waiting_uids_link_when_this_ships():
     importlib.import_module("apps.accounts.migrations.0004_link_waiting_uids").forwards(apps, None)
     assert Player.objects.get(game_uid=4242).user == waiting
     assert PlayerClaim.objects.get(user=late).status == PlayerClaim.Status.PENDING
+
+
+# -- changing your display name ---------------------------------------------------------------
+
+
+def test_fan_renames_from_my_account():
+    fan = make_user("fan@tdl.test", display_name="OLD NAME")
+    client = as_user(fan)
+    res = client.patch("/api/v1/me", {"display_name": "  New   Name "}, format="json")
+    assert res.status_code == 200, res.data
+    assert res.data["display_name"] == "New Name"
+    assert res.data["display_name_next_change"] is not None
+    fan.refresh_from_db()
+    assert fan.display_name == "New Name" and fan.display_name_changed_at is not None
+
+
+def test_rename_checks_length_and_taken_names():
+    make_user("a@tdl.test", display_name="KING SLAYER")
+    client = as_user(make_user("b@tdl.test", display_name="B"))
+    for bad in ["x", "y" * 31, "king slayer"]:
+        res = client.patch("/api/v1/me", {"display_name": bad}, format="json")
+        assert res.status_code == 400, bad
+        assert "display_name" in res.data
+
+
+def test_fans_cannot_pose_as_staff(staff):
+    staff.display_name = "TDL ANALYST"
+    staff.save()
+    client = as_user(make_user("fan@tdl.test", display_name="FAN"))
+    for bad in ["tdl analyst", "TDL Staff", "Official TDL", "admin_joe"]:
+        res = client.patch("/api/v1/me", {"display_name": bad}, format="json")
+        assert res.status_code == 400, bad
+    # Staff can use those words for themselves.
+    res = as_user(staff).patch("/api/v1/me", {"display_name": "TDL Staff Desk"}, format="json")
+    assert res.status_code == 200, res.data
+
+
+def test_rename_once_a_week(staff):
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    fan = make_user("fan@tdl.test", display_name="FIRST")
+    client = as_user(fan)
+    assert client.patch("/api/v1/me", {"display_name": "SECOND"}, format="json").status_code == 200
+    res = client.patch("/api/v1/me", {"display_name": "THIRD"}, format="json")
+    assert res.status_code == 400 and "7 days" in str(res.data["display_name"])
+    # Saving the same name (or only the language) still works while waiting.
+    assert client.patch("/api/v1/me", {"display_name": "SECOND"}, format="json").status_code == 200
+    week_ago = timezone.now() - timedelta(days=8)
+    User.objects.filter(pk=fan.pk).update(display_name_changed_at=week_ago)
+    fan.refresh_from_db()
+    assert client.patch("/api/v1/me", {"display_name": "THIRD"}, format="json").status_code == 200
+    # Staff aren't held to the wait.
+    staff_client = as_user(staff)
+    for name in ["S ONE", "S TWO"]:
+        res = staff_client.patch("/api/v1/me", {"display_name": name}, format="json")
+        assert res.status_code == 200, res.data
+
+
+def test_signup_refuses_reserved_names(open_signup):
+    client, csrf = csrf_client()
+    res = client.post(
+        "/api/v1/auth/signup",
+        {"email": "new@tdl.test", "password": PASSWORD, "display_name": "TDL Admin"},
+        format="json",
+        HTTP_X_CSRFTOKEN=csrf,
+    )
+    assert res.status_code == 400 and "display_name" in res.data

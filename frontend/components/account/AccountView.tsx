@@ -75,6 +75,8 @@ export default function AccountView() {
         )}
       </div>
 
+      <DisplayName current={me.display_name} nextChange={me.display_name_next_change} onSaved={refresh} />
+
       {player && !isStaff && <JoinTeam onJoined={onJoined} />}
 
       {player ? (
@@ -109,6 +111,79 @@ export default function AccountView() {
             }}
           />
         </div>
+      )}
+    </div>
+  );
+}
+
+/** Your name on the DC leaderboard, fan zone and shop. Card names still come from the match
+ * logs (by UID), so this never changes results or cards. */
+function DisplayName({ current, nextChange, onSaved }: { current: string; nextChange: string | null; onSaved: () => unknown }) {
+  const [editing, setEditing] = useState(false);
+  const [name, setName] = useState(current);
+  const [error, setError] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const waitUntil = day(nextChange);
+
+  async function save(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setBusy(true);
+    try {
+      await api("/me", { method: "PATCH", body: { display_name: name } });
+      await onSaved();
+      setEditing(false);
+      setSaved(true);
+    } catch (err) {
+      const field = err instanceof ApiError ? (err.data as { display_name?: string[] } | null)?.display_name?.[0] : null;
+      setError(field ?? (err instanceof Error ? err.message : "Couldn't change your name."));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="card p-4 text-sm">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="font-display text-lg uppercase">Display name</p>
+        {!editing && (
+          <button
+            type="button"
+            className="btn px-4 py-1.5 text-xs"
+            disabled={!!waitUntil}
+            onClick={() => {
+              setName(current);
+              setSaved(false);
+              setEditing(true);
+            }}
+          >
+            Change
+          </button>
+        )}
+      </div>
+      <p className="mt-1 text-muted">
+        Shown on the DC leaderboard, fan zone and shop. Your player card keeps your in-game name, and your stats stay linked to your UID.
+      </p>
+      {saved && !editing && <p className="mt-2 text-ok">Saved. You&apos;re now {current}.</p>}
+      {waitUntil && !editing && <p className="mt-2 text-muted">You can change it again on {waitUntil}.</p>}
+      {editing && (
+        <form onSubmit={save} className="mt-3">
+          <label className="block">
+            <span className="text-muted">New name</span>
+            <input value={name} onChange={(e) => setName(e.target.value)} required minLength={2} maxLength={30} className="input mt-1" autoFocus />
+          </label>
+          <p className="mt-1 text-xs text-muted">2 to 30 characters. You can change it once a week.</p>
+          {error && <p className="mt-2 text-xs text-bad">{error}</p>}
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button type="submit" className="btn btn-primary px-4 py-1.5 text-xs" disabled={busy || name.trim().length < 2 || name.trim() === current}>
+              {busy ? "Saving…" : "Save name"}
+            </button>
+            <button type="button" className="btn px-4 py-1.5 text-xs" disabled={busy} onClick={() => setEditing(false)}>
+              Cancel
+            </button>
+          </div>
+        </form>
       )}
     </div>
   );
