@@ -114,3 +114,89 @@ class Spotlight(models.Model):
 
     def __str__(self) -> str:
         return f"DC King {self.month:%B %Y}: {self.player_id}"
+
+
+class Perk(models.Model):
+    """Something DC buys that changes how a player or team is seen, never how they play."""
+
+    class Key(models.TextChoices):
+        BANNER = "BANNER", "Team banner"
+        THEME = "THEME", "Team colours"
+        SHOUTOUT = "SHOUTOUT", "Home page shoutout"
+        PIN = "PIN", "Pinned moment"
+        NAME_COLOUR = "NAME_COLOUR", "Name colour"
+
+    key = models.CharField(max_length=12, choices=Key.choices, unique=True)
+    price = models.PositiveIntegerField(help_text="DC")
+    days = models.PositiveSmallIntegerField(
+        null=True, blank=True, help_text="How long it lasts; empty = until replaced"
+    )
+    for_team = models.BooleanField(default=False, help_text="Paid from the team pot")
+    enabled = models.BooleanField(default=True)
+    order = models.PositiveSmallIntegerField(default=0)
+
+    class Meta:
+        ordering = ["order", "pk"]
+
+    def __str__(self) -> str:
+        return self.get_key_display()
+
+
+class TeamPot(models.Model):
+    """DC a team's players put together for team perks. Can only be spent, never taken out."""
+
+    team = models.OneToOneField("league.Team", on_delete=models.CASCADE, related_name="dc_pot")
+    balance = models.BigIntegerField(default=0)
+    updated_at = models.DateTimeField(auto_now=True)
+
+
+class PotEntry(models.Model):
+    """One movement in a team pot: a player chipping in (+) or a perk bought (-)."""
+
+    pot = models.ForeignKey(TeamPot, on_delete=models.CASCADE, related_name="entries")
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+    amount = models.BigIntegerField()
+    balance_after = models.BigIntegerField()
+    note = models.CharField(max_length=120, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at", "-pk"]
+
+
+class PerkPurchase(models.Model):
+    class Status(models.TextChoices):
+        PENDING = "PENDING", "Waiting for staff"
+        ACTIVE = "ACTIVE", "Active"
+        REJECTED = "REJECTED", "Turned down (refunded)"
+        REMOVED = "REMOVED", "Removed by staff"
+        REPLACED = "REPLACED", "Replaced by a newer one"
+
+    perk = models.ForeignKey(Perk, on_delete=models.PROTECT, related_name="purchases")
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="perk_purchases"
+    )
+    player = models.ForeignKey(
+        "league.Player", on_delete=models.CASCADE, null=True, blank=True, related_name="+"
+    )
+    team = models.ForeignKey(
+        "league.Team", on_delete=models.CASCADE, null=True, blank=True, related_name="+"
+    )
+    price_paid = models.PositiveIntegerField()
+    from_pot = models.BooleanField(default=False)
+    status = models.CharField(max_length=8, choices=Status.choices)
+    data = models.JSONField(default=dict, blank=True, help_text="Colours, text, palette, moment")
+    image = models.FileField(upload_to="teams/banners/", blank=True)
+    starts_at = models.DateTimeField(null=True, blank=True)
+    ends_at = models.DateTimeField(null=True, blank=True)
+    reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+    review_note = models.CharField(max_length=200, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at", "-pk"]
+        indexes = [models.Index(fields=["perk", "status"])]

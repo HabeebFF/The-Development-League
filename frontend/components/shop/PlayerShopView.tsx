@@ -103,6 +103,9 @@ export default function PlayerShopView() {
         <Link href="/player-shop/collection" className="text-sm text-accent underline">
           See the whole collection
         </Link>
+        <Link href="/player-shop/perks" className="text-sm text-accent underline">
+          Perks: name colour, shoutouts, team banner
+        </Link>
         <Link href="/shop" className="ml-auto text-sm text-muted underline">
           Fan card shop
         </Link>

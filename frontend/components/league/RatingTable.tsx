@@ -2,6 +2,7 @@
 
 import DcBadge from "@/components/dc/DcBadge";
 import { aura, useAuras } from "@/lib/auras";
+import { nameColour, useLivePerks } from "@/lib/dcBoard";
 import Link from "next/link";
 import { Fragment, useState } from "react";
 
@@ -48,6 +49,7 @@ export default function RatingTable({ board, limit, query = "" }: { board: Ratin
   const [all, setAll] = useState(false);
   const [open, setOpen] = useState<number | null>(null);
   const auras = useAuras();
+  const live = useLivePerks();
   if (!board.players.length) return <p className="text-sm text-muted">No ratings yet.</p>;
   const found = matchPlayers(board.players, query);
   if (!found.length) return <p className="text-sm text-muted">No player or team matches &ldquo;{query.trim()}&rdquo; here.</p>;
@@ -84,7 +86,7 @@ export default function RatingTable({ board, limit, query = "" }: { board: Ratin
                       {p.team && <TeamMark team={p.team} />}
                       <span className="min-w-0">
                         <span className="flex min-w-0 items-center">
-                          <span className={`block truncate font-display text-base font-extrabold uppercase ${aura(auras, p.player_id).className}`} style={aura(auras, p.player_id).style}>
+                          <span className={`block truncate font-display text-base font-extrabold uppercase ${aura(auras, p.player_id).className}`} style={aura(auras, p.player_id).style ?? nameColour(live, p.player_id)}>
                             {p.player}
                             {p.star && <span className="ml-1.5 text-accent-2" title="Player of the Day">★</span>}
                           </span>

@@ -164,7 +164,14 @@ def _fill(scrim: ScrimSession, actor=None) -> bool:
         return False
     playing = scrim.registrations.filter(status=R.REGISTERED).count()
     moved = False
-    for row in scrim.registrations.filter(status=R.WAITLIST).order_by("created_at", "pk"):
+    waiting = list(scrim.registrations.filter(status=R.WAITLIST).order_by("created_at", "pk"))
+    # The week's DC priority team (most DC earned from matches last week) moves up first.
+    from apps.dc.ranks import priority_team
+
+    first = priority_team(scrim.date)
+    if first:
+        waiting.sort(key=lambda r: r.team_id != first["team_id"])
+    for row in waiting:
         if playing >= scrim.max_teams:
             break
         row.status = R.REGISTERED
