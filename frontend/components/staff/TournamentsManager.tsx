@@ -169,9 +169,19 @@ function Manage({ slug, onChanged }: { slug: string; onChanged: () => void }) {
         <div className="flex flex-wrap items-center gap-3">
           <h3 className="section-title">Teams ({t.teams.length})</h3>
           {!done && (
-            <button type="button" className="btn ml-auto px-3 py-1.5 text-sm" onClick={() => run(() => api(`${base}/invite-top`, { method: "POST", body: { n: 12 } }))}>
-              Invite the top 12 now
-            </button>
+            <>
+              <button type="button" className="btn ml-auto px-3 py-1.5 text-sm" onClick={() => run(() => api(`${base}/invite-top`, { method: "POST", body: { n: 12 } }))}>
+                Invite the top 12 now
+              </button>
+              <button
+                type="button"
+                className="btn px-3 py-1.5 text-sm"
+                title="The top 11, plus the team outside them whose players earned the most DC from matches in the 30 days before the Cup"
+                onClick={() => run(() => api(`${base}/invite-top`, { method: "POST", body: { n: 12, dc_wildcard: true } }))}
+              >
+                Top 11 + DC wildcard
+              </button>
+            </>
           )}
         </div>
         <TeamEditor t={t} base={base} run={run} locked={done} />

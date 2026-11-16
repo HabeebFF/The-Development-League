@@ -1,5 +1,6 @@
 "use client";
 
+import PriorityTeam from "@/components/dc/PriorityTeam";
 import SectionHeader from "@/components/ui/SectionHeader";
 import TeamBadge from "@/components/league/TeamBadge";
 import { nightName, places, stageText, type Night, type ScrimSession } from "@/lib/scrims";
@@ -57,6 +58,7 @@ export default function ScrimLobby({ title }: { title?: string }) {
           <SessionLobby key={s.session} s={s} />
         ))}
       </div>
+      <PriorityTeam />
     </section>
   );
 }

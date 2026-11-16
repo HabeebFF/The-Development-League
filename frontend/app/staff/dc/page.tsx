@@ -1,5 +1,6 @@
 "use client";
 
+import DcPerksManager from "@/components/staff/DcPerksManager";
 import DcRanksManager from "@/components/staff/DcRanksManager";
 import DcSettingsManager from "@/components/staff/DcSettingsManager";
 
@@ -12,6 +13,7 @@ export default function StaffDc() {
       </p>
       <DcSettingsManager />
       <DcRanksManager />
+      <DcPerksManager />
     </section>
   );
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import DcBadge from "@/components/dc/DcBadge";
+import { useLivePerks } from "@/lib/dcBoard";
 import Link from "next/link";
 
 import { BooyahBadge } from "@/components/ui/MatchCard";
@@ -135,6 +136,7 @@ function RosterCard({ r, colour }: { r: RosterPlayer; colour: string }) {
 /** A team's page: roster, this season's record and recent matches. */
 export default function TeamView({ slug }: { slug: string }) {
   const enc = encodeURIComponent(slug);
+  const live = useLivePerks();
   const team = useApi<TeamDetail>(`/teams/${enc}`);
   const seasons = useApi<Paged<Season>>("/seasons?page_size=100");
   const season = seasons.data ? currentSeason(rows(seasons.data)) : null;
@@ -153,10 +155,15 @@ export default function TeamView({ slug }: { slug: string }) {
   const recent = matches.data ? rows(matches.data) : [];
   const socials = Object.entries(t.socials ?? {}).filter(([, url]) => /^https?:\/\//.test(url));
   const colour = t.primary_color || "#f5a524";
+  const banner = live?.banners[String(t.id)];
 
   return (
     <>
       <section className="relative overflow-hidden border-b border-line">
+        {banner && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={banner} alt="" className="pointer-events-none absolute inset-0 h-full w-full object-cover opacity-60" />
+        )}
         <div className="pointer-events-none absolute inset-0" style={{ background: `linear-gradient(115deg, ${colour}66, ${colour}1a 45%, transparent 75%)` }} />
         <div className="hex-grid pointer-events-none absolute inset-0 opacity-50" />
         <div className="pointer-events-none absolute -right-16 top-0 h-full w-1/2 -skew-x-[20deg] bg-[repeating-linear-gradient(90deg,rgb(255_255_255/0.04)_0_2px,transparent_2px_16px)]" />

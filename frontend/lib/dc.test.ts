@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { breakdown, dc, kingMonth, nextRank, rankFor, teamCoin } from "./dc.ts";
+import { breakdown, clockTime, dc, kingMonth, nextRank, parseClock, rankFor, teamCoin } from "./dc.ts";
 
 test("lists what a match paid for", () => {
   assert.equal(breakdown({ kills: 3, booyah: true, mvp: true }), "3 kills · Booyah · MVP");
@@ -32,4 +32,13 @@ test("king month and team coins", () => {
   assert.equal(teamCoin(teams, 2), 2);
   assert.equal(teamCoin(teams, 4), null);
   assert.equal(teamCoin(teams, null), null);
+});
+
+test("match clock", () => {
+  assert.equal(clockTime(725), "12:05");
+  assert.equal(clockTime(null), "");
+  assert.equal(parseClock("12:05"), 725);
+  assert.equal(parseClock("90"), 90);
+  assert.equal(parseClock("1:75"), null);
+  assert.equal(parseClock(""), null);
 });

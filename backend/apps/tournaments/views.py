@@ -248,6 +248,16 @@ class InviteTopView(APIView):
         teams = services.top_teams(n)
         if not teams:
             raise ValidationError({"detail": "The league has no standings yet."})
+        if request.data.get("dc_wildcard"):
+            # The last place goes to the DC wildcard: the team outside the top whose players
+            # earned the most DC from matches in the 30 days before the Cup.
+            from apps.dc.ranks import wildcard
+            from apps.predictions.services import lagos_today
+
+            keep = teams[: n - 1]
+            pick = wildcard(t.starts_on or lagos_today(), {x.pk for x in keep})
+            if pick:
+                teams = keep + [Team.objects.get(pk=pick["team_id"])]
         t.teams.set(teams)
         return Response(tournament_data(t))
 

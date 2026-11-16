@@ -24,6 +24,7 @@ import ScrimLobby from "@/components/scrims/ScrimLobby";
 import CardCountdown from "./CardCountdown";
 import ExploreGrid from "./ExploreGrid";
 import DcKingSpotlight from "../dc/DcKingSpotlight";
+import Shoutouts from "../dc/Shoutouts";
 
 import FanZone from "./FanZone";
 import { Skeleton, SkeletonRows } from "./Loading";
@@ -207,6 +208,8 @@ export default function HomeView() {
         <ScrimLobby />
 
         <DcKingSpotlight />
+
+        <Shoutouts />
 
         {season && <Stars />}
 

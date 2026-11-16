@@ -6,7 +6,15 @@ import { useDcBoard } from "@/lib/dcBoard";
 import RankIcon from "./RankIcon";
 
 /** Beside a player's name: their DC rank, and "DC KING · NOVEMBER" for the month's DC King. */
-export default function DcBadge({ playerId, king = true, size }: { playerId: number | null | undefined; king?: boolean; size?: number }) {
+export default function DcBadge({
+  playerId,
+  king = true,
+  size,
+}: {
+  playerId: number | null | undefined;
+  king?: boolean;
+  size?: number;
+}) {
   const board = useDcBoard();
   if (!board || playerId == null) return null;
   const earned = board.players[String(playerId)] ?? 0;

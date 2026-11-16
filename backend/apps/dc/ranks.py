@@ -21,7 +21,14 @@ from .models import DcSettings, MatchReward, Spotlight
 
 Kind = LedgerEntry.Kind
 # Not "earned": the starting coins, and coins moved in and out of the shops.
-NOT_EARNED = [Kind.INITIAL, Kind.PURCHASE, Kind.SHOP_REFUND]
+NOT_EARNED = [
+    Kind.INITIAL,
+    Kind.PURCHASE,
+    Kind.SHOP_REFUND,
+    Kind.PERK,
+    Kind.PERK_REFUND,
+    Kind.TEAM_POT,
+]
 
 
 def _tz():
@@ -206,6 +213,58 @@ def spotlight_data(s: Spotlight | None) -> dict | None:
     }
 
 
+def week_start(day: dt.date) -> dt.date:
+    return day - dt.timedelta(days=day.weekday())
+
+
+def priority_team(day: dt.date) -> dict | None:
+    """The team whose players earned the most DC from matches in the week (Mon-Sun) before
+    ``day``'s week: it goes first when a scrim waitlist moves up that week. Earned, not bought,
+    and it never pushes a team out of a place it already has."""
+    this_week = week_start(day)
+    last_week = this_week - dt.timedelta(days=7)
+    row = (
+        MatchReward.objects.filter(
+            match__match_day__date__gte=last_week,
+            match__match_day__date__lt=this_week,
+            team__isnull=False,
+            amount__gt=0,
+        )
+        .values("team_id", "team__name", "team__slug")
+        .annotate(dc=Sum("amount"))
+        .order_by("-dc", "team__name")
+        .first()
+    )
+    if not row:
+        return None
+    return {
+        "team_id": row["team_id"],
+        "name": row["team__name"],
+        "slug": row["team__slug"],
+        "dc": row["dc"],
+        "week_of": this_week,
+    }
+
+
+def wildcard(before: dt.date, exclude: set[int]) -> dict | None:
+    """The Cup's DC wildcard: the team (not already in) whose players earned the most DC from
+    matches in the 30 days before ``before``."""
+    rows = (
+        MatchReward.objects.filter(
+            match__match_day__date__gte=before - dt.timedelta(days=30),
+            match__match_day__date__lt=before,
+            team__isnull=False,
+            amount__gt=0,
+        )
+        .exclude(team_id__in=exclude)
+        .values("team_id", "team__name")
+        .annotate(dc=Sum("amount"))
+        .order_by("-dc", "team__name")
+    )
+    row = rows.first()
+    return {"team_id": row["team_id"], "name": row["team__name"], "dc": row["dc"]} if row else None
+
+
 def board() -> dict:
     """Everything the badges need, in one cached response."""
     from apps.predictions.services import lagos_today
@@ -218,4 +277,5 @@ def board() -> dict:
         "players": {str(k): v for k, v in player_earned().items()},
         "teams": team_month(month),
         "king": spotlight_data(current_spotlight()),
+        "priority": priority_team(lagos_today()),
     }

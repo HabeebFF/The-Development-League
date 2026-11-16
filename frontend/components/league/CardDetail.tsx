@@ -15,6 +15,7 @@ import {
 import { useApi } from "@/lib/useApi";
 
 import DcBadge from "../dc/DcBadge";
+import PinnedMoment from "../dc/PinnedMoment";
 import WaitingDc from "../dc/WaitingDc";
 
 import { cardImage } from "./cardImage";
@@ -109,6 +110,7 @@ export default function CardDetail({
           </p>
         )}
         <WaitingDc playerId={card.player_id} />
+        <PinnedMoment playerId={card.player_id} />
         {card.stale && (
           <p className="mt-2 text-sm text-muted">
             Not enough matches this week, so these are the numbers from their
