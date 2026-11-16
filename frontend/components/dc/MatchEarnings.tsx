@@ -2,14 +2,21 @@
 
 import Link from "next/link";
 
-import { breakdown, dc, type MyEarnings } from "@/lib/dc";
+import { breakdown, dc, nextRank, rankFor, type MyEarnings } from "@/lib/dc";
+import { useDcBoard } from "@/lib/dcBoard";
 import { useApi } from "@/lib/useApi";
+
+import RankIcon from "./RankIcon";
 
 /** On /account (and the Player shop): DC this player earned by playing, and from which matches. */
 export default function MatchEarnings({ compact = false }: { compact?: boolean }) {
   const data = useApi<MyEarnings>("/dc/me");
+  const board = useDcBoard();
   const me = data.data;
   if (!me || !me.linked) return null;
+  const earned = board?.players[String(me.player_id)] ?? 0;
+  const step = board ? rankFor(earned, board.steps) : null;
+  const next = board ? nextRank(earned, board.steps) : null;
 
   return (
     <div className="card p-4">
@@ -21,6 +28,25 @@ export default function MatchEarnings({ compact = false }: { compact?: boolean }
         </div>
         <div className="text-sm text-muted">{dc(me.total)} in total</div>
       </div>
+      {board && (
+        <div className="mt-3">
+          <p className="flex items-center gap-1.5 text-sm">
+            {step ? <RankIcon step={step} size={16} /> : null}
+            <b>{step ? step.name : "Rookie"}</b>
+            <span className="text-muted">· {dc(earned)} earned</span>
+          </p>
+          {next && (
+            <>
+              <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-panel-2" aria-hidden="true">
+                <div className="h-full bg-accent" style={{ width: `${Math.min(100, Math.round((earned / next.step.min) * 100))}%` }} />
+              </div>
+              <p className="mt-1 text-xs text-muted">
+                {dc(next.need)} more to {next.step.name}
+              </p>
+            </>
+          )}
+        </div>
+      )}
       <p className="mt-2 text-xs text-muted">Every match pays for kills, a Booyah, match MVP and just playing. It lands after the upload.</p>
       {!compact && me.latest.length > 0 && (
         <ul className="mt-3 divide-y divide-line border-y border-line text-sm">

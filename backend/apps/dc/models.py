@@ -4,6 +4,17 @@ from django.conf import settings
 from django.db import models
 
 
+def default_rank_steps() -> list:
+    """DC ranks by DC earned (Habeeb approved 2026-11-16)."""
+    return [
+        {"key": "bronze", "name": "Bronze", "min": 5_000},
+        {"key": "silver", "name": "Silver", "min": 25_000},
+        {"key": "gold", "name": "Gold", "min": 100_000},
+        {"key": "elite", "name": "Elite", "min": 500_000},
+        {"key": "legend", "name": "Legend", "min": 2_000_000},
+    ]
+
+
 class DcSettings(models.Model):
     """Staff settings for DC earned by playing (one row)."""
 
@@ -14,6 +25,9 @@ class DcSettings(models.Model):
     played = models.PositiveIntegerField(default=50, help_text="Every player in the match")
     start_date = models.DateField(
         null=True, blank=True, help_text="Matches from this day (Lagos) earn DC"
+    )
+    rank_steps = models.JSONField(
+        default=default_rank_steps, help_text="DC ranks: name and the DC earned to reach it"
     )
     updated_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
@@ -82,3 +96,21 @@ class MatchReward(models.Model):
         if self.mvp:
             parts.append("MVP")
         return ", ".join(parts) or "played"
+
+
+class Spotlight(models.Model):
+    """DC King of a month: the player who earned the most DC in it. Shown on the home page and
+    in broadcast labels for the whole month after."""
+
+    month = models.DateField(unique=True, help_text="First day of the month they won")
+    player = models.ForeignKey("league.Player", on_delete=models.CASCADE, related_name="+")
+    earned = models.BigIntegerField()
+    from_matches = models.BigIntegerField(default=0, help_text="Of which from matches")
+    hidden = models.BooleanField(default=False, help_text="Staff hid it from the site")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-month"]
+
+    def __str__(self) -> str:
+        return f"DC King {self.month:%B %Y}: {self.player_id}"

@@ -14,6 +14,7 @@ STATS = {
     "kills": "kills",
     "booyahs": "booyahs",
     "totw": "Team of the Week picks",
+    "dcking": "months as DC King",
 }
 
 
@@ -33,6 +34,8 @@ def label(unlock: str) -> str:
     name = STATS[stat]
     if n == 1 and stat == "totw":
         return "Make the Team of the Week"
+    if n == 1 and stat == "dcking":
+        return "Be DC King of a month"
     return f"Reach {n:,} {name}"
 
 
@@ -47,7 +50,10 @@ def progress(player) -> dict[str, int]:
     )
     booyahs = rows.filter(Exists(won)).count()
     totw = PlayerCard.objects.filter(player=player).exclude(totw=[]).count()
-    return {"kills": kills, "booyahs": booyahs, "totw": totw}
+    from apps.dc.models import Spotlight
+
+    dcking = Spotlight.objects.filter(player=player).count()
+    return {"kills": kills, "booyahs": booyahs, "totw": totw, "dcking": dcking}
 
 
 def grant(user, player) -> list:

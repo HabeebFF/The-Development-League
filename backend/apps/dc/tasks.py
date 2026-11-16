@@ -46,3 +46,15 @@ def pay_waiting_task(player_id: int) -> int:
     from .rewards import pay_waiting
 
     return pay_waiting(player_id)
+
+
+@shared_task
+def crown_task() -> int | None:
+    """Daily, early morning: make last month's DC King if it isn't made yet."""
+    from django.core.cache import cache
+
+    from .ranks import crown_last_month
+
+    s = crown_last_month()
+    cache.delete("dc:board")
+    return s.pk if s else None

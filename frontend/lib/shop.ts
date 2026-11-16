@@ -52,6 +52,6 @@ export type PlayerShop = {
   number: number | null;
   flag: string | null;
   owns_number: boolean;
-  progress: { kills: number; booyahs: number; totw: number } | null;
+  progress: { kills: number; booyahs: number; totw: number; dcking?: number } | null;
   low_balance_warning: number;
 };

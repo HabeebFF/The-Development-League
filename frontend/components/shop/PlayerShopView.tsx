@@ -1,5 +1,6 @@
 "use client";
 
+import MatchEarnings from "@/components/dc/MatchEarnings";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 
@@ -107,6 +108,11 @@ export default function PlayerShopView() {
         </Link>
       </div>
       <Gate shop={data} />
+      {data.can_buy && (
+        <div className="mt-4">
+          <MatchEarnings compact />
+        </div>
+      )}
 
       <div className="mt-6 grid gap-8 lg:grid-cols-[minmax(0,21rem)_1fr]">
         <aside className="flex flex-col items-center gap-3 lg:sticky lg:top-24 lg:self-start">

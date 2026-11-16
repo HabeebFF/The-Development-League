@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 
+import WalletRank from "@/components/dc/WalletRank";
 import Loading from "@/components/league/Loading";
 import { coins, METRICS, percent, type Leaderboard, type Metric } from "@/lib/predictions";
 import { useApi } from "@/lib/useApi";
@@ -64,6 +65,7 @@ export default function LeaderboardView() {
                       </span>
                     )}
                     {r.name}
+                    <WalletRank net={r.net ?? r.balance} />
                     {r.is_me && <span className="ml-2 chip text-accent">You</span>}
                   </td>
                   <td className="text-right font-display text-lg">
