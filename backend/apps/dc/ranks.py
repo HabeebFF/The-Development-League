@@ -53,9 +53,7 @@ def rank_for(earned: int, steps: list[dict]) -> dict | None:
 
 
 def _earned_entries():
-    return LedgerEntry.objects.exclude(kind__in=NOT_EARNED).filter(
-        wallet__user__is_active=True
-    )
+    return LedgerEntry.objects.exclude(kind__in=NOT_EARNED).filter(wallet__user__is_active=True)
 
 
 def earned_by_user(since: dt.datetime | None = None, until: dt.datetime | None = None):
@@ -96,7 +94,9 @@ def _staff_ids() -> set[int]:
     from apps.accounts.models import StaffProfile, User
 
     ids = set(StaffProfile.objects.values_list("user_id", flat=True))
-    ids |= set(User.objects.filter(Q(is_staff=True) | Q(is_superuser=True)).values_list("pk", flat=True))
+    ids |= set(
+        User.objects.filter(Q(is_staff=True) | Q(is_superuser=True)).values_list("pk", flat=True)
+    )
     return ids
 
 

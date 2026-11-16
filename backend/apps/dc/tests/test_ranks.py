@@ -13,7 +13,7 @@ from apps.predictions.models import LedgerEntry
 from apps.predictions.services import lagos_today, post_entry, wallet_for
 from apps.shop.models import OwnedDesign
 
-from .test_rewards import _on, league, make_user, upload  # noqa: F401
+from .conftest import make_user, upload
 
 pytestmark = pytest.mark.django_db
 K = LedgerEntry.Kind

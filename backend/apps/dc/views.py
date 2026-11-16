@@ -117,12 +117,7 @@ class SpotlightAdminView(APIView):
 
     def get(self, request):
         rows = Spotlight.objects.select_related("player")[:24]
-        return Response(
-            [
-                {**ranks.spotlight_data(s), "id": s.pk, "hidden": s.hidden}
-                for s in rows
-            ]
-        )
+        return Response([{**ranks.spotlight_data(s), "id": s.pk, "hidden": s.hidden} for s in rows])
 
     def patch(self, request):
         s = Spotlight.objects.filter(pk=request.data.get("id")).first()
