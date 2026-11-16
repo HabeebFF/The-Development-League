@@ -267,6 +267,11 @@ CELERY_BEAT_SCHEDULE = {
         "task": "apps.dc.tasks.sweep_task",
         "schedule": crontab(minute="4-59/5"),
     },
+    # The 1st (and every day after, if it was missed): last month's DC King.
+    "dc-crown-month": {
+        "task": "apps.dc.tasks.crown_task",
+        "schedule": crontab(minute=20, hour=0),
+    },
     "coach-catch-up-reviews": {
         "task": "apps.coach.tasks.catch_up_reviews_task",
         "schedule": crontab(minute=30, hour=4),

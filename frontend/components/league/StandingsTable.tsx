@@ -4,6 +4,7 @@ import type { StandingRow } from "@/lib/league";
 import { signed } from "@/lib/pp";
 import { Movement } from "@/components/ui/RankBadge";
 import UiRankBadge from "@/components/ui/RankBadge";
+import TeamCoin from "@/components/dc/TeamCoin";
 
 import { TeamMark } from "./TeamBadge";
 
@@ -101,7 +102,10 @@ export default function StandingsTable({
                 <Link href={`/teams/${r.team.slug}`} className="flex min-w-0 items-center gap-3 hover:text-accent-hot">
                   <TeamMark team={r.team} size="md" />
                   <span className="min-w-0">
-                    <span className="block truncate font-display text-lg leading-tight font-extrabold uppercase">{r.team.name}</span>
+                    <span className="flex min-w-0 items-center">
+                      <span className="block truncate font-display text-lg leading-tight font-extrabold uppercase">{r.team.name}</span>
+                      <TeamCoin teamId={r.team.id} />
+                    </span>
                     {r.last_match_points != null && <span className="block text-xs text-muted">Last match +{r.last_match_points}</span>}
                   </span>
                 </Link>
@@ -147,7 +151,10 @@ export default function StandingsTable({
                 <Link href={`/teams/${r.team.slug}`} className="flex min-w-0 flex-1 items-center gap-2.5">
                   <TeamMark team={r.team} size="md" />
                   <span className="min-w-0">
-                    <span className="block truncate font-display text-lg leading-tight font-extrabold uppercase">{r.team.name}</span>
+                    <span className="flex min-w-0 items-center">
+                      <span className="block truncate font-display text-lg leading-tight font-extrabold uppercase">{r.team.name}</span>
+                      <TeamCoin teamId={r.team.id} />
+                    </span>
                     {r.last_match_points != null && <span className="block text-xs text-muted">Last match +{r.last_match_points}</span>}
                   </span>
                 </Link>

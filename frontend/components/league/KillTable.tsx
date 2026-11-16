@@ -1,5 +1,6 @@
 "use client";
 
+import DcBadge from "@/components/dc/DcBadge";
 import { aura, useAuras } from "@/lib/auras";
 import Link from "next/link";
 import { useState } from "react";
@@ -51,8 +52,11 @@ export default function KillTable({ list, showMatches = true, query = "" }: { li
                   <span className="flex min-w-0 items-center gap-2.5">
                     {p.team && <TeamMark team={p.team} />}
                     <span className="min-w-0">
-                      <span className={`block truncate font-display text-base font-extrabold uppercase ${aura(auras, p.player_id).className}`} style={aura(auras, p.player_id).style}>
-                        {p.player}
+                      <span className="flex min-w-0 items-center">
+                        <span className={`block truncate font-display text-base font-extrabold uppercase ${aura(auras, p.player_id).className}`} style={aura(auras, p.player_id).style}>
+                          {p.player}
+                        </span>
+                        <DcBadge playerId={p.player_id} />
                       </span>
                       {p.team && (
                         <Link href={`/teams/${p.team.slug}`} className="block truncate text-xs text-muted hover:text-accent">

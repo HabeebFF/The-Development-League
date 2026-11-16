@@ -1,5 +1,6 @@
 "use client";
 
+import DcBadge from "@/components/dc/DcBadge";
 import Link from "next/link";
 
 import { BooyahBadge } from "@/components/ui/MatchCard";
@@ -84,7 +85,10 @@ function RosterCard({ r, colour }: { r: RosterPlayer; colour: string }) {
           <img src={r.photo || BLANK_PHOTO} alt="" className="h-full w-full object-cover object-top" />
         </span>
         <span className="min-w-0 flex-1">
-          <span className="block truncate font-display text-xl leading-tight uppercase">{name}</span>
+          <span className="flex min-w-0 items-center">
+            <span className="block truncate font-display text-xl leading-tight uppercase">{name}</span>
+            <DcBadge playerId={r.player.id} king={false} />
+          </span>
           <span className="block truncate text-[11px] font-semibold tracking-widest text-muted uppercase">
             {[...new Set([r.role, r.card?.role_label].filter(Boolean).map((x) => x!.toUpperCase()))].join(" · ") || "Player"}
             {!r.on_roster && <span className="ml-1.5 normal-case tracking-normal text-muted/80">(from the logs)</span>}

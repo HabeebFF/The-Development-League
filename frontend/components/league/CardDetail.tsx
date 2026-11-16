@@ -14,6 +14,7 @@ import {
 } from "@/lib/cards";
 import { useApi } from "@/lib/useApi";
 
+import DcBadge from "../dc/DcBadge";
 import WaitingDc from "../dc/WaitingDc";
 
 import { cardImage } from "./cardImage";
@@ -72,7 +73,10 @@ export default function CardDetail({
         <p className="eyebrow">
           {TIER_LABELS[card.tier]} · week of {weekLabel(card.week)}
         </p>
-        <h2 className="mt-1 font-display text-4xl uppercase">{card.name}</h2>
+        <h2 className="mt-1 flex flex-wrap items-center font-display text-4xl uppercase">
+          {card.name}
+          <DcBadge playerId={card.player_id} size={22} />
+        </h2>
         <p className="mt-1 text-sm text-muted">
           {card.role_label}
           {card.role_suggested ? " (suggested from how they play)" : ""}
