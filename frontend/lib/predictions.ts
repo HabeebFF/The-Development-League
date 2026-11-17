@@ -182,11 +182,13 @@ export function combinedOdds(odds: string[]): string {
 }
 
 /** What a multiple returns if every pick wins: stake x every odds, rounded down, capped.
- * Whole-number maths, so it matches the server to the coin. */
+ * Whole-number maths, so it matches the server to the coin. A single (one pick) has no cap
+ * on what it returns. */
 export function multipleReturn(stake: number, odds: string[]): number {
   let top = BigInt(stake);
   for (const o of odds) top *= BigInt(hundredths(o));
   const coinsBack = top / BigInt(100) ** BigInt(odds.length);
+  if (odds.length <= 1) return Number(coinsBack);
   return coinsBack > BigInt(MAX_RETURN) ? MAX_RETURN : Number(coinsBack);
 }
 

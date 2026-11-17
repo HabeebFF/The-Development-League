@@ -261,7 +261,7 @@ export default function BetSlip() {
                           <dd className="text-right">{balance !== null ? coins(balance) : "–"}</dd>
                         </dl>
                       )}
-                      {returns >= MAX_RETURN && <p className="text-xs text-muted">Returns are capped at {coins(MAX_RETURN)}.</p>}
+                      {multiple && returns >= MAX_RETURN && <p className="text-xs text-muted">Returns are capped at {coins(MAX_RETURN)}.</p>}
                       <button
                         type="button"
                         className="btn btn-primary w-full"
