@@ -228,6 +228,7 @@ test("bet slip: multiples add up like the server", async () => {
   assert.equal(multipleReturn(100, ["1.55", "2.10"]), 325);
   assert.equal(multipleReturn(33, ["1.01", "1.01", "1.01"]), 33); // 33 x 1.030301 = 33.9999, rounded down
   assert.equal(multipleReturn(500, ["100.00", "100.00", "100.00"]), MAX_RETURN);
+  assert.equal(multipleReturn(5000, ["21.00"]), 105000); // a single is never capped
   const f = (match_number: number | null, date = "2026-10-23") => ({ id: 1, title: "x", date, session: "8PM", match_number });
   const pick = (market: number, fixture: ReturnType<typeof f> | null) => ({
     market,
