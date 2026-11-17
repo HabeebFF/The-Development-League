@@ -482,14 +482,25 @@ def bet_data(bet: Bet) -> dict:
         "potential_return": bet.potential_return,
         "potential_profit": bet.potential_return - bet.stake,
         "payout": bet.payout,
+        "dead_heat": _bet_dead_heat(bet),
         "status": bet.status,
         "placed_at": bet.placed_at,
         "settled_at": bet.settled_at,
     }
 
 
+def _bet_dead_heat(bet: Bet) -> int:
+    """How many teams shared the win a won bet was paid on (1 when there was no tie)."""
+    if bet.status != Bet.Status.WON:
+        return 1
+    latest = max(bet.market.settlements.all(), key=lambda s: s.version, default=None)
+    return latest.dead_heat if latest else 1
+
+
 def _bets():
-    return Bet.objects.select_related("market__fixture", "outcome")
+    return Bet.objects.select_related("market__fixture", "outcome").prefetch_related(
+        "market__settlements"
+    )
 
 
 class BetsView(APIView):

@@ -283,6 +283,19 @@ def test_most_booyahs_tie_is_a_dead_heat(session, staff, fans):
     assert check_wallets() == []
 
 
+def test_my_bets_show_the_dead_heat(session, staff, fans):
+    m = market(session, staff, C.MOST_BOOYAHS, teams=("Alpha", "Bravo", "Charlie"))
+    bet(fans[0], m, pick(m, "Alpha", session), stake=100)
+    bet(fans[2], m, pick(m, "Charlie", session), stake=100)
+    publish(session)
+    close(m, staff)
+    settle(m, actor=staff, winners=suggest(m)["winners"])
+    won = as_user(fans[0]).get("/api/v1/predictions/bets").json()["results"][0]
+    assert (won["status"], won["payout"], won["dead_heat"]) == (B.WON, 150, 2)
+    lost = as_user(fans[2]).get("/api/v1/predictions/bets").json()["results"][0]
+    assert (lost["status"], lost["dead_heat"]) == (B.LOST, 1)
+
+
 def test_settling_a_tie_as_one_winner_needs_a_reason(session, staff, fans):
     m = market(session, staff, C.MOST_BOOYAHS, teams=("Alpha", "Bravo", "Charlie"))
     publish(session)
