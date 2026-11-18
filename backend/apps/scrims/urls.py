@@ -42,6 +42,11 @@ urlpatterns = [
         name="admin-scrims-add",
     ),
     path(
+        f"admin/scrims/{SESSION}/invite",
+        views.StaffSessionView.as_view(action="invite"),
+        name="admin-scrims-invite",
+    ),
+    path(
         f"admin/scrims/{SESSION}/remove",
         views.StaffSessionView.as_view(action="remove"),
         name="admin-scrims-remove",

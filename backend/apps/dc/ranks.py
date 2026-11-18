@@ -28,6 +28,8 @@ NOT_EARNED = [
     Kind.PERK,
     Kind.PERK_REFUND,
     Kind.TEAM_POT,
+    Kind.SCRIM_FEE,
+    Kind.SCRIM_REFUND,
 ]
 
 

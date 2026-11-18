@@ -249,6 +249,11 @@ CELERY_BEAT_SCHEDULE = {
     },
     # Every 5 minutes, so markets follow scrim sign-up closing quickly; it acts from 10:00 Lagos
     # time on scrim days and only fills in what's missing.
+    # Scrim sign-up closing: drop unconfirmed invites, fill from the waitlist, refund the rest.
+    "scrims-wrap": {
+        "task": "apps.scrims.tasks.wrap_scrims_task",
+        "schedule": crontab(minute="*/5"),
+    },
     "predictions-auto-markets": {
         "task": "apps.predictions.tasks.auto_markets_task",
         "schedule": crontab(minute="*/5"),
