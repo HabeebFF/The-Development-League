@@ -12,7 +12,7 @@ The rules, all worked out here on the server:
   counts at its odds divided by the number tied. With every pick refunded the stake comes
   back.
 - What a multiple pays is stake x the picks' odds, rounded down, and never more than
-  ``PREDICTIONS_MAX_RETURN`` coins.
+  ``max_return()`` coins (no cap by default, only the database ceiling).
 
 Each settlement of a market re-works the multiples with a pick on it, inside the same
 transaction, posting the difference from what they were already paid (as single bets do).
@@ -46,8 +46,15 @@ def max_picks() -> int:
     return settings.PREDICTIONS_MAX_PICKS
 
 
+# The most any multiple can pay even with no cap set: the return is stored in a 32-bit
+# column (up to ~2.1 billion), and 8 long-odds picks can multiply past that.
+RETURN_CEILING = 1_000_000_000
+
+
 def max_return() -> int:
-    return settings.PREDICTIONS_MAX_RETURN
+    """``PREDICTIONS_MAX_RETURN`` when set above 0, otherwise only the database ceiling."""
+    cap = settings.PREDICTIONS_MAX_RETURN
+    return min(cap, RETURN_CEILING) if cap and cap > 0 else RETURN_CEILING
 
 
 def combined_odds(odds) -> Decimal:

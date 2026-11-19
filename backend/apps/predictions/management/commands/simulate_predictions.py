@@ -42,7 +42,7 @@ from apps.predictions.models import (
     Settlement,
     Wallet,
 )
-from apps.predictions.multiples import place_multiple
+from apps.predictions.multiples import max_return, place_multiple
 from apps.predictions.services import check_wallets, initial_coins, wallet_for
 from apps.predictions.settlement import correct, settle, suggest, void
 from apps.results.models import MatchEvent, PlayerMatchResult, TeamMatchResult
@@ -329,7 +329,7 @@ class Command(BaseCommand):
     def try_refused(self, user, market) -> None:
         outcome = market.outcomes.first()
         balance = wallet_for(user).balance
-        for stake in (5, 501, balance + 1 if balance + 1 >= 10 else 5):
+        for stake in (5, 0, balance + 1 if balance + 1 >= 10 else 5):
             try:
                 place_bet(
                     user,
@@ -452,7 +452,7 @@ class Command(BaseCommand):
                 return 0
         if voids == len(legs):
             return m.stake
-        return min(int(total), settings.PREDICTIONS_MAX_RETURN)
+        return min(int(total), max_return())
 
     @staticmethod
     def expected_payout(bet: Bet, latest: Settlement | None) -> int:

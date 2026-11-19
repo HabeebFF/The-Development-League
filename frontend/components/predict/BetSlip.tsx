@@ -31,8 +31,7 @@ import { NOTE } from "./PredictNav";
 import { useSlip } from "./slip";
 import { useWallet } from "./useWallet";
 
-const QUICK = [10, 50, 100, 250, 500];
-const BIG_QUICK = [100, 500, 1000, 5000, 10000];
+const QUICK = [10, 100, 500, 1000, 5000];
 
 type Review = { picks: SlipPick[]; stake: number; key: string };
 type Placed = { kind: "single"; bet: Bet } | { kind: "multiple"; multiple: Multiple };
@@ -236,12 +235,12 @@ export default function BetSlip() {
                     <>
                       <label className="block">
                         <span className="text-muted">
-                          {maxStake === null ? `Stake (${MIN_STAKE} DC or more, no cap tonight)` : `Stake (${MIN_STAKE} to ${maxStake} DC)`}
+                          {maxStake === null ? `Stake (${MIN_STAKE} DC or more)` : `Stake (${MIN_STAKE} to ${maxStake} DC)`}
                         </span>
                         <input className="input mt-1" inputMode="numeric" value={stake} onChange={(e) => setStake(e.target.value)} aria-invalid={!!stakeNote} />
                       </label>
                       <div className="flex flex-wrap gap-1">
-                        {(maxStake === null ? BIG_QUICK : QUICK).map((q) => (
+                        {QUICK.filter((q) => maxStake === null || q <= maxStake).map((q) => (
                           <button key={q} type="button" className="btn px-2 py-1 text-xs" onClick={() => setStake(String(q))}>
                             {q}
                           </button>

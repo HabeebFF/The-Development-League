@@ -50,6 +50,7 @@ from .markets import (
     PlayerRules,
     accepting_bets,
     create_market,
+    max_stake,
     place_bet,
     set_active,
     set_odds,
@@ -654,7 +655,7 @@ class RulesView(APIView):
         return Response(
             {
                 "min_stake": settings.PREDICTIONS_MIN_STAKE,
-                "max_stake": settings.PREDICTIONS_MAX_STAKE,
+                "max_stake": max_stake(),
                 "max_picks": max_picks(),
                 "max_return": max_return(),
             }

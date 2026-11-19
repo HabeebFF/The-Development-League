@@ -676,6 +676,13 @@ def uncapped_sessions() -> set[str]:
     return set(keys)
 
 
+def max_stake() -> int | None:
+    """The usual most one prediction can take; None (the default) means only the wallet
+    limits it. ``PREDICTIONS_MAX_STAKE`` above 0 brings a cap back."""
+    cap = settings.PREDICTIONS_MAX_STAKE
+    return cap if cap and cap > 0 else None
+
+
 def stake_cap(market: Market, uncapped: set[str] | None = None) -> int | None:
     """The most one single prediction (and one person's total on one choice) can take on
     this market; None on an uncapped night, where only the wallet limits it."""
@@ -684,13 +691,13 @@ def stake_cap(market: Market, uncapped: set[str] | None = None) -> int | None:
         keys = uncapped_sessions() if uncapped is None else uncapped
         if f"{f.date.isoformat()} {f.session}" in keys:
             return None
-    return settings.PREDICTIONS_MAX_STAKE
+    return max_stake()
 
 
 def clean_stake(stake, cap: int | None = -1) -> int:
     """Checks a stake. ``cap`` -1 means the usual most (multiples), None means no most."""
     lo = settings.PREDICTIONS_MIN_STAKE
-    hi = settings.PREDICTIONS_MAX_STAKE if cap == -1 else cap
+    hi = max_stake() if cap == -1 else cap
     if not isinstance(stake, int) or isinstance(stake, bool):
         raise MarketError("The stake must be a whole number of coins.", "stake")
     if stake < lo or (hi is not None and stake > hi):
@@ -702,7 +709,7 @@ def clean_stake(stake, cap: int | None = -1) -> int:
 def check_pick_total(user, outcome: Outcome, stake: int, cap: int | None = -1) -> None:
     """Repeat predictions on the same choice are fine, but one person's single predictions
     on one choice can't add up to more than the most one prediction can take."""
-    cap = settings.PREDICTIONS_MAX_STAKE if cap == -1 else cap
+    cap = max_stake() if cap == -1 else cap
     if cap is None:
         return
     before = Bet.objects.filter(user=user, outcome=outcome).exclude(status=Bet.Status.VOID)

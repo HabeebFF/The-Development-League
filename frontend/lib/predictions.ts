@@ -133,10 +133,12 @@ export type LeaderRow = {
 export type Leaderboard = { metric: Metric; accuracy_min_settled: number; rows: LeaderRow[] };
 
 export const MIN_STAKE = 10;
-export const MAX_STAKE = 500;
+/** No most per prediction: people can stake as much DC as they have. */
+export const MAX_STAKE: number | null = null;
 /** Picks in one multiple, and the most a multiple can pay (the server's settings). */
 export const MAX_PICKS = 8;
-export const MAX_RETURN = 50000;
+/** No payout cap on multiples, only the server's 1,000,000,000 DC database ceiling. */
+export const MAX_RETURN = 1_000_000_000;
 
 /** Odds "2.55" as whole hundredths (255), so sums stay exact. */
 function hundredths(odds: string): number {
@@ -264,8 +266,8 @@ export function toPick(m: Market, o: Outcome): SlipPick {
   };
 }
 
-/** The most the slip can take: a single uses its market's cap (none on a big night),
- * a multiple always the usual cap. */
+/** The most the slip can take: a single uses its market's cap, a multiple the usual cap
+ * (no cap unless the server sets one; the wallet still limits it). */
 export function slipMaxStake(picks: SlipPick[]): number | null {
   if (picks.length !== 1) return MAX_STAKE;
   const cap = picks[0].maxStake;

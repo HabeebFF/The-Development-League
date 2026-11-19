@@ -156,7 +156,7 @@ type Auto = {
   skip_dates: string[];
   /** "2026-11-16 10PM" -> matches that night (a 6-map tournament night). */
   long_sessions: Record<string, number>;
-  /** Sessions whose single predictions have no 500 DC cap. */
+  /** Sessions whose single predictions have no stake cap (only matters if a cap is set). */
   uncapped_sessions: string[];
   last_run_at: string | null;
   last_report: Partial<AutoReport>;
@@ -168,7 +168,7 @@ const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 type Big = { date: string; session: string; matches: string; uncapped: boolean };
 
-/** Big nights (a tournament final): more matches in a session, and no 500 DC cap on single
+/** Big nights (a tournament final): more matches in a session, and no stake cap on single
  * predictions. Set them before the day's markets are made. */
 function BigNights({ conf, big, setBig, save }: { conf: Auto; big: Big; setBig: (b: Big) => void; save: (c: Partial<Auto>) => void }) {
   const keys = [...new Set([...Object.keys(conf.long_sessions), ...conf.uncapped_sessions])].sort();
@@ -207,7 +207,7 @@ function BigNights({ conf, big, setBig, save }: { conf: Auto; big: Big; setBig: 
       </label>
       <label className="flex items-center gap-1">
         <input type="checkbox" checked={big.uncapped} onChange={(e) => setBig({ ...big, uncapped: e.target.checked })} />
-        <span className="text-muted">no 500 DC cap</span>
+        <span className="text-muted">no stake cap</span>
       </label>
       <button type="button" disabled={!big.date} className="btn px-3 py-1 text-xs" onClick={add}>
         Add big night
