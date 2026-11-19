@@ -10,8 +10,10 @@ From 10:00 Lagos time on a scrim day the hourly task makes tonight's fixtures (t
 - Mondays: most points over the week (Monday to Sunday).
 
 On scrim nights with sign-up (``apps.scrims``), a session's teams (its lobby) are the teams
-signed up, and its markets are made once sign-up closes (6:00pm for 8PM, 8:00pm for 10PM);
-staff adding or removing a team after that remakes the markets nobody predicted on. On other
+signed up, and its markets are made as soon as the session fills up (sign-up opens 8pm the
+night before, so that can be a day early), or else once sign-up closes (6:00pm for 8PM,
+8:00pm for 10PM); staff adding or removing a team after that remakes the markets nobody
+predicted on. On other
 days the lobby is the teams that played the last published session at the same hour, unless
 staff already set the lobby. Every market is recorded by what it is for
 (``AutoMarket.key``), so a re-run only fills gaps and never brings back a market staff
@@ -117,20 +119,60 @@ def registered(date: dt.date, session: str) -> list[int]:
     return sorted(scrims.lobby(scrim)) if scrim else []
 
 
+def lobby_settled(scrim: ScrimSession) -> bool:
+    """The session's teams are known: it filled up (locked) or sign-up closed."""
+    where = scrims.stage(scrim.date, scrim.session)
+    return where == "closed" or (where in ("soon", "open") and scrim.locked_at is not None)
+
+
+def open_session(scrim: ScrimSession) -> dict | None:
+    """A session just filled up: make its markets now, even the day before, rather than
+    waiting for the 10:00 run or sign-up to close."""
+    conf = AutoSettings.get()
+    if not (conf.enabled and settings.PREDICTIONS_ENABLED and is_scrim_day(conf, scrim.date)):
+        return None
+    job = Run(scrim.date, system_user())
+    if job.season is None:
+        return None
+    job.session(scrim.session)
+    return {"date": scrim.date.isoformat(), "made": job.made, "notes": job.notes}
+
+
+def open_full_sessions() -> int:
+    """Every few minutes, in case a fill was missed: full sessions of today and tomorrow
+    that have no markets yet get them."""
+    made = 0
+    day = scrims.today()
+    for scrim in ScrimSession.objects.filter(
+        date__in=[day, day + dt.timedelta(days=1)], locked_at__isnull=False
+    ):
+        if not lobby_settled(scrim):
+            continue
+        whole = Fixture.objects.filter(
+            date=scrim.date, session=scrim.session, match_number__isnull=True
+        ).first()
+        if whole is None or not whole.teams.exists():
+            report = open_session(scrim)
+            made += len(report["made"]) if report else 0
+    return made
+
+
 def follow_registration(sender, scrim: ScrimSession, **kwargs) -> dict | None:
-    """After sign-up closes, a session's lobby follows staff adding or removing teams on
-    Staff > Scrims: markets nobody has predicted on are remade with the new teams, and a
-    removed team is switched off (or its own markets suspended) where predictions exist.
-    Before close nothing is made yet; the run at close uses the list as it is then."""
+    """Once a session's teams are known (it filled up, or sign-up closed), its markets follow
+    the list: a session that just filled gets its markets straight away, and staff adding or
+    removing teams on Staff > Scrims remakes the markets nobody has predicted on, with a
+    removed team switched off (or its own markets suspended) where predictions exist.
+    Before that nothing is made; the run at close uses the list as it is then."""
     if not settings.PREDICTIONS_ENABLED or scrim.session not in SESSIONS:
         return None
-    if scrims.stage(scrim.date, scrim.session) != "closed":
-        return None  # not closed yet (or a night off), or started: markets are closed
+    scrim.refresh_from_db(fields=["locked_at"])
+    if not lobby_settled(scrim):
+        return None  # still filling (or a night off), or started: markets are closed
     whole = Fixture.objects.filter(
         date=scrim.date, session=scrim.session, match_number__isnull=True
     ).first()
-    if whole is None:
-        return None  # no markets yet: the next run makes them from the list
+    if whole is None or not whole.teams.exists():
+        return open_session(scrim) if scrim.locked_at else None
     before = set(whole.teams.values_list("pk", flat=True))
     teams = registered(scrim.date, scrim.session)
     if set(teams) == before:
@@ -317,11 +359,19 @@ class Run:
         )
         teams = sorted(whole.teams.values_list("pk", flat=True))
         if not teams and scrims.is_scrim_night(self.date):
-            # Teams sign up on the site: the lobby is who signed up, once sign-up closes.
-            if scrims.stage(self.date, session) in ("soon", "open"):
-                shut = scrims.clock(scrims.closes_at(self.date, session))
-                self.notes.append(f"{session}: waiting for sign-up to close at {shut}.")
-                return
+            # Teams sign up on the site: the lobby is who signed up, once the session fills
+            # up or sign-up closes.
+            scrim = ScrimSession.objects.filter(date=self.date, session=session).first()
+            if scrim is not None:
+                scrims.wrap(scrim)  # sign-up closed: drop invites, move the waitlist up
+                scrim.refresh_from_db()
+            if scrim is None or not lobby_settled(scrim):
+                if scrims.stage(self.date, session) in ("soon", "open"):
+                    shut = scrims.clock(scrims.closes_at(self.date, session))
+                    self.notes.append(
+                        f"{session}: waiting for it to fill up or sign-up to close at {shut}."
+                    )
+                    return
             teams = registered(self.date, session)
             if len(teams) < 2:
                 self.notes.append(

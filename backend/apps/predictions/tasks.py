@@ -27,8 +27,10 @@ def close_due_markets_task() -> int:
 @shared_task
 def auto_markets_task() -> int:
     """Every 5 minutes: on a scrim day from 10:00 Lagos time, make tonight's missing markets.
-    On scrim nights with sign-up (Staff > Scrims) a session's markets wait for sign-up to close."""
+    On scrim nights with sign-up (Staff > Scrims) a session's markets wait for it to fill up
+    (made at once, even the day before) or for sign-up to close."""
     report = auto.run()
+    auto.open_full_sessions()
     for note in report["notes"]:
         log.info("Automatic markets %s: %s", report["date"], note)
     return len(report["made"])

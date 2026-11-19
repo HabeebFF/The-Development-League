@@ -23,7 +23,13 @@ class ScrimSettings(models.Model):
 
     weekdays = models.JSONField(default=scrim_weekdays, help_text="Scrim days: 0 = Monday ... 6")
     skip_dates = models.JSONField(default=list, blank=True, help_text="Nights off, YYYY-MM-DD")
-    opens_at = models.TimeField(default=dt.time(12, 1), help_text="Sign-up opens, Lagos time")
+    opens_at = models.TimeField(default=dt.time(20), help_text="Sign-up opens, Lagos time")
+    opens_days_before = models.PositiveSmallIntegerField(
+        default=1, help_text="Sign-up opens this many days before the scrim night (0 = that day)"
+    )
+    fee = models.PositiveIntegerField(
+        default=500, help_text="DC a team pays per session to sign up or confirm (0 = free)"
+    )
     closes_at = models.JSONField(
         default=close_times, help_text='Sign-up closes per session, e.g. {"8PM": "18:00"}'
     )
@@ -51,6 +57,12 @@ class ScrimSession(models.Model):
     date = models.DateField()
     session = models.CharField(max_length=4, choices=Session.choices)
     max_teams = models.PositiveSmallIntegerField(help_text="Places; staff can change it")
+    locked_at = models.DateTimeField(
+        null=True, blank=True, help_text="Filled up: sign-up locked and predictions opened"
+    )
+    wrapped_at = models.DateTimeField(
+        null=True, blank=True, help_text="Sign-up closed: invites dropped, waitlist refunded"
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -64,10 +76,12 @@ class ScrimSession(models.Model):
 
 
 class Registration(models.Model):
-    """A team's place in a session: playing, or on the waitlist (in sign-up order)."""
+    """A team's place in a session: playing, invited by staff (place held until the team
+    confirms), or on the waitlist (in sign-up order)."""
 
     class Status(models.TextChoices):
         REGISTERED = "REGISTERED", "Registered"
+        INVITED = "INVITED", "Invited"
         WAITLIST = "WAITLIST", "Waitlist"
 
     scrim = models.ForeignKey(ScrimSession, on_delete=models.CASCADE, related_name="registrations")
@@ -76,6 +90,10 @@ class Registration(models.Model):
     by_staff = models.BooleanField(default=False, help_text="Added by staff, not the team")
     registered_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name="+"
+    )
+    fee_paid = models.PositiveIntegerField(default=0, help_text="DC paid to sign up")
+    paid_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -126,6 +144,12 @@ class ScrimLog(models.Model):
         SUSPENDED = "SUSPENDED", "Suspended"
         UNSUSPENDED = "UNSUSPENDED", "Unsuspended"
         SUSPENDED_OUT = "SUSPENDED_OUT", "Removed: suspended"
+        INVITED = "INVITED", "Invited by staff"
+        CONFIRMED = "CONFIRMED", "Confirmed the invite"
+        DECLINED = "DECLINED", "Declined the invite"
+        INVITE_EXPIRED = "INVITE_EXPIRED", "Invite not confirmed in time"
+        FILLED = "FILLED", "Session full: sign-up locked"
+        REFUNDED = "REFUNDED", "Sign-up DC refunded"
 
     scrim = models.ForeignKey(
         ScrimSession, on_delete=models.CASCADE, null=True, blank=True, related_name="log"

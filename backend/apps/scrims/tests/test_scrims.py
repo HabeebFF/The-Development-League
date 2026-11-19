@@ -18,6 +18,15 @@ MONDAY = dt.date(2026, 11, 16)
 WEDNESDAY = dt.date(2026, 11, 18)
 
 
+@pytest.fixture(autouse=True)
+def same_day_free():
+    """These tests were written for sign-up at 12:01pm on the day with no fee; the day-early
+    opening and the fee have their own tests (test_day_early.py)."""
+    ScrimSettings.objects.update_or_create(
+        pk=1, defaults={"opens_at": dt.time(12, 1), "opens_days_before": 0, "fee": 0}
+    )
+
+
 @pytest.fixture
 def clock(monkeypatch):
     """Set the Lagos time: ``clock(MONDAY, 12, 1)``."""
@@ -115,8 +124,12 @@ def test_twelve_places_then_waitlist_in_order(clock, teams, manager):
     assert sv.lobby(eight()) == [t.pk for t in teams[:12]]
 
 
-def test_withdraw_moves_first_waitlisted_team_up(clock, teams, manager):
-    for t in teams[:14]:
+def test_withdraw_moves_first_waitlisted_team_up(clock, teams, manager, staff):
+    # 11 playing + 1 invited hold every place without filling it, so it isn't locked.
+    for t in teams[:11]:
+        sv.register(eight(), t, manager)
+    sv.staff_invite(eight(), teams[11], staff)
+    for t in teams[12:14]:
         sv.register(eight(), t, manager)
     sv.withdraw(eight(), teams[3], manager)
     assert teams[12].pk in sv.lobby(eight())
@@ -245,7 +258,9 @@ def test_lobby_changed_is_sent_when_playing_teams_change(
         with django_capture_on_commit_callbacks(execute=True):
             for t in teams[:13]:
                 sv.register(eight(), t, manager)
-        assert len(seen) == 12  # the 13th joined the waitlist: nobody new is playing
+        # 12 sign-ups, then once more as the session filled up and locked; the 13th joined
+        # the waitlist: nobody new is playing.
+        assert len(seen) == 13
         seen.clear()
         with django_capture_on_commit_callbacks(execute=True):
             sv.staff_remove(eight(), teams[0], staff)

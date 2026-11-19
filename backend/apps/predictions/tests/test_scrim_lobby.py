@@ -66,8 +66,8 @@ def test_markets_wait_for_sign_up_to_close(lg, night, staff):
     date, at = night
     sign_up(date, "8PM", [lg["teams"][n] for n in ("Alpha", "Golf", "Idle")], staff)
     report = auto.run(date, force=True)
-    assert "8PM: waiting for sign-up to close at 6:00pm." in report["notes"]
-    assert "10PM: waiting for sign-up to close at 8:00pm." in report["notes"]
+    assert "8PM: waiting for it to fill up or sign-up to close at 6:00pm." in report["notes"]
+    assert "10PM: waiting for it to fill up or sign-up to close at 8:00pm." in report["notes"]
     assert not made(date, "8PM").exists()
 
 
@@ -80,7 +80,7 @@ def test_lobby_is_the_teams_signed_up_not_last_session(lg, night, staff):
     assert sorted(whole.teams.values_list("name", flat=True)) == ["Alpha", "Golf", "Idle"]
     assert booyah_teams(date, "8PM") == ["Alpha", "Golf", "Idle"]
     # 10PM sign-up is still open.
-    assert "10PM: waiting for sign-up to close at 8:00pm." in report["notes"]
+    assert "10PM: waiting for it to fill up or sign-up to close at 8:00pm." in report["notes"]
     assert not made(date, "10PM").exists()
 
 
@@ -128,3 +128,44 @@ def test_changes_before_close_make_nothing_yet(
     with django_capture_on_commit_callbacks(execute=True):
         sign_up(date, "8PM", [lg["teams"][n] for n in ("Alpha", "Bravo")], staff)
     assert not made(date).exists()
+
+
+# -- a full session opens its markets at once (2026-11-18) -----------------------------------------
+
+
+def test_a_full_session_opens_its_markets_the_day_before(
+    lg, night, staff, django_capture_on_commit_callbacks, monkeypatch
+):
+    date, _ = night
+    eve = dt.datetime.combine(date - dt.timedelta(days=1), dt.time(21), tzinfo=scrims.local_tz())
+    monkeypatch.setattr(scrims, "now", lambda: eve)  # sign-up opened at 8pm the night before
+    scrim = scrims.get_session(date, "8PM")
+    scrims.set_max_teams(scrim, 3, staff)
+    t = lg["teams"]
+    with django_capture_on_commit_callbacks(execute=True):
+        scrims.staff_add(scrim, t["Alpha"], staff)
+        scrims.staff_add(scrim, t["Golf"], staff)
+    assert not made(date).exists()  # 2 of 3: still filling
+    with django_capture_on_commit_callbacks(execute=True):
+        scrims.staff_add(scrim, t["Idle"], staff)
+    scrim.refresh_from_db()
+    assert scrim.locked_at is not None
+    assert booyah_teams(date, "8PM") == ["Alpha", "Golf", "Idle"]
+    assert not made(date, "10PM").exists()  # 10PM is still filling
+    # The day's run fills only gaps and keeps waiting on 10PM.
+    report = auto.run(date, force=True)
+    assert "10PM: waiting for it to fill up or sign-up to close at 8:00pm." in report["notes"]
+
+
+def test_the_sweep_opens_a_full_session_it_missed(lg, night, staff, monkeypatch):
+    date, _ = night
+    monkeypatch.setattr(scrims, "today", lambda: date - dt.timedelta(days=1))
+    eve = dt.datetime.combine(date - dt.timedelta(days=1), dt.time(21), tzinfo=scrims.local_tz())
+    monkeypatch.setattr(scrims, "now", lambda: eve)
+    scrim = scrims.get_session(date, "8PM")
+    scrims.set_max_teams(scrim, 2, staff)
+    scrims.staff_add(scrim, lg["teams"]["Alpha"], staff)  # no on-commit: the signal is missed
+    scrims.staff_add(scrim, lg["teams"]["Golf"], staff)
+    assert not made(date).exists()
+    assert auto.open_full_sessions() > 0
+    assert booyah_teams(date, "8PM") == ["Alpha", "Golf"]

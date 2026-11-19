@@ -7,12 +7,13 @@ import datetime as dt
 from django.shortcuts import get_object_or_404
 from rest_framework import serializers
 from rest_framework.exceptions import ValidationError
+from rest_framework.permissions import BasePermission
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.league.models import Team
 from apps.league.serializers import TeamRefSerializer
-from common.permissions import IsStaff, IsTeamManagerOrStaff, IsTeamMemberOrStaff, PublicRead
+from common.permissions import IsStaff, IsTeamMemberOrStaff, PublicRead
 
 from . import services as sv
 from .models import Registration, ScrimLog, ScrimSession, ScrimSettings, Suspension
@@ -76,7 +77,10 @@ def session_data(date: dt.date, session: str, request, *, staff=False, conf=None
         "closes_at": sv.closes_at(date, session, conf),
         "starts_at": sv.starts_at(date, session),
         "max_teams": scrim.max_teams if scrim else conf.max_teams,
+        "locked": bool(scrim and scrim.locked_at),
+        "fee": conf.fee,
         "playing": [entry(r) for r in rows if r.status == R.REGISTERED],
+        "invited": [entry(r) for r in rows if r.status == R.INVITED],
         "waitlist": [entry(r) for r in rows if r.status == R.WAITLIST],
     }
 
@@ -89,6 +93,14 @@ def night_data(date, request, **kw) -> dict:
         if date
         else [],
     }
+
+
+def nights_data(request) -> dict:
+    """The first night shown (``date``/``sessions``, as before) plus every night shown:
+    tonight until it starts, and the next night once its sign-up opens."""
+    nights = [night_data(day, request) for day in sv.shown_nights()]
+    first = nights[0] if nights else {"date": None, "sessions": []}
+    return {**first, "nights": nights}
 
 
 def suspension_data(held: Suspension | None) -> dict | None:
@@ -106,10 +118,20 @@ class TonightView(APIView):
     permission_classes = [PublicRead]
 
     def get(self, request):
-        return Response(night_data(sv.next_scrim_night(), request))
+        return Response(nights_data(request))
 
 
 # -- team ------------------------------------------------------------------------------------------
+
+
+class CanSignUpTeam(BasePermission):
+    """For views with ``get_team()``: staff, the team's managers, and its players with a
+    linked game UID."""
+
+    message = "Only this team's managers and players with a linked game UID can do this."
+
+    def has_permission(self, request, view) -> bool:
+        return sv.can_register(request.user, view.get_team())
 
 
 class TeamScoped(APIView):
@@ -120,38 +142,40 @@ class TeamScoped(APIView):
 
 
 def team_night(team: Team, request) -> dict:
-    """The team's next scrim night: each session, with the team's place in it."""
-    data = night_data(sv.next_scrim_night(), request)
-    mine = {}
-    if data["date"]:
-        mine = dict(
-            Registration.objects.filter(team=team, scrim__date=data["date"]).values_list(
-                "scrim__session", "status"
-            )
-        )
-    for item in data["sessions"]:
-        item["mine"] = mine.get(item["session"])
-        if item["mine"] == R.WAITLIST:
-            ids = [w["team"]["id"] for w in item["waitlist"]]
-            item["waitlist_place"] = ids.index(team.pk) + 1
-    user = request.user
+    """The nights shown, each session with the team's place in it."""
+    data = nights_data(request)
+    days = [n["date"] for n in data["nights"]]
+    mine = {
+        (str(d), key): status
+        for d, key, status in Registration.objects.filter(
+            team=team, scrim__date__in=days
+        ).values_list("scrim__date", "scrim__session", "status")
+    }
+    for night in data["nights"]:
+        for item in night["sessions"]:
+            item["mine"] = mine.get((str(night["date"]), item["session"]))
+            if item["mine"] == R.WAITLIST:
+                ids = [w["team"]["id"] for w in item["waitlist"]]
+                item["waitlist_place"] = ids.index(team.pk) + 1
+    data["sessions"] = data["nights"][0]["sessions"] if data["nights"] else []
     data["team"] = _team(team, request)
-    data["can_manage"] = bool(user.is_league_staff or user.manages(team))
+    data["can_manage"] = sv.can_register(request.user, team)
     data["suspended"] = suspension_data(sv.active_suspension(team))
+    data["fee"] = ScrimSettings.get().fee
     return data
 
 
 class TeamScrimsView(TeamScoped):
-    permission_classes = [IsTeamMemberOrStaff]
+    permission_classes = [IsTeamMemberOrStaff | CanSignUpTeam]
 
     def get(self, request, slug):
         return Response(team_night(self.get_team(), request))
 
 
 class TeamSignupView(TeamScoped):
-    """POST .../register or .../withdraw for one session of today."""
+    """POST .../register (also confirms an invite) or .../withdraw (also declines one)."""
 
-    permission_classes = [IsTeamManagerOrStaff]
+    permission_classes = [CanSignUpTeam]
     action = "register"
 
     def post(self, request, slug, date, session):
@@ -178,7 +202,10 @@ class TeamSignupView(TeamScoped):
 class SettingsSerializer(serializers.ModelSerializer):
     class Meta:
         model = ScrimSettings
-        fields = ["weekdays", "skip_dates", "opens_at", "closes_at", "max_teams", "updated_at"]
+        fields = [
+            "weekdays", "skip_dates", "opens_at", "opens_days_before", "closes_at", "max_teams",
+            "fee", "updated_at",
+        ]  # fmt: skip
         read_only_fields = ["updated_at"]
 
     def validate_weekdays(self, value):
@@ -210,10 +237,21 @@ class SettingsSerializer(serializers.ModelSerializer):
 
     def validate(self, attrs):
         opens = attrs.get("opens_at", self.instance.opens_at)
+        before = attrs.get("opens_days_before", self.instance.opens_days_before)
         closes = attrs.get("closes_at", self.instance.closes_at)
-        if any(dt.time.fromisoformat(v) <= opens for v in closes.values()):
+        if not before and any(dt.time.fromisoformat(v) <= opens for v in closes.values()):
             raise serializers.ValidationError({"closes_at": "Sign-up must close after it opens."})
         return attrs
+
+    def validate_opens_days_before(self, value):
+        if not 0 <= value <= 6:
+            raise serializers.ValidationError("0 (on the day) to 6 days before.")
+        return value
+
+    def validate_fee(self, value):
+        if not 0 <= value <= 1_000_000:
+            raise serializers.ValidationError("0 (free) to 1,000,000 DC.")
+        return value
 
     def validate_max_teams(self, value):
         if not 2 <= value <= 50:
@@ -247,7 +285,7 @@ class StaffNightView(APIView):
 
 
 class StaffSessionView(APIView):
-    """PATCH {max_teams}; POST .../add or .../remove {team, note}."""
+    """PATCH {max_teams}; POST .../add, .../invite or .../remove {team, note}."""
 
     permission_classes = [IsStaff]
     action = None
@@ -274,6 +312,8 @@ class StaffSessionView(APIView):
         try:
             if self.action == "add":
                 sv.staff_add(sv.get_session(day, key), team, request.user, note)
+            elif self.action == "invite":
+                sv.staff_invite(sv.get_session(day, key), team, request.user, note)
             else:
                 scrim = _find(day, key)
                 if scrim is None:

@@ -56,6 +56,8 @@ class LedgerEntry(models.Model):
         PERK = "PERK", "Perk bought"
         TEAM_POT = "TEAM_POT", "Put into the team pot"
         PERK_REFUND = "PERK_REFUND", "Perk refund"
+        SCRIM_FEE = "SCRIM_FEE", "Scrim sign-up"
+        SCRIM_REFUND = "SCRIM_REFUND", "Scrim sign-up refund"
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     wallet = models.ForeignKey(Wallet, on_delete=models.PROTECT, related_name="entries")
