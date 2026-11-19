@@ -19,7 +19,11 @@ test("stake checks", () => {
   assert.equal(stakeProblem("10.5", 1000), "Enter a whole number of DC.");
   assert.equal(stakeProblem("-5", 1000), "Enter a whole number of DC.");
   assert.equal(stakeProblem("9", 1000), "The smallest stake is 10 DC.");
-  assert.equal(stakeProblem("501", 1000), "The biggest stake is 500 DC.");
+  // No cap by default: only the wallet limits it.
+  assert.equal(stakeProblem("501", 1000), null);
+  assert.equal(stakeProblem("100000", 250000), null);
+  // A cap still works if the server sends one.
+  assert.equal(stakeProblem("501", 1000, 500), "The biggest stake is 500 DC.");
   assert.equal(stakeProblem("300", 200), "You only have 200 DC.");
   assert.equal(stakeProblem("300", null), null);
   // A big night with no cap: only the wallet limits it.
@@ -27,13 +31,14 @@ test("stake checks", () => {
   assert.equal(stakeProblem("7000", 6000, null), "You only have 6,000 DC.");
 });
 
-test("the slip's cap: singles follow their market, multiples keep 500", () => {
+test("the slip's cap: singles follow their market, multiples have none", () => {
   const pick = (market: number, maxStake?: number | null): SlipPick => ({
     market, marketTitle: "", fixture: null, season: 1, outcome: market, label: "", odds: "2.00", maxStake,
   });
   assert.equal(slipMaxStake([pick(1, null)]), null);
-  assert.equal(slipMaxStake([pick(1)]), 500); // saved before caps were sent
-  assert.equal(slipMaxStake([pick(1, null), pick(2, null)]), 500);
+  assert.equal(slipMaxStake([pick(1)]), null); // saved before caps were sent
+  assert.equal(slipMaxStake([pick(1, 500)]), 500); // a market that still has a cap
+  assert.equal(slipMaxStake([pick(1, null), pick(2, null)]), null);
 });
 
 test("closing countdown", () => {
@@ -227,7 +232,8 @@ test("bet slip: multiples add up like the server", async () => {
   assert.equal(combinedOdds(["2.50"]), "2.50");
   assert.equal(multipleReturn(100, ["1.55", "2.10"]), 325);
   assert.equal(multipleReturn(33, ["1.01", "1.01", "1.01"]), 33); // 33 x 1.030301 = 33.9999, rounded down
-  assert.equal(multipleReturn(500, ["100.00", "100.00", "100.00"]), MAX_RETURN);
+  assert.equal(multipleReturn(500, ["100.00", "100.00", "100.00"]), 500_000_000); // no 50,000 cap any more
+  assert.equal(multipleReturn(500, ["100.00", "100.00", "100.00", "100.00"]), MAX_RETURN); // database ceiling
   assert.equal(multipleReturn(5000, ["21.00"]), 105000); // a single is never capped
   const f = (match_number: number | null, date = "2026-10-23") => ({ id: 1, title: "x", date, session: "8PM", match_number });
   const pick = (market: number, fixture: ReturnType<typeof f> | null) => ({

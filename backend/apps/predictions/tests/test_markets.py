@@ -168,7 +168,7 @@ def test_return_is_rounded_down_to_whole_coins():
     "change",
     [
         {"stake": 5},
-        {"stake": 501},
+        {"stake": 1001},  # more than the 1,000 in the wallet
         {"stake": 0},
         {"stake": -50},
         {"stake": 10.5},
@@ -361,7 +361,7 @@ def _at_once(n: int, work) -> list:
 def test_simultaneous_bets_cannot_overspend(league, staff, fan):
     market = booyah(league, staff)
     wallet_for(fan)
-    # Spread over the 3 choices so the 500-per-choice limit doesn't decide it first.
+    # Spread over the 3 choices (in case a per-choice cap is ever switched back on).
     results = _at_once(8, lambda i: bet(fan, market, n=i % 3, stake=250))
     ok = [r for r in results if isinstance(r, tuple)]
     assert len(ok) == 4, results

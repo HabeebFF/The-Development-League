@@ -74,7 +74,8 @@ def test_session_markets_wait_for_the_sixth_match(night, staff, fans):  # noqa: 
     assert fresh(m).status == S.SETTLED
 
 
-def test_an_uncapped_night_takes_big_single_predictions(night, staff, fans):  # noqa: F811
+def test_an_uncapped_night_takes_big_single_predictions(night, staff, fans, settings):  # noqa: F811
+    settings.PREDICTIONS_MAX_STAKE = 500  # only matters when a cap is switched back on
     t = night["teams"]
     m = market(night, staff, C.BOOYAH, number=1)
     fan = fans[0]
@@ -98,7 +99,8 @@ def test_an_uncapped_night_takes_big_single_predictions(night, staff, fans):  # 
     assert wallet_for(fan).balance == 5000 - 3500
 
 
-def test_multiples_keep_the_cap_on_uncapped_nights(night, staff, fans):  # noqa: F811
+def test_multiples_keep_the_cap_on_uncapped_nights(night, staff, fans, settings):  # noqa: F811
+    settings.PREDICTIONS_MAX_STAKE = 500
     t = night["teams"]
     set_conf(uncapped_sessions=[key(night["date"], "8PM")])
     a = market(night, staff, C.BOOYAH, number=1)
@@ -111,9 +113,12 @@ def test_multiples_keep_the_cap_on_uncapped_nights(night, staff, fans):  # noqa:
         place_multiple(fans[0], picks=picks, stake=600, client_key=uuid.uuid4())
 
 
-def test_markets_say_their_stake_cap(night, staff, fans):  # noqa: F811
+def test_markets_say_their_stake_cap(night, staff, fans, settings):  # noqa: F811
     m = market(night, staff, C.BOOYAH, number=1)
     client = as_user(fans[0])
+    # No cap by default.
+    assert client.get(f"/api/v1/predictions/markets/{m.pk}").json()["max_stake"] is None
+    settings.PREDICTIONS_MAX_STAKE = 500
     assert client.get(f"/api/v1/predictions/markets/{m.pk}").json()["max_stake"] == 500
     set_conf(uncapped_sessions=[key(night["date"], "8PM")])
     assert client.get(f"/api/v1/predictions/markets/{m.pk}").json()["max_stake"] is None

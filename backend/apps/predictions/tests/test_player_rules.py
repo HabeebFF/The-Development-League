@@ -247,3 +247,20 @@ def test_the_cap_says_how_much_more_fits(lg, staff, settings):
     with pytest.raises(MarketError, match="add up to 50 more"):
         bet(fan, m, "Bravo", stake=100)
     assert bet(fan, m, "Bravo", stake=50).stake == 50
+
+
+def test_no_stake_cap_by_default_only_the_wallet(lg, staff):
+    """Habeeb, 2026-11-19: people can stake as much DC as they have."""
+    from apps.predictions.services import wallet_for
+
+    m = booyah(lg, staff)
+    fan = make_user("fan@tdl.test")
+    wallet = wallet_for(fan)
+    wallet.balance = 100_000
+    wallet.save(update_fields=["balance"])
+    assert bet(fan, m, "Bravo", stake=60_000).stake == 60_000
+    assert bet(fan, m, "Bravo", stake=30_000).stake == 30_000  # no total per choice either
+    with pytest.raises(MarketError, match="Not enough DC"):
+        bet(fan, m, "Bravo", stake=10_001)  # but never more than the wallet
+    with pytest.raises(MarketError, match="at least 10"):
+        bet(fan, m, "Charlie", stake=9)  # the 10 DC minimum stays

@@ -146,12 +146,21 @@ def test_place_takes_the_stake_once_and_fixes_the_odds(lg, staff, fan):
     assert check_wallets() == []
 
 
-def test_return_is_capped(lg, staff, fan, settings):
+def test_return_has_no_cap_by_default(lg, staff, fan, settings):
     big = ("100.00", "3.00", "4.00", "5.00")
     a, b, c = (market(lg, staff, w, odds=big) for w in ("m1", "sat", None))
     m = place(fan, [pick(a, "Alpha"), pick(b, "Alpha"), pick(c, "Alpha")], stake=500)
     assert m.odds == Decimal("1000000.00")
-    assert m.potential_return == settings.PREDICTIONS_MAX_RETURN == 50000
+    # No payout cap by default: 500 x 1,000,000.
+    assert m.potential_return == 500_000_000
+    # A cap still works if one is set, and nothing goes past the database ceiling.
+    settings.PREDICTIONS_MAX_RETURN = 200
+    m = place(fan, [pick(a, "Bravo"), pick(b, "Bravo"), pick(c, "Bravo")], stake=10)  # 270 uncapped
+    assert m.potential_return == 200
+    settings.PREDICTIONS_MAX_RETURN = 0
+    from apps.predictions.multiples import multiple_return
+
+    assert multiple_return(500, ["100", "100", "100", "100"]) == 1_000_000_000
 
 
 @pytest.mark.parametrize(
@@ -190,7 +199,6 @@ def test_refusals(lg, staff, fan):
     refused([pick(a, "Alpha"), pick(a, "Bravo")], "picks")
     refused([pick(a, "Alpha"), {"market": b.pk}], "picks")
     refused([pick(a, "Alpha"), pick(b, "Alpha")], "stake", stake=5)
-    refused([pick(a, "Alpha"), pick(b, "Alpha")], "stake", stake=501)
     refused([pick(a, "Alpha"), {"market": b.pk, "outcome": a.outcomes.first().pk}], "outcome")
     set_odds(b.outcomes.get(team__name="Alpha"), "2.50", actor=staff)
     err = refused([pick(a, "Alpha"), {**pick(b, "Alpha"), "expected_odds": "2.00"}], "odds_changed")
@@ -204,6 +212,12 @@ def test_refusals(lg, staff, fan):
     refused([pick(a, "Alpha"), pick(c, "Bravo")], "not_allowed", user=staff)
     assert balance(fan) == 1000
     assert not Multiple.objects.exists() and not Leg.objects.exists()
+
+
+def test_multiples_have_no_stake_cap(lg, staff, fan):
+    a, b = market(lg, staff, "m1"), market(lg, staff, "sat")
+    place(fan, [pick(a, "Alpha"), pick(b, "Alpha")], stake=1000)  # all of it, no 500 cap
+    assert balance(fan) == 0
 
 
 def test_not_enough_coins(lg, staff, fan):
@@ -390,9 +404,9 @@ def test_api_refusal_says_which_pick(lg, staff, fan):
 def test_api_rules(client):
     assert client.get("/api/v1/predictions/rules").json() == {
         "min_stake": 10,
-        "max_stake": 500,
+        "max_stake": None,
         "max_picks": 8,
-        "max_return": 50000,
+        "max_return": 1_000_000_000,
     }
 
 
