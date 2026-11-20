@@ -25,6 +25,7 @@ from ..parsers import debugger, match_id, match_result, replay_info, safe_zone
 from ..parsers.base import ParseResult
 from ..parsers.filenames import FileKind, classify
 from . import storage
+from .roster_match import team_of_players
 
 PS = UploadedFile.ParseStatus
 # How long after a debugger block starts its MatchResult may be written.
@@ -107,6 +108,7 @@ def _parse(upload: UploadedFile, kind: FileKind) -> None:
                 "kills": t.kill_score,
                 "total": t.total_score,
                 "players": len(t.players),
+                "uids": [p.uid for p in t.players if p.uid],
             }
             for t in (result.data.teams if result.data else [])
         ]
@@ -253,10 +255,26 @@ def _preview_match(game_match_id: int, data: dict[str, Any]) -> dict[str, Any]:
     season = existing.season if existing else None
 
     teams = []
+    roster_warnings: list[str] = []
     if sources.match_result is not None:
         for t in sources.match_result.parse_report.get("teams", []):
             team = TeamAlias.resolve(t["in_game_name"], season)
-            teams.append({**t, "team": {"id": team.pk, "name": team.name} if team else None})
+            found = team_of_players(t.get("uids") or [], season)
+            matched_by = "name" if team else None
+            if team is None and found is not None:
+                team, matched_by = found.team, f"roster: {found.matching} of {found.of} players"
+            elif team is not None and found is not None and found.team.pk != team.pk:
+                roster_warnings.append(
+                    f"'{t['in_game_name']}' is {team.name}, but {found.matching} of its players "
+                    f"are on {found.team.name}'s roster."
+                )
+            teams.append(
+                {
+                    **t,
+                    "team": {"id": team.pk, "name": team.name} if team else None,
+                    "matched_by": matched_by,
+                }
+            )
 
     meta = sources.replay.parse_report.get("meta", {}) if sources.replay else {}
     game_map_id = meta.get("map_id")
@@ -266,7 +284,7 @@ def _preview_match(game_match_id: int, data: dict[str, Any]) -> dict[str, Any]:
     room_name = meta.get("room_name") or ""
     day = _DAY_IN_ROOM.search(room_name)
 
-    warnings = list(data["warnings"])
+    warnings = list(data["warnings"]) + roster_warnings
     if sources.match_result is None:
         warnings.append("No MatchResult file yet: the match cannot be scored.")
     if teams and any(t["team"] is None for t in teams):

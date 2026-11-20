@@ -92,7 +92,8 @@ export type PreviewMatch = {
   room_name: string;
   started_at: string | null;
   map: { id: number; name: string } | null;
-  teams: { in_game_name: string; team: { id: number; name: string } | null }[];
+  /** matched_by: "name", or "roster: 3 of 4 players" when the squad's UIDs found the team. */
+  teams: { in_game_name: string; team: { id: number; name: string } | null; matched_by?: string | null }[];
   has_match_result: boolean;
   has_replay_info: boolean;
   has_debugger: boolean;
