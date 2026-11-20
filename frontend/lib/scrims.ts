@@ -15,6 +15,9 @@ export type Entry = {
   at?: string;
 };
 
+/** A map drawn for a match (drawn when the night's sign-up opens). */
+export type MapRef = { id: number; name: string; slug: string };
+
 export type ScrimSession = {
   date: string;
   session: "8PM" | "10PM";
@@ -31,6 +34,10 @@ export type ScrimSession = {
   /** Invited by staff, place held until the team confirms. */
   invited: Entry[];
   waitlist: Entry[];
+  /** Each match's map, in order: drawn when sign-up opens (empty before). */
+  maps?: MapRef[];
+  /** Staff only: matches in the session. */
+  match_count?: number;
   /** On the team page: the team's place in it. */
   mine?: "REGISTERED" | "INVITED" | "WAITLIST" | null;
   waitlist_place?: number;
@@ -51,7 +58,7 @@ export type TeamNight = Nights & {
   fee: number;
 };
 
-export type StaffNight = Night & { scrim_night: boolean };
+export type StaffNight = Night & { scrim_night: boolean; map_pool?: MapRef[] };
 
 export type StaffTeam = TeamRef & {
   suspended: Suspended | null;
@@ -253,4 +260,9 @@ export function weekdayList(days: number[]): string {
         .map((d) => WEEKDAYS[d].slice(0, 3))
         .join(", ")
     : "None";
+}
+
+/** "M1 Kalahari", ... for a session's drawn maps. */
+export function mapLine(s: Pick<ScrimSession, "maps">): string[] {
+  return (s.maps ?? []).map((m, i) => `M${i + 1} ${m.name}`);
 }

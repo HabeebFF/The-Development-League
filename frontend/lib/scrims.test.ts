@@ -141,3 +141,10 @@ test("invites and the fee", () => {
     "Invite expired",
   );
 });
+
+test("the drawn maps read M1 to M5", async () => {
+  const { mapLine } = await import("./scrims.ts");
+  const maps = ["Bermuda", "Kalahari"].map((name, i) => ({ id: i + 1, name, slug: name.toLowerCase() }));
+  assert.deepEqual(mapLine({ maps }), ["M1 Bermuda", "M2 Kalahari"]);
+  assert.deepEqual(mapLine({}), []);
+});

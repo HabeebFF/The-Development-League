@@ -86,6 +86,7 @@ def session_data(date: dt.date, session: str, request, *, staff=False, conf=None
         "invited": [entry(r) for r in rows if r.status == R.INVITED],
         "waitlist": [entry(r) for r in rows if r.status == R.WAITLIST],
         "maps": mp.names(mp.ensure(scrim)) if scrim else [],
+        **({"match_count": mp.matches_for(date, session)} if staff else {}),
     }
 
 
@@ -285,6 +286,7 @@ class StaffNightView(APIView):
         date = _date(request.query_params.get("date"), sv.next_scrim_night() or sv.today())
         data = night_data(date, request, staff=True)
         data["scrim_night"] = sv.is_scrim_night(date)
+        data["map_pool"] = mp.pool_data()
         return Response(data)
 
 
@@ -329,22 +331,10 @@ class StaffSessionView(APIView):
 
 
 class StaffMapsView(APIView):
-    """POST {redraw: true} draws every map again; POST {maps: [ids]} sets them in match order."""
+    """POST {redraw: true} draws every map again; POST {maps: [ids]} sets them in match order.
+    The maps staff can pick from are in the night's ``map_pool``."""
 
     permission_classes = [IsStaff]
-
-    def get(self, request, date, session):
-        from apps.maps.models import Map
-
-        day, key = _date(date), _session(session)
-        maps = Map.objects.filter(is_active=True).order_by("name")
-        return Response(
-            {
-                "session": session_data(day, key, request, staff=True),
-                "pool": [{"id": m.pk, "name": m.name, "slug": m.slug} for m in maps],
-                "matches": mp.matches_in(sv.get_session(day, key)),
-            }
-        )
 
     def post(self, request, date, session):
         day, key = _date(date), _session(session)

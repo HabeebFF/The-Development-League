@@ -135,8 +135,9 @@ def test_staff_set_the_maps_by_hand(clock, staff):
     client = APIClient()
     client.force_authenticate(staff)
     url = f"/api/v1/admin/scrims/{MONDAY.isoformat()}/8PM/maps"
-    pool = client.get(url).json()
-    assert pool["matches"] == 5 and len(pool["pool"]) == 5
+    night = client.get(f"/api/v1/admin/scrims/night?date={MONDAY.isoformat()}").json()
+    assert len(night["map_pool"]) == 5
+    assert [x["match_count"] for x in night["sessions"]] == [5, 5]
     kalahari = Map.objects.get(name="Kalahari").pk
     bermuda = Map.objects.get(name="Bermuda").pk
     chosen = [kalahari, bermuda, kalahari, bermuda, kalahari]

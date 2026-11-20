@@ -193,7 +193,12 @@ test("staff: phase C codes match the server's", async () => {
   assert.equal(playersProblem("BOOYAH", 0), null);
   assert.equal(teamsProblem("TOTAL_KILLS", 0), null);
   assert.equal(teamsProblem("TOTAL_KILLS", 1), "This type has no teams.");
-  assert.equal(categoriesFor("match").length, 17);
+  assert.equal(categoriesFor("match").length, 18);
+  assert.deepEqual(
+    outcomeCodes("PLAYER_KNOCKS", [], 3, 3, players.slice(0, 1)).map((o) => o.label),
+    ["Ace: over 2.5 knocks", "Ace: under 2.5 knocks"],
+  );
+  assert.equal(lineProblem("0", "PLAYER_KNOCKS"), "A whole number from 1 to 30.");
 });
 
 test("staff: session, date-range and season kinds", async () => {
@@ -219,8 +224,13 @@ test("staff: session, date-range and season kinds", async () => {
   assert.equal(datesProblem("2026-10-19", "2026-10-19"), null);
   assert.deepEqual(
     categoriesFor("session").map((c) => c.key),
-    ["SESSION_WINNER", "MOST_BOOYAHS", "SESSION_KILLS", "SESSION_H2H", "SESSION_FRAGGER"],
+    ["SESSION_WINNER", "MOST_BOOYAHS", "SESSION_KILLS", "SESSION_DEATHS", "SESSION_H2H", "SESSION_FRAGGER"],
   );
+  assert.deepEqual(
+    outcomeCodes("SESSION_DEATHS", [], 3, 5, [{ id: 9, name: "Cy" }]).map((o) => o.label),
+    ["Cy: over 4.5 deaths", "Cy: under 4.5 deaths"],
+  );
+  assert.equal(defaultTitle("SESSION_DEATHS", [], 3, null, 5, [{ name: "Cy" }]), "Cy: over/under 4.5 deaths in the session");
   assert.ok(categoriesFor("season").some((c) => c.key === "RANGE_FRAGGER" && c.dates));
   assert.ok(SHARED_WIN.has("RANGE_WINNER") && !SHARED_WIN.has("SESSION_H2H"));
 });

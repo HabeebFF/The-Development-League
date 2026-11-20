@@ -31,13 +31,22 @@ def pool() -> list[int]:
     return list(Map.objects.filter(is_active=True).order_by("name").values_list("pk", flat=True))
 
 
-def matches_in(scrim: ScrimSession) -> int:
-    """Matches in the session (5, or what staff set for a longer night on Staff > Predictions)."""
+def matches_for(date, session: str) -> int:
+    """Matches in a session (5, or what staff set for a longer night on Staff > Predictions)."""
     try:
         from apps.predictions.auto import matches_in as predictions_matches
     except ImportError:  # pragma: no cover - predictions always installed with scrims
         return DEFAULT_MATCHES
-    return predictions_matches(scrim.date, scrim.session)
+    return predictions_matches(date, session)
+
+
+def matches_in(scrim: ScrimSession) -> int:
+    return matches_for(scrim.date, scrim.session)
+
+
+def pool_data() -> list[dict]:
+    """The maps staff can pick from: ``[{id, name, slug}]``."""
+    return names(pool())
 
 
 def draw(count: int, maps: list[int], rng: random.Random, start: list[int] | None = None):
