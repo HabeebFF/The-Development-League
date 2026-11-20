@@ -103,7 +103,7 @@ def test_staff_changes_after_close_remake_markets(
     auto.run(date, force=True)
     taken = made(date, "8PM").get(title__regex=r"^Booyah · Match 1( ·|$)")
     bet(make_user("fan@tdl.test"), taken)
-    own = made(date, "8PM").get(title="Golf top 3 · Match 1")
+    own = made(date, "8PM").get(title__regex=r"^Golf top 3 · Match 1( ·|$)")
     bet(make_user("fan2@tdl.test"), own)
     with django_capture_on_commit_callbacks(execute=True):
         scrims.staff_remove(scrim, t["Golf"], staff)

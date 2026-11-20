@@ -86,7 +86,7 @@ def test_staff_changing_maps_remakes_markets_nobody_predicted_on(
     assert taken.map_id != chosen[0] and taken.status == S.OPEN
     # ...the others were made again for the new map.
     total = made(date, "8PM").get(fixture=first, category=C.TOTAL_KILLS)
-    assert total.map_id == chosen[0] and total.title.endswith(by_name("Kalahari").name)
+    assert total.map_id == chosen[0] and total.title.endswith(Map.objects.get(pk=chosen[0]).name)
     m2 = Fixture.objects.get(date=date, session="8PM", match_number=2)
     assert made(date, "8PM").get(fixture=m2, category=C.BOOYAH).map_id == chosen[1]
 
