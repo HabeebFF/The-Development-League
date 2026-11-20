@@ -2,8 +2,10 @@
 
 import { useEffect, useState } from "react";
 
+import NewTeams from "@/components/staff/NewTeams";
 import TeamEditor, { type AdminTeam } from "@/components/staff/TeamEditor";
 import JoinRequests from "@/components/team/JoinRequests";
+import Squad from "@/components/team/Squad";
 import TeamPeople from "@/components/team/TeamPeople";
 import { api, type Paged } from "@/lib/api";
 
@@ -33,6 +35,9 @@ export default function StaffTeams() {
         and colour, merge spellings of the same team, and invite each team&apos;s manager.
       </p>
       <div className="mt-6">
+        <NewTeams onApproved={() => setVersion((v) => v + 1)} />
+      </div>
+      <div className="mt-6">
         <JoinRequests />
       </div>
       {error && <p className="mt-6 text-bad">{error}</p>}
@@ -45,7 +50,7 @@ export default function StaffTeams() {
                 <span className="block truncate font-medium">{team.name}</span>
                 <span className="text-xs text-muted">
                   {team.matches_played} {team.matches_played === 1 ? "match" : "matches"}
-                  {team.is_league_member ? "" : " · not a league team"}
+                  {team.status === "PENDING" ? " · waiting for approval" : team.status === "REJECTED" ? " · rejected" : team.is_league_member ? "" : " · not a league team"}
                   {team.igl_name ? ` · IGL ${team.igl_name}` : ""}
                 </span>
               </span>
@@ -58,6 +63,7 @@ export default function StaffTeams() {
             </div>
             {open?.slug === team.slug && (
               <div className="border-t border-line p-4">
+                {open.tab === "people" && <Squad slug={team.slug} canManage />}
                 {open.tab === "edit" ? (
                   <TeamEditor
                     team={team}

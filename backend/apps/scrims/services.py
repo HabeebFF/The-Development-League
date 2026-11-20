@@ -375,12 +375,21 @@ def _check_suspension(team: Team) -> None:
         raise ScrimError(f"{team.name} is suspended and can't register.{why}")
 
 
+def _check_approved(team: Team) -> None:
+    if team.status != Team.Status.APPROVED:
+        raise ScrimError(
+            f"{team.name} is waiting for TDL staff to approve it. "
+            "You can sign up for scrims once it's approved."
+        )
+
+
 def register(scrim: ScrimSession, team: Team, user) -> Registration:
     """Someone on the team signs it up, paying the fee: a place if one is free, else the
     waitlist. A team staff invited confirms its place this way too."""
     if scrim.registrations.filter(team=team, status=R.INVITED).exists():
         return confirm(scrim, team, user)
     _check_open(scrim)
+    _check_approved(team)
     _check_suspension(team)
     with transaction.atomic():
         scrim = _locked(scrim)

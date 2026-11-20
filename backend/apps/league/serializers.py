@@ -134,9 +134,11 @@ class TeamAdminSerializer(serializers.ModelSerializer):
             "matches_played",
             "igl",
             "igl_name",
+            "status",
+            "country",
             "created_at",
         ]
-        read_only_fields = ["created_at"]
+        read_only_fields = ["created_at", "status"]
 
     def get_aliases(self, team: Team) -> list[str]:
         return list(team.aliases.values_list("in_game_name", flat=True))

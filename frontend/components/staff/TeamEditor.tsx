@@ -16,6 +16,7 @@ export type AdminTeam = {
   matches_played: number;
   igl: number | null;
   igl_name: string | null;
+  status?: "PENDING" | "APPROVED" | "REJECTED";
 };
 
 type TeamPlayer = { id: number; name: string; matches: number };

@@ -13,6 +13,7 @@ import { SkeletonRows } from "../league/Loading";
 import MatchEarnings from "../dc/MatchEarnings";
 
 import JoinTeam from "./JoinTeam";
+import NewTeam from "./NewTeam";
 
 const dc = (n: number) => `${n.toLocaleString("en-GB")} DC`;
 const ROLE: Record<string, string> = { RUSHER: "Rusher", GRENADER: "Grenader", SNIPER: "Sniper", ALL_ROUNDER: "All-rounder" };
@@ -82,6 +83,8 @@ export default function AccountView() {
       <DisplayName current={me.display_name} nextChange={me.display_name_next_change} onSaved={refresh} />
 
       {player && !isStaff && <JoinTeam onJoined={onJoined} />}
+
+      {!isStaff && <NewTeam compact />}
 
       {player ? (
         <div className="card p-4 text-sm">

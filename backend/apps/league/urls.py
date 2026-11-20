@@ -1,7 +1,7 @@
 from django.urls import path
 from rest_framework.routers import SimpleRouter
 
-from . import views
+from . import newteams, views
 
 router = SimpleRouter(trailing_slash=False)
 router.register("teams", views.PublicTeamViewSet, basename="team")
@@ -37,4 +37,18 @@ urlpatterns = [
     path("teams/<slug:slug>/igl", views.TeamIglView.as_view(), name="team-igl"),
     path("teams/<slug:slug>/day-cards", views.TeamDayCardsView.as_view(), name="team-day-cards"),
     path("admin/cards", views.CardAdminView.as_view(), name="admin-cards"),
+    path("me/new-team", newteams.MyNewTeamView.as_view(), name="me-new-team"),
+    path("me/new-team/check", newteams.CheckNewTeamView.as_view(), name="me-new-team-check"),
+    path("admin/new-teams", newteams.StaffNewTeamsView.as_view(), name="admin-new-teams"),
+    path(
+        "admin/new-teams/<slug:slug>/approve",
+        newteams.StaffReviewTeamView.as_view(action="approve"),
+        name="admin-new-team-approve",
+    ),
+    path(
+        "admin/new-teams/<slug:slug>/reject",
+        newteams.StaffReviewTeamView.as_view(action="reject"),
+        name="admin-new-team-reject",
+    ),
+    path("teams/<slug:slug>/squad", newteams.SquadView.as_view(), name="team-squad"),
 ]

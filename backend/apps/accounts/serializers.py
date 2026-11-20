@@ -14,7 +14,7 @@ from .models import Invite, Membership, PlayerClaim, StaffProfile, User
 class TeamRefSerializer(serializers.ModelSerializer):
     class Meta:
         model = Team
-        fields = ["id", "name", "tag", "slug"]
+        fields = ["id", "name", "tag", "slug", "status"]
 
 
 class MembershipSerializer(serializers.ModelSerializer):

@@ -39,7 +39,9 @@ export default function SignupForm() {
         },
       });
       // A full load so the whole site knows who is signed in.
-      window.location.assign(site.predictions ? "/predict" : "/");
+      // Back to where they came from (e.g. /create-team), else the usual start page.
+      const next = new URLSearchParams(window.location.search).get("next");
+      window.location.assign(next && next.startsWith("/") && !next.startsWith("//") ? next : site.predictions ? "/predict" : "/");
     } catch (e) {
       if (e instanceof ApiError && e.data && typeof e.data === "object") {
         const out: Record<string, string> = {};
