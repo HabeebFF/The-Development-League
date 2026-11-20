@@ -90,7 +90,8 @@ export type Me = {
   features: string[];
   memberships: Membership[];
   /** The league player this account is linked to (by game UID), if any. */
-  player: { game_uid: string; display_name: string } | null;
+  /** ``photo``: the approved card photo, which is also the profile picture. */
+  player: { game_uid: string; display_name: string; photo?: string | null } | null;
   /** A game UID waiting for staff (another account had it). */
   pending_uid_claim: string | null;
   /** Live replays are for league teams: staff, managers, and team players with a linked UID. */
