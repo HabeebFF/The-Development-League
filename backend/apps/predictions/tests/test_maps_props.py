@@ -146,7 +146,7 @@ def test_an_unknown_map_settles_as_usual(lg, market_on_kalahari):
     assert suggest(market_on_kalahari)["kind"] == "SETTLE"
 
 
-# -- map-aware odds -----------------------------------------------------------------------------------
+# -- map-aware odds --------------------------------------------------------------------------------
 
 
 def test_a_team_strong_on_a_map_is_favoured_there(league):
