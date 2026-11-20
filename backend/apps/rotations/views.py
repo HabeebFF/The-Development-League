@@ -1,12 +1,12 @@
-"""Rotation API: team accounts with rotations.view read (anyone while the site is public);
-live replays are for league team members only; staff plot and confirm."""
+"""Rotation API: rotations and live replays are for the league teams that played each match
+(plus staff, and teams staff allow to watch every match); staff plot and confirm."""
 
 from django.db import transaction
 from django.db.models import Q
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import status
-from rest_framework.exceptions import ValidationError
+from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -19,7 +19,7 @@ from apps.results.models import (
     TeamMatchResult,
     ZonePhase,
 )
-from common.permissions import CanWatchReplays, HasFeature, IsStaff
+from common.permissions import CanWatchReplays, IsStaff
 
 from .auto import draft_rotations
 from .models import PlayerTrack, ReplayObject, RotationPoint, TeamRotation
@@ -34,15 +34,26 @@ def _match(request, pk: int) -> Match:
     return get_object_or_404(qs, pk=pk)
 
 
+NOT_YOUR_MATCH = "Only the teams that played this match can watch it again."
+
+
+def _watchable_match(request, pk: int) -> Match:
+    """The match, if this account's team played it (staff and allowed teams: any match)."""
+    match = _match(request, pk)
+    if not request.user.can_watch_match(match):
+        raise PermissionDenied(NOT_YOUR_MATCH)
+    return match
+
+
 def _map_info(match: Match) -> dict | None:
     return {"slug": match.map.slug, "name": match.map.name} if match.map else None
 
 
 class MatchZonesView(APIView):
-    permission_classes = [HasFeature("rotations.view", public=True)]
+    permission_classes = [CanWatchReplays]  # teams that played, never public
 
     def get(self, request, pk: int):
-        match = _match(request, pk)
+        match = _watchable_match(request, pk)
         zones = ZonePhase.objects.filter(match=match).order_by("stage_index", "game_time_s")
         return Response(
             {
@@ -57,10 +68,10 @@ class MatchZonesView(APIView):
 class MatchRotationsView(APIView):
     """Every team's rotation in a match, best placement first."""
 
-    permission_classes = [HasFeature("rotations.view", public=True)]
+    permission_classes = [CanWatchReplays]  # teams that played, never public
 
     def get(self, request, pk: int):
-        match = _match(request, pk)
+        match = _watchable_match(request, pk)
         placements = dict(
             TeamMatchResult.objects.filter(match=match).values_list("team_id", "placement")
         )
@@ -113,11 +124,11 @@ class MatchReplayView(APIView):
     every team is included. Tracks are ``[x, z]`` in world decimetres every ``step_s``.
     """
 
-    permission_classes = [CanWatchReplays]  # league teams only, never public
+    permission_classes = [CanWatchReplays]  # teams that played, never public
     EVENT_KINDS = [MatchEvent.Kind.KILL, MatchEvent.Kind.KNOCK]
 
     def get(self, request, pk: int):
-        match = _match(request, pk)
+        match = _watchable_match(request, pk)
         results = list(
             TeamMatchResult.objects.filter(match=match)
             .select_related("team")

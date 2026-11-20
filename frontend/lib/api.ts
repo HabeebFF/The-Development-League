@@ -96,6 +96,9 @@ export type Me = {
   pending_uid_claim: string | null;
   /** Live replays are for league teams: staff, managers, and team players with a linked UID. */
   can_watch_replays: boolean;
+  /** Teams whose matches they can watch again (replays and rotations); null means every match
+   * (staff, or a team staff allowed to watch all scrims). */
+  scrim_team_ids: number[] | null;
 };
 
 /** GET /me/link-uid?uid=: who a game UID is, and what linking to it would do. */

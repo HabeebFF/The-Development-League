@@ -82,19 +82,45 @@ class User(AbstractUser):
     def has_feature(self, code: str) -> bool:
         return code in self.features()
 
-    def can_watch_replays(self) -> bool:
-        """Replays are for league teams: staff, managers on a league team, and players on a
-        league team whose account is linked to their game UID (player card)."""
+    def scrim_team_ids(self) -> set[int] | None:
+        """The league teams whose matches this account can watch again (replays and
+        rotations): None means every match (staff, or a team staff allowed to watch all).
+
+        A team counts for its active managers, and for its active players whose account is
+        linked to their game UID (player card)."""
         if self.is_league_staff:
-            return True
-        roles = set(
+            return None
+        rows = list(
             self.memberships.filter(is_active=True, team__is_league_member=True).values_list(
-                "role", flat=True
+                "team_id", "role", "team__can_watch_all_scrims"
             )
         )
-        if Membership.Role.MANAGER in roles:
+        linked = hasattr(self, "player") and self.player is not None
+        teams: set[int] = set()
+        for team_id, role, watch_all in rows:
+            if role == Membership.Role.MANAGER or linked:
+                if watch_all:
+                    return None
+                teams.add(team_id)
+        return teams
+
+    def can_watch_replays(self) -> bool:
+        """Replays and rotations are for league teams: staff, managers on a league team, and
+        players on a league team whose account is linked to their game UID (player card).
+        Each match is further limited to the teams that played it (``can_watch_match``)."""
+        teams = self.scrim_team_ids()
+        return teams is None or bool(teams)
+
+    def can_watch_match(self, match) -> bool:
+        """Staff and allowed teams watch every match; other teams only the ones they played."""
+        teams = self.scrim_team_ids()
+        if teams is None:
             return True
-        return bool(roles) and hasattr(self, "player") and self.player is not None
+        if not teams:
+            return False
+        from apps.results.models import TeamMatchResult
+
+        return TeamMatchResult.objects.filter(match=match, team_id__in=teams).exists()
 
     def manages(self, team) -> bool:
         return self.memberships.filter(

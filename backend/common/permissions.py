@@ -90,10 +90,11 @@ class IsTeamMemberOrStaff(BasePermission):
 
 
 class CanWatchReplays(BasePermission):
-    """Live replays: league staff, and members of a league team (players need their account
-    linked to their game UID). See ``User.can_watch_replays``."""
+    """Live replays and rotations: league staff, and members of a league team (players need
+    their account linked to their game UID). See ``User.can_watch_replays``. Views also check
+    the match itself with ``User.can_watch_match`` (only the teams that played it)."""
 
-    message = "Replays are for league teams only."
+    message = "Replays and rotations are for league teams only."
 
     def has_permission(self, request, view) -> bool:
         user = _user(request)

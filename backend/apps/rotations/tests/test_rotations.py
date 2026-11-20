@@ -139,46 +139,68 @@ def staff() -> APIClient:
 
 
 def team_client(team: Team) -> APIClient:
+    """A manager on ``team`` (managers count without a linked UID)."""
     user = User.objects.create_user(email=f"{team.slug}@tdl.test")
-    Membership.objects.create(user=user, team=team, role=Membership.Role.PLAYER)
+    Membership.objects.create(user=user, team=team, role=Membership.Role.MANAGER)
     client = APIClient()
     client.force_authenticate(user)
     return client
 
 
-def test_read_zones_and_rotations_needs_the_feature(match, settings):
-    settings.PUBLIC_SITE = False
+def test_read_zones_and_rotations_for_teams_that_played(match):
     draft_rotations(match)
-    alpha_player = team_client(Team.objects.get(name="Alpha"))
-    zones = alpha_player.get(f"/api/v1/matches/{match.pk}/zones").json()
+    alpha_manager = team_client(Team.objects.get(name="Alpha"))
+    zones = alpha_manager.get(f"/api/v1/matches/{match.pk}/zones").json()
     assert zones["map"]["slug"] == "purgatory" and len(zones["zones"]) == 3
-    data = alpha_player.get(f"/api/v1/matches/{match.pk}/rotations").json()
+    data = alpha_manager.get(f"/api/v1/matches/{match.pk}/rotations").json()
     assert [r["team"]["name"] for r in data["rotations"]] == ["Alpha", "Bravo"]
     assert data["rotations"][0]["placement"] == 1
     assert data["rotations"][0]["points"][0]["checkpoint"] == "DROP"
 
-    outsider = team_client(Team.objects.create(name="Guest", is_league_member=False))
-    assert outsider.get(f"/api/v1/matches/{match.pk}/rotations").status_code == 403
-    assert APIClient().get(f"/api/v1/matches/{match.pk}/zones").status_code == 401
-
     match.status = Match.Status.NEEDS_REVIEW
     match.save()
-    assert alpha_player.get(f"/api/v1/matches/{match.pk}/rotations").status_code == 404
+    assert alpha_manager.get(f"/api/v1/matches/{match.pk}/rotations").status_code == 404
 
 
-def test_rotations_are_public_for_now_but_replays_are_for_teams(match):
+def test_rotations_and_replays_are_only_for_teams_that_played(match, staff):
+    """SCRIM-VIEWING: visitors, fans and teams that weren't in the match are locked out of
+    its rotations and replay, even while the site is public."""
     draft_rotations(match)
-    anon = APIClient()
-    for part in ("zones", "rotations"):
-        assert anon.get(f"/api/v1/matches/{match.pk}/{part}").status_code == 200, part
-    assert anon.get(f"/api/v1/matches/{match.pk}/replay").status_code == 401
-    outsider = team_client(Team.objects.create(name="Guest", is_league_member=False))
-    assert outsider.get(f"/api/v1/matches/{match.pk}/rotations").status_code == 200
+    charlie = Team.objects.create(name="Charlie")  # a league team that didn't play it
+    anon, charlie_manager = APIClient(), team_client(charlie)
+    guest = team_client(Team.objects.create(name="Guest", is_league_member=False))
+    for part in ("zones", "rotations", "replay"):
+        url = f"/api/v1/matches/{match.pk}/{part}"
+        assert anon.get(url).status_code == 401, part
+        assert guest.get(url).status_code == 403, part
+        resp = charlie_manager.get(url)
+        assert resp.status_code == 403, part
+        assert "teams that played" in resp.json()["detail"], part
+        assert staff.get(url).status_code == 200, part
+
+    # Staff let Charlie watch every match.
+    charlie.can_watch_all_scrims = True
+    charlie.save()
+    for part in ("zones", "rotations", "replay"):
+        assert charlie_manager.get(f"/api/v1/matches/{match.pk}/{part}").status_code == 200, part
+    assert charlie_manager.get("/api/v1/me").json()["scrim_team_ids"] is None
+
     # Staff tools stay staff only, and unpublished matches stay hidden.
     assert anon.get(f"/api/v1/matches/{match.pk}/rotations/bravo").status_code == 401
     match.status = Match.Status.NEEDS_REVIEW
     match.save()
-    assert anon.get(f"/api/v1/matches/{match.pk}/rotations").status_code == 404
+    assert charlie_manager.get(f"/api/v1/matches/{match.pk}/rotations").status_code == 404
+
+
+def test_staff_can_switch_on_watch_all(staff):
+    team = Team.objects.create(name="Charlie")
+    resp = staff.patch(
+        f"/api/v1/admin/teams/{team.slug}", {"can_watch_all_scrims": True}, format="json"
+    )
+    assert resp.status_code == 200, resp.content
+    assert resp.json()["can_watch_all_scrims"] is True
+    team.refresh_from_db()
+    assert team.can_watch_all_scrims
 
 
 def test_plot_confirm_and_reset(match, staff):
@@ -309,10 +331,11 @@ def test_replays_are_for_league_team_members(match, staff):
     url = f"/api/v1/matches/{match.pk}/replay"
     alpha, bravo = Team.objects.get(name="Alpha"), Team.objects.get(name="Bravo")
     guest = Team.objects.create(name="Guest", is_league_member=False)
+    charlie = Team.objects.create(name="Charlie")
     allowed = {
         "staff": staff,
         "linked player": account("p@tdl.test", alpha, uid=1),
-        "other team's linked player": account("q@tdl.test", bravo, uid=2),  # every team's
+        "other team's linked player": account("q@tdl.test", bravo, uid=2),  # both played
         "manager without a UID": account("m@tdl.test", alpha, Membership.Role.MANAGER),
     }
     refused = {
@@ -321,6 +344,7 @@ def test_replays_are_for_league_team_members(match, staff):
         "linked player not on a team": (account("solo@tdl.test", uid=3), 403),
         "team player without a UID": (account("nouid@tdl.test", alpha), 403),
         "guest team player": (account("g@tdl.test", guest, uid=4), 403),
+        "linked player on a team that didn't play": (account("c@tdl.test", charlie, uid=5), 403),
     }
     for who, client in allowed.items():
         assert client.get(url).status_code == 200, who
@@ -328,6 +352,9 @@ def test_replays_are_for_league_team_members(match, staff):
     for who, (client, code) in refused.items():
         assert client.get(url).status_code == code, who
     assert refused["fan"][0].get("/api/v1/me").json()["can_watch_replays"] is False
+    me = allowed["linked player"].get("/api/v1/me").json()
+    assert me["scrim_team_ids"] == [alpha.pk]
+    assert staff.get("/api/v1/me").json()["scrim_team_ids"] is None
 
     # A player removed from the team loses it.
     Membership.objects.filter(user__email="p@tdl.test").update(is_active=False)

@@ -3,6 +3,7 @@
 import dynamic from "next/dynamic";
 
 import { useTeam } from "@/app/team/TeamGate";
+import WatchGate from "@/components/league/WatchGate";
 
 const RotationsView = dynamic(() => import("@/components/team/RotationsView"), {
   ssr: false,
@@ -10,6 +11,10 @@ const RotationsView = dynamic(() => import("@/components/team/RotationsView"), {
 });
 
 export default function RotationsLoader({ matchId }: { matchId: number }) {
-  const { membership } = useTeam();
-  return <RotationsView matchId={matchId} focusTeam={membership?.team.slug ?? null} />;
+  const { me, membership } = useTeam();
+  return (
+    <WatchGate matchId={matchId} me={me} backHref="/team" loading="Loading rotations...">
+      <RotationsView matchId={matchId} focusTeam={membership?.team.slug ?? null} />
+    </WatchGate>
+  );
 }
