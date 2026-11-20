@@ -33,6 +33,7 @@ class MeSerializer(serializers.ModelSerializer):
     player = serializers.SerializerMethodField()
     pending_uid_claim = serializers.SerializerMethodField()
     can_watch_replays = serializers.SerializerMethodField()
+    scrim_team_ids = serializers.SerializerMethodField()
     display_name_next_change = serializers.SerializerMethodField()
 
     class Meta:
@@ -50,6 +51,7 @@ class MeSerializer(serializers.ModelSerializer):
             "player",
             "pending_uid_claim",
             "can_watch_replays",
+            "scrim_team_ids",
         ]
         read_only_fields = ["id", "email"]
 
@@ -81,6 +83,11 @@ class MeSerializer(serializers.ModelSerializer):
 
     def get_can_watch_replays(self, user: User) -> bool:
         return user.can_watch_replays()
+
+    def get_scrim_team_ids(self, user: User) -> list[int] | None:
+        """Teams whose matches they can watch again; null means every match."""
+        teams = user.scrim_team_ids()
+        return None if teams is None else sorted(teams)
 
     def get_pending_uid_claim(self, user: User) -> str | None:
         claim = user.player_claims.filter(status=PlayerClaim.Status.PENDING).first()

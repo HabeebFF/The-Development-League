@@ -50,7 +50,7 @@ export default function StaffTeams() {
                 <span className="block truncate font-medium">{team.name}</span>
                 <span className="text-xs text-muted">
                   {team.matches_played} {team.matches_played === 1 ? "match" : "matches"}
-                  {team.status === "PENDING" ? " · waiting for approval" : team.status === "REJECTED" ? " · rejected" : team.is_league_member ? "" : " · not a league team"}
+                  {team.status === "PENDING" ? " · waiting for approval" : team.status === "REJECTED" ? " · rejected" : team.is_league_member ? (team.can_watch_all_scrims ? " · watches all scrims" : "") : " · not a league team"}
                   {team.igl_name ? ` · IGL ${team.igl_name}` : ""}
                 </span>
               </span>

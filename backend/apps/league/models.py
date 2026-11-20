@@ -122,6 +122,11 @@ class Team(TimeStampedModel):
     secondary_color = models.CharField(max_length=7, blank=True, help_text="#RRGGBB")
     socials = models.JSONField(default=dict, blank=True)
     is_league_member = models.BooleanField(default=True)
+    # Replays and rotations are for the teams that played each match; staff can let a team
+    # watch every match (SCRIM-VIEWING).
+    can_watch_all_scrims = models.BooleanField(
+        default=False, help_text="Members can watch every match's replay and rotations"
+    )
     plan = models.ForeignKey(
         "accounts.Plan",
         on_delete=models.PROTECT,

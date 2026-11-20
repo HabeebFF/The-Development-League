@@ -12,6 +12,7 @@ export type AdminTeam = {
   logo: string | null;
   primary_color: string;
   is_league_member: boolean;
+  can_watch_all_scrims: boolean;
   aliases: string[];
   matches_played: number;
   igl: number | null;
@@ -57,6 +58,7 @@ export default function TeamEditor({
       body.set("tag", String(form.get("tag") ?? "").trim());
       body.set("primary_color", String(form.get("primary_color") ?? ""));
       body.set("is_league_member", form.get("is_league_member") ? "true" : "false");
+      body.set("can_watch_all_scrims", form.get("can_watch_all_scrims") ? "true" : "false");
       if (players) body.set("igl", String(form.get("igl") ?? ""));
       const logo = form.get("logo");
       if (logo instanceof File && logo.size > 0) body.set("logo", logo);
@@ -121,6 +123,13 @@ export default function TeamEditor({
         <label className="flex items-center gap-2 text-sm sm:col-span-2">
           <input name="is_league_member" type="checkbox" defaultChecked={team.is_league_member} />
           League team (shown on the public Teams page)
+        </label>
+        <label className="flex items-start gap-2 text-sm sm:col-span-2">
+          <input name="can_watch_all_scrims" type="checkbox" defaultChecked={team.can_watch_all_scrims} className="mt-1" />
+          <span>
+            Can watch all scrims
+            <span className="block text-xs text-muted">Off: the team only sees replays and rotations of matches it played. On: every match.</span>
+          </span>
         </label>
         <div className="flex items-center gap-3 sm:col-span-2">
           <button type="submit" disabled={busy} className="btn btn-primary">

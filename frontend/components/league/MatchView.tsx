@@ -5,6 +5,7 @@ import { Fragment, useState } from "react";
 
 import type { KillList } from "@/lib/kills";
 import type { MatchRatings as Ratings } from "@/lib/ratings";
+import { canWatchMatch } from "@/lib/watch";
 import { mapName, ordinal, plural, shortDate, type MatchDetail } from "@/lib/league";
 import { clock } from "@/lib/replay";
 import { useApi } from "@/lib/useApi";
@@ -24,7 +25,7 @@ export default function MatchView({ id }: { id: number }) {
   const kills = useApi<KillList>(`/kills?match=${id}`);
   const ratings = useApi<Ratings>(`/ratings?match=${id}`);
   const [open, setOpen] = useState<Set<number>>(new Set());
-  const canWatch = !!useAuth().me?.can_watch_replays;
+  const me = useAuth().me;
   if (!match.data)
     return (
       <div className="mx-auto max-w-6xl px-4 py-8">
@@ -32,6 +33,8 @@ export default function MatchView({ id }: { id: number }) {
       </div>
     );
   const m = match.data;
+  // Replays and rotations are for the teams that played this match (SCRIM-VIEWING).
+  const canWatch = canWatchMatch(me, m.results.map((r) => r.team.id));
 
   function toggle(teamId: number) {
     setOpen((current) => {
@@ -54,10 +57,10 @@ export default function MatchView({ id }: { id: number }) {
             </a>
           )}
           <Link href={`/matches/${m.id}/replay`} className="btn flex w-fit">
-            {canWatch ? "Live replay" : "🔒 Live replay · teams only"}
+            {canWatch ? "Live replay" : "🔒 Live replay · teams that played"}
           </Link>
           <Link href={`/matches/${m.id}/rotations`} className="btn flex w-fit">
-            Rotations
+            {canWatch ? "Rotations" : "🔒 Rotations · teams that played"}
           </Link>
         </div>
       </PageHeader>

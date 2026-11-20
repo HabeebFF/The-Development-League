@@ -129,6 +129,7 @@ class TeamAdminSerializer(serializers.ModelSerializer):
             "secondary_color",
             "socials",
             "is_league_member",
+            "can_watch_all_scrims",
             "plan",
             "aliases",
             "matches_played",
