@@ -71,7 +71,13 @@ class MeSerializer(serializers.ModelSerializer):
         player = Player.objects.filter(user=user).first()
         if not player:
             return None
-        return {"game_uid": str(player.game_uid), "display_name": player.display_name}
+        # The approved card photo doubles as the account's profile picture.
+        photo = player.photo or player.photo_cutout
+        return {
+            "game_uid": str(player.game_uid),
+            "display_name": player.display_name,
+            "photo": photo.url if photo else None,
+        }
 
     def get_can_watch_replays(self, user: User) -> bool:
         return user.can_watch_replays()

@@ -26,7 +26,7 @@ export default function PhotoRequests() {
         Photos from players{list && list.pending > 0 ? ` (${list.pending})` : ""}
       </h2>
       <p className="mt-2 text-sm text-muted">
-        Players linked to their game UID can send a new photo from My card. Nothing shows on their card until you
+        Players linked to their game UID can send a new photo from My account. Nothing shows on their card until you
         approve it; the background is then cut out as usual.
       </p>
       {error && <p className="mt-3 text-bad">{error}</p>}

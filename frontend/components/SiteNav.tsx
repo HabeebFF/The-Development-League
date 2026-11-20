@@ -73,7 +73,7 @@ export default function SiteNav() {
               ))}
             </div>
             {signedIn ? (
-              <MeMenu links={mine} on={meOn} name={me?.display_name ?? "Me"} onSignOut={signOut} />
+              <MeMenu links={mine} on={meOn} name={me?.display_name ?? "Me"} photo={me?.player?.photo} onSignOut={signOut} />
             ) : (
               <span className="ml-2 flex items-center gap-2">
                 <Link href={login} className={`btn ${site.signup ? "btn-ghost" : "btn-primary"}`}>
@@ -112,7 +112,7 @@ export default function SiteNav() {
               <p className="flex min-w-0 items-center gap-3">
                 {signedIn ? (
                   <>
-                    <PlayerAvatar name={me?.display_name ?? "?"} size="md" />
+                    <PlayerAvatar src={me?.player?.photo} name={me?.display_name ?? "?"} size="md" />
                     <span className="min-w-0">
                       <span className="block truncate font-display text-2xl leading-none font-black uppercase">{me?.display_name}</span>
                       <span className="block text-xs text-muted">{me?.player ? "League player" : me?.staff_role ? "Staff" : "Fan"}</span>
@@ -228,7 +228,7 @@ function SectionTabs({ section: s, path, player }: { section: Section; path: str
 }
 
 /** Desktop: your name on the right, opening your own pages and Sign out. */
-function MeMenu({ links, on, name, onSignOut }: { links: NavLink[]; on: boolean; name: string; onSignOut: () => void }) {
+function MeMenu({ links, on, name, photo, onSignOut }: { links: NavLink[]; on: boolean; name: string; photo?: string | null; onSignOut: () => void }) {
   const [open, setOpen] = useState(false);
   const box = useRef<HTMLDivElement>(null);
   const onBlur = (e: FocusEvent) => {
@@ -250,7 +250,7 @@ function MeMenu({ links, on, name, onSignOut }: { links: NavLink[]; on: boolean;
         aria-haspopup="true"
         className={`flex min-h-11 items-center gap-2 px-2 font-display text-sm font-bold tracking-[0.08em] uppercase ${on ? "text-accent" : "text-muted hover:text-text"}`}
       >
-        <PlayerAvatar name={name} size="sm" />
+        <PlayerAvatar src={photo} name={name} size="sm" />
         <span className="max-w-32 truncate">{name}</span>
         <svg viewBox="0 0 20 20" className={`h-3.5 w-3.5 transition-transform ${open ? "rotate-180" : ""}`} fill="currentColor" aria-hidden>
           <path d="M5.5 7.5 10 12l4.5-4.5z" />

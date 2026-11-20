@@ -337,7 +337,7 @@ def test_uid_links_straight_away(staff, team):
     assert resp.status_code == 201
     assert resp.json()["status"] == "APPROVED" and resp.json()["reviewed_by"] is None
     me = as_user(user).get("/api/v1/me").json()
-    assert me["player"] == {"game_uid": "2063288734", "display_name": "NB VALSI"}
+    assert me["player"] == {"game_uid": "2063288734", "display_name": "NB VALSI", "photo": None}
     assert me["pending_uid_claim"] is None
     assert as_user(user).get("/api/v1/admin/player-claims").status_code == 403
 
@@ -463,7 +463,7 @@ def test_signup_with_a_game_uid_links_the_player(open_signup):
     assert (claim.game_uid, claim.status) == (5550001, PlayerClaim.Status.APPROVED)
     me = client.get("/api/v1/me").json()
     assert me["pending_uid_claim"] is None
-    assert me["player"] == {"game_uid": "5550001", "display_name": "Viper"}
+    assert me["player"] == {"game_uid": "5550001", "display_name": "Viper", "photo": None}
 
 
 def test_signup_refuses_a_uid_someone_already_has(open_signup):

@@ -77,6 +77,8 @@ def test_player_sends_photo_and_it_waits_privately(player_user):
     assert mine["player"]["name"] == "VT ACE"
     assert mine["player"]["photo"] is None
     assert mine["request"]["status"] == "PENDING"
+    # Nor is it the profile picture yet.
+    assert c.get("/api/v1/me").json()["player"]["photo"] is None
     # The player can see their own picture; another account can't.
     assert c.get(body["image"]).status_code == 200
     other = client_for(User.objects.create_user(email="o@tdl.test"))
@@ -129,6 +131,9 @@ def test_staff_approve_puts_photo_on_card(
     # Approving twice is refused.
     assert staff.post(f"/api/v1/admin/photo-requests/{row['id']}/approve").status_code == 400
     assert staff.get("/api/v1/admin/photo-requests").json()["pending"] == 0
+    # The approved card photo is now the player's profile picture too.
+    me = client_for(player_user).get("/api/v1/me").json()
+    assert me["player"]["photo"] == player.photo.url
 
 
 def test_staff_reject_keeps_old_photo_and_tells_player(player_user, staff, no_cutout):
