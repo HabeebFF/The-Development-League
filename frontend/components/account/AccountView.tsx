@@ -82,7 +82,7 @@ export default function AccountView() {
 
       <DisplayName current={me.display_name} nextChange={me.display_name_next_change} onSaved={refresh} />
 
-      {player && !isStaff && <JoinTeam onJoined={onJoined} />}
+      {!isStaff && <JoinTeam onJoined={onJoined} />}
 
       {!isStaff && <NewTeam compact />}
 

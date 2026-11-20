@@ -124,6 +124,8 @@ export type JoinRequest = {
   email: string;
   team: JoinTeamRef;
   player: { name: string; game_uid: string; matches_for_team: number; current_team: JoinTeamRef | null } | null;
+  /** MANAGER: asking to manage the team (only league staff answer those). */
+  role?: Role;
   note: string;
   status: "PENDING" | "ACCEPTED" | "REJECTED" | "CANCELLED";
   voided_bets: number;
@@ -137,7 +139,7 @@ export type JoinRequest = {
 /** GET /me/join-team */
 export type MyJoin = {
   player: { name: string; game_uid: string } | null;
-  on_team: JoinTeamRef | null;
+  on_team: (JoinTeamRef & { role?: Role }) | null;
   suggested: (JoinTeamRef & { matches: number }) | null;
   teams: JoinTeamRef[];
   request: JoinRequest | null;

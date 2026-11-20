@@ -1,13 +1,17 @@
 """Players asking to join their team: they ask from My account, the team's manager (or
 league staff, when the team has no manager) accepts or rejects. Only accounts linked to a
-game UID can ask, so managers can see who is asking and whether they played for the team."""
+game UID can ask, so managers can see who is asking and whether they played for the team.
+
+Someone can also ask to join as the team's manager (``role=MANAGER``, no UID needed). Only
+league staff accept those; the team's current manager can see them but not answer."""
 
 from django.db import transaction
+from django.db.models import Q
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import mixins, serializers, status, viewsets
 from rest_framework.decorators import action
-from rest_framework.exceptions import ValidationError
+from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -56,6 +60,7 @@ class JoinRequestSerializer(serializers.ModelSerializer):
             "email",
             "team",
             "player",
+            "role",
             "note",
             "status",
             "voided_bets",
@@ -85,6 +90,9 @@ class AskSerializer(serializers.Serializer):
         slug_field="slug", queryset=Team.objects.filter(is_league_member=True)
     )
     note = serializers.CharField(max_length=200, required=False, allow_blank=True)
+    role = serializers.ChoiceField(
+        choices=Membership.Role.choices, required=False, default=Membership.Role.PLAYER
+    )
 
 
 class MyJoinRequestView(APIView):
@@ -104,7 +112,9 @@ class MyJoinRequestView(APIView):
                 "player": {"name": player.display_name, "game_uid": str(player.game_uid)}
                 if player
                 else None,
-                "on_team": _team(membership.team) if membership else None,
+                "on_team": {**_team(membership.team), "role": membership.role}
+                if membership
+                else None,
                 "suggested": _team(player.current_team, player) if player else None,
                 "teams": [_team(t) for t in teams],
                 "request": JoinRequestSerializer(latest).data if latest else None,
@@ -116,13 +126,19 @@ class MyJoinRequestView(APIView):
         data = AskSerializer(data=request.data)
         data.is_valid(raise_exception=True)
         team = data.validated_data["team"]
-        if not Player.objects.filter(user=user).exists():
+        role = data.validated_data["role"]
+        as_manager = role == Membership.Role.MANAGER
+        if not as_manager and not Player.objects.filter(user=user).exists():
             raise ValidationError(
                 {"detail": "Link your Free Fire UID first, so your manager can see who you are."}
             )
         if user.is_league_staff:
             raise ValidationError({"detail": "League staff can't join a team this way."})
         on = user.active_memberships().first()
+        if as_manager and on is not None and on.team_id == team.pk:
+            if on.role == Membership.Role.MANAGER:
+                raise ValidationError({"detail": f"You already manage {team.name}."})
+            on = None  # a player on the team asking to become its manager
         if on is not None:
             msg = (
                 f"You're already on {on.team.name}."
@@ -135,7 +151,10 @@ class MyJoinRequestView(APIView):
                 status=JoinRequest.Status.CANCELLED, reviewed_at=timezone.now()
             )
             made = JoinRequest.objects.create(
-                user=user, team=team, note=(data.validated_data.get("note") or "").strip()
+                user=user,
+                team=team,
+                role=role,
+                note=(data.validated_data.get("note") or "").strip(),
             )
         return Response(JoinRequestSerializer(made).data, status=status.HTTP_201_CREATED)
 
@@ -156,6 +175,8 @@ def review(join: JoinRequest, reviewer, accept: bool) -> JoinRequest:
         join = JoinRequest.objects.select_for_update().get(pk=join.pk)
         if join.status != JoinRequest.Status.PENDING:
             raise ValidationError({"detail": "This request was already answered or cancelled."})
+        if join.role == Membership.Role.MANAGER and not reviewer.is_league_staff:
+            raise PermissionDenied("Only TDL staff can answer a request to manage a team.")
         if accept:
             on = join.user.active_memberships().exclude(team=join.team).first()
             if on is not None:
@@ -163,10 +184,11 @@ def review(join: JoinRequest, reviewer, accept: bool) -> JoinRequest:
                     {"detail": f"{join.user} is already on {on.team.name}. Reject this one."}
                 )
             membership, made = Membership.objects.get_or_create(
-                user=join.user, team=join.team, defaults={"role": Membership.Role.PLAYER}
+                user=join.user, team=join.team, defaults={"role": join.role}
             )
-            if not made and not membership.is_active:
-                membership.is_active, membership.role = True, Membership.Role.PLAYER
+            if not made and (not membership.is_active or join.role == Membership.Role.MANAGER):
+                # Back on the team (as asked), or a player on it becoming its manager.
+                membership.is_active, membership.role = True, join.role
                 membership.save(update_fields=["is_active", "role"])
             player = Player.objects.filter(user=join.user).first()
             why = f"Joined {join.team.name}: can't predict on your own team"
@@ -214,10 +236,11 @@ class StaffJoinRequestViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
             "user", "team"
         )
         if self.request.query_params.get("unmanaged"):
+            # Staff answer requests for teams nobody manages, and every request to manage.
             managed = Membership.objects.filter(
                 role=Membership.Role.MANAGER, is_active=True
             ).values("team_id")
-            qs = qs.exclude(team_id__in=managed)
+            qs = qs.filter(~Q(team_id__in=managed) | Q(role=Membership.Role.MANAGER))
         return qs
 
     def list(self, request, *args, **kwargs):

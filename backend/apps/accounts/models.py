@@ -261,6 +261,11 @@ class JoinRequest(models.Model):
 
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="join_requests")
     team = models.ForeignKey("league.Team", on_delete=models.CASCADE, related_name="join_requests")
+    # Players ask as PLAYER (their manager answers). Someone asking to manage the team asks as
+    # MANAGER: only league staff can accept that, since a manager runs sign-ups and the roster.
+    role = models.CharField(
+        max_length=10, choices=Membership.Role.choices, default=Membership.Role.PLAYER
+    )
     note = models.CharField(max_length=200, blank=True)
     status = models.CharField(max_length=10, choices=Status.choices, default=Status.PENDING)
     reviewed_by = models.ForeignKey(

@@ -131,3 +131,49 @@ def test_already_on_a_team(lg, ace, boss):  # noqa: F811
     res = ask(ace, team="bravo")
     assert res.status_code == 400 and "remove you first" in str(res.json())
     assert as_user(ace).get("/api/v1/me/join-team").json()["on_team"]["slug"] == "alpha"
+
+
+# -- asking to manage a team ---------------------------------------------------------------------
+
+
+def ask_to_manage(user, team="alpha"):
+    return as_user(user).post(
+        "/api/v1/me/join-team",
+        {"team": team, "role": "MANAGER", "note": "I run Alpha"},
+        format="json",
+    )
+
+
+def test_anyone_signed_in_can_ask_to_manage_and_only_staff_accept(lg, staff, boss):  # noqa: F811
+    newboss = make_user("new-boss@tdl.test")  # no UID: managers don't have to play
+    res = ask_to_manage(newboss)
+    assert res.status_code == 201, res.content
+    assert res.json()["role"] == "MANAGER"
+    rid = res.json()["id"]
+    # The current manager sees it but can't answer it.
+    rows = as_user(boss).get("/api/v1/teams/alpha/join-requests").json()
+    rows = rows["results"] if isinstance(rows, dict) else rows
+    assert [r["role"] for r in rows] == ["MANAGER"]
+    assert as_user(boss).post(f"/api/v1/teams/alpha/join-requests/{rid}/accept").status_code == 403
+    # Staff see it in their list even though Alpha has a manager.
+    staff_rows = as_user(staff).get("/api/v1/admin/join-requests?unmanaged=1").json()
+    staff_rows = staff_rows["results"] if isinstance(staff_rows, dict) else staff_rows
+    assert [r["id"] for r in staff_rows] == [rid]
+    done = as_user(staff).post(f"/api/v1/teams/alpha/join-requests/{rid}/accept")
+    assert done.status_code == 200, done.content
+    assert newboss.manages(lg["teams"]["Alpha"])
+
+
+def test_a_player_on_the_team_can_ask_to_become_its_manager(lg, staff, ace):  # noqa: F811
+    Membership.objects.create(user=ace, team=lg["teams"]["Alpha"], role=Membership.Role.PLAYER)
+    assert ask(ace).status_code == 400  # already on it as a player
+    res = ask_to_manage(ace)
+    assert res.status_code == 201, res.content
+    as_user(staff).post(f"/api/v1/teams/alpha/join-requests/{res.json()['id']}/accept")
+    m = Membership.objects.get(user=ace, team=lg["teams"]["Alpha"])
+    assert m.role == "MANAGER" and m.is_active
+
+
+def test_managers_cant_ask_to_manage_their_own_team_or_another(lg, boss):  # noqa: F811
+    assert "already manage" in ask_to_manage(boss).json()["detail"]
+    assert ask_to_manage(boss, "bravo").status_code == 400
