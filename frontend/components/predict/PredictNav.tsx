@@ -1,36 +1,17 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
 
 import { coins } from "@/lib/predictions";
 
 import { useOddsFormat } from "./oddsFormat";
 import type { WalletState } from "./useWallet";
 
-const LINKS = [
-  { href: "/predict", label: "Markets" },
-  { href: "/predict/mine", label: "My predictions" },
-  { href: "/predict/wallet", label: "DC" },
-  { href: "/predict/leaderboard", label: "Leaderboard" },
-  { href: "/shop", label: "Card shop" },
-];
 
-/** Tabs across the prediction pages, with the balance (or a sign-up prompt) on the right. */
+/** The odds switch and the balance (or a sign-up prompt); the section tabs above the page link the prediction pages. */
 export default function PredictNav({ wallet }: { wallet: WalletState }) {
-  const path = usePathname();
   return (
     <div className="flex flex-col gap-2 md:flex-row md:items-center">
-      <nav className="-mx-4 flex gap-1 overflow-x-auto px-4 md:mx-0 md:px-0" aria-label="Predictions">
-        {LINKS.map((l) => {
-          const on = l.href === "/predict" ? path === "/predict" || path.startsWith("/predict/markets") : path.startsWith(l.href);
-          return (
-            <Link key={l.href} href={l.href} className={`btn shrink-0 px-4 text-xs uppercase ${on ? "btn-primary" : "btn-ghost"}`}>
-              {l.label}
-            </Link>
-          );
-        })}
-      </nav>
       <span className="flex items-center justify-between gap-3 md:ml-auto md:justify-end">
         <OddsSwitch />
         <Balance wallet={wallet} />

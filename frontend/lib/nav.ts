@@ -31,6 +31,11 @@ const ICON = {
   predict: "M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20m0 3a7 7 0 1 1 0 14 7 7 0 0 1 0-14m-1 2v5.4l4.3 2.6 1-1.7-3.3-2V7z",
   shop: "M4 7h16l-1.2 12.2A2 2 0 0 1 16.8 21H7.2a2 2 0 0 1-2-1.8zm4 0V6a4 4 0 0 1 8 0v1h-2V6a2 2 0 0 0-4 0v1z",
   menu: "M4 6h16v2H4zm0 5h16v2H4zm0 5h16v2H4z",
+  league: "M5 3h14v2h-1v4a6 6 0 0 1-5 5.9V18h3v3H8v-3h3v-3.1A6 6 0 0 1 6 9V5H5zm3 2v4a4 4 0 0 0 8 0V5z",
+  me: "M12 2a10 10 0 1 1 0 20 10 10 0 0 1 0-20m0 4a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7m0 9c-2.6 0-4.8 1.3-5.9 3.2A8 8 0 0 0 12 20a8 8 0 0 0 5.9-1.8C16.8 16.3 14.6 15 12 15",
+  wallet: "M3 7a3 3 0 0 1 3-3h12v3h1a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H6a3 3 0 0 1-3-3zm3-1a1 1 0 0 0 0 2h10V6zm11 6a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3",
+  list: "M4 5h2v2H4zm4 0h12v2H8zM4 11h2v2H4zm4 0h12v2H8zm-4 6h2v2H4zm4 0h12v2H8z",
+  staff: "M12 1 3 5v6c0 5.5 3.8 10.7 9 12 5.2-1.3 9-6.5 9-12V5zm0 5a3 3 0 1 1 0 6 3 3 0 0 1 0-6m-5 11c.6-2 2.6-3.5 5-3.5s4.4 1.5 5 3.5a8.7 8.7 0 0 1-5 3.6A8.7 8.7 0 0 1 7 17",
 };
 
 export const HOME: NavLink = { href: "/", label: "Home", blurb: "", icon: ICON.home };
@@ -60,6 +65,103 @@ export const GROUPS: NavGroup[] = [
 ];
 
 export const MENU_ICON = ICON.menu;
+export const ME_ICON = ICON.me;
+
+// -- The simpler layout: three sections and "Me" ------------------------------------------
+// Every public page sits in exactly one section. The phone's bottom bar is
+// Home · League · Players · Predict · Me, the desktop bar is the same four, and each
+// section shows its own row of tabs under the header so people always see where they are.
+
+export type SectionKey = "league" | "players" | "predict";
+
+export type Section = {
+  key: SectionKey;
+  label: string;
+  blurb: string;
+  icon: string;
+  /** Where the bottom-bar tab goes: the section's first page. */
+  href: string;
+  links: (NavLink & { playersOnly?: boolean })[];
+  flag?: "predictions";
+};
+
+export const SECTIONS: Section[] = [
+  {
+    key: "league",
+    label: "League",
+    blurb: "The table, every result, teams and cups",
+    icon: ICON.league,
+    href: "/standings",
+    links: [
+      { href: "/standings", label: "Standings", blurb: "Who is top of the table", icon: ICON.standings },
+      { href: "/results", label: "Results", blurb: "Every match day, map by map, with replays", icon: ICON.results },
+      { href: "/teams", label: "Teams", blurb: "Every team, its players and its rotations", icon: ICON.teams },
+      { href: "/tournaments", label: "Cups", blurb: "Tournaments and finals, with prizes", icon: ICON.awards },
+      { href: "/protection-points", label: "Protection Points", blurb: "Points teams win or lose from scrim tasks", icon: ICON.pp },
+    ],
+  },
+  {
+    key: "players",
+    label: "Players",
+    blurb: "Kills, ratings, cards and awards",
+    icon: ICON.players,
+    href: "/players",
+    links: [
+      { href: "/kills", label: "Kills", blurb: "Top fraggers for each session, week and month", icon: ICON.kills },
+      { href: "/ratings", label: "Ratings", blurb: "Every player marked out of 10, like football", icon: ICON.ratings },
+      { href: "/cards", label: "Cards", blurb: "FUT-style cards, new ones every Saturday", icon: ICON.cards },
+      { href: "/awards", label: "Awards", blurb: "Best player, rusher, sniper and grenader", icon: ICON.awards },
+      { href: "/maps", label: "Maps", blurb: "Top players, teams and weapons on each map", icon: ICON.map },
+    ],
+  },
+  {
+    key: "predict",
+    label: "Predict",
+    blurb: "Free DC coins: predict, climb, spend",
+    icon: ICON.predict,
+    href: "/predict",
+    flag: "predictions",
+    links: [
+      { href: "/predict", label: "Matches", blurb: "Pick winners with free DC, no real money", icon: ICON.predict },
+      { href: "/predict/mine", label: "My picks", blurb: "Your open and settled predictions", icon: ICON.list },
+      { href: "/predict/leaderboard", label: "Leaderboard", blurb: "Who has the most DC", icon: ICON.ratings },
+      { href: "/predict/wallet", label: "My DC", blurb: "Your balance and every coin in and out", icon: ICON.wallet },
+      { href: "/shop", label: "Shop", blurb: "Spend DC on card designs", icon: ICON.shop },
+      { href: "/player-shop", label: "Player shop", blurb: "Looks only league players can buy", icon: ICON.cards, playersOnly: true },
+    ],
+  },
+];
+
+/** Pages that live in a section without a tab of their own (a match, a team page, a card). */
+const SECTION_EXTRA: [string, SectionKey][] = [
+  ["/matches", "league"],
+  ["/players", "players"],
+];
+
+/** The section a page belongs to, or null (home, account, team and staff pages). */
+export function sectionFor(path: string): Section | null {
+  for (const s of SECTIONS) if (s.links.some((l) => isActive(path, l.href))) return s;
+  const extra = SECTION_EXTRA.find(([href]) => isActive(path, href));
+  return extra ? (SECTIONS.find((s) => s.key === extra[1]) ?? null) : null;
+}
+
+/** The section tab that matches ``path`` best (the longest href wins, so /predict/mine beats /predict). */
+export function activeLink(path: string, s: Section): string | null {
+  const hits = s.links.filter((l) => isActive(path, l.href) || (l.href === "/predict" && path.startsWith("/predict/markets")));
+  hits.sort((a, b) => b.href.length - a.href.length);
+  return hits[0]?.href ?? null;
+}
+
+/** Pages under "Me", which depend on who is signed in. */
+export function meLinks(me: { staff_role: string | null; memberships: unknown[]; player: unknown } | null): NavLink[] {
+  if (!me) return [];
+  const out: NavLink[] = [{ href: "/account", label: "My account", blurb: "Name, game UID, team requests", icon: ICON.me }];
+  if (me.memberships.length > 0) out.push({ href: "/team", label: "My team", blurb: "Scrims, coach, replays and members", icon: ICON.teams });
+  else out.push({ href: "/create-team", label: "Start a team", blurb: "Create a team or ask to join one", icon: ICON.teams });
+  if (me.player) out.push({ href: "/player-shop", label: "Player shop", blurb: "Looks only league players can buy", icon: ICON.cards });
+  if (me.staff_role) out.push({ href: "/staff", label: "Staff", blurb: "Uploads, teams, predictions and settings", icon: ICON.staff });
+  return out;
+}
 
 /** True when ``path`` is ``href`` or a page under it. */
 export function isActive(path: string, href: string): boolean {

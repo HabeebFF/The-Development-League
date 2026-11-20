@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-import { PLAYER_PAGES, SOCIALS, TEAM_PAGES } from "@/lib/nav";
+import { SECTIONS, SOCIALS } from "@/lib/nav";
 
 import TdlLogo from "./ui/TdlLogo";
 
@@ -17,17 +17,12 @@ const SOCIAL_ICON: Record<(typeof SOCIALS)[number]["label"], string> = {
     "M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2m5.3 14.1c-.2.6-1.3 1.2-1.8 1.2-.5.1-1 .2-3.3-.7-2.8-1.1-4.6-4-4.7-4.2-.1-.2-1.1-1.5-1.1-2.9s.7-2 1-2.3.6-.3.8-.3h.6c.2 0 .4 0 .6.5l.9 2.1c.1.2.1.4 0 .5l-.4.6-.4.4c-.1.2-.3.3-.1.6.2.3.8 1.3 1.7 2.1 1.2 1 2.1 1.4 2.4 1.5.3.2.5.1.6 0l.9-1c.2-.3.4-.2.6-.1l2 1c.3.1.5.2.5.3.1.1.1.6-.1 1.2",
 };
 
-const LEAGUE = [
-  { href: "/standings", label: "Standings" },
-  { href: "/results", label: "Results" },
-  ...TEAM_PAGES,
-];
 
 /** The foot of every page: lion mark, the site's links, the league's socials and the copyright line. */
 export default function SiteFooter() {
   return (
     <footer className="relative mt-12 border-t border-line bg-gradient-to-b from-panel to-bg">
-      <div className="mx-auto grid max-w-6xl grid-cols-2 gap-6 px-4 pt-9 pb-11 md:grid-cols-[1.4fr_1fr_1fr]">
+      <div className="mx-auto grid max-w-6xl grid-cols-2 gap-6 px-4 pt-9 pb-11 md:grid-cols-[1.4fr_1fr_1fr_1fr]">
         <div className="col-span-2 md:col-span-1">
           <Link href="/" className="inline-flex min-h-11 items-center gap-2.5" aria-label="The Development League, home">
             <TdlLogo size="lg" tagline />
@@ -54,9 +49,19 @@ export default function SiteFooter() {
             </ul>
           )}
         </div>
-        <FooterLinks title="League" links={LEAGUE} />
-        <FooterLinks title="Players" links={[...PLAYER_PAGES, { href: "/staff", label: "Staff" }, { href: "/privacy", label: "Privacy" }]} />
-        <p className="col-span-2 border-t border-line pt-4 text-xs text-muted md:col-span-3">&copy; The Development League</p>
+        {/* The same three sections as the top bar, so the footer teaches the site's shape too. */}
+        {SECTIONS.map((s) => (
+          <FooterLinks key={s.key} title={s.label} links={s.links.filter((l) => !l.playersOnly)} />
+        ))}
+        <p className="col-span-2 flex flex-wrap gap-x-4 gap-y-1 border-t border-line pt-4 text-xs text-muted md:col-span-4">
+          <span>&copy; The Development League</span>
+          <Link href="/privacy" className="hover:text-accent-hot">
+            Privacy
+          </Link>
+          <Link href="/staff" className="hover:text-accent-hot">
+            Staff
+          </Link>
+        </p>
       </div>
     </footer>
   );
