@@ -65,6 +65,8 @@ export type Bet = {
   potential_return: number;
   potential_profit: number;
   payout: number | null;
+  /** Teams that shared the win this bet was paid on (1 when nobody tied). */
+  dead_heat: number;
   status: BetStatus;
   placed_at: string;
   settled_at: string | null;

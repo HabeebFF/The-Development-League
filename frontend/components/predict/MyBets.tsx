@@ -126,6 +126,11 @@ export default function MyBets() {
                       {b.settled_at ? ` · settled ${when(b.settled_at)}` : ""}
                     </span>
                   </div>
+                  {b.status === "WON" && b.dead_heat > 1 && (
+                    <p className="mt-1 text-xs text-muted">
+                      Dead heat: {b.dead_heat} teams tied, paid at {b.dead_heat === 2 ? "half" : `1/${b.dead_heat}`} odds.
+                    </p>
+                  )}
                 </li>
               ))}
           </ul>
