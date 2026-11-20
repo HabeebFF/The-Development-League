@@ -573,3 +573,69 @@ def test_known_files_are_not_sent_again(upload, client, django_capture_on_commit
     preview = client.get(url).json()["preview"]
     assert [m["game_match_id"] for m in preview["matches"]] == [str(MATCH_ID)]
     assert preview["matches"][0]["ready"] is True
+
+
+# -- teams recognised by their players (NEW-TEAMS.md) ---------------------------------------------
+
+NOOBZ_UIDS = [2063288734, 8135917484, 1843878143, 1759305665]
+
+
+def _rostered(team: Team, uids: list[int], season: Season) -> None:
+    from apps.league.models import RosterEntry
+
+    for uid in uids:
+        player = Player.objects.create(
+            game_uid=uid, current_name_raw=str(uid), display_name=str(uid), search_name=str(uid)
+        )
+        RosterEntry.objects.create(player=player, team=team, season=season)
+
+
+def test_unknown_lobby_name_matched_by_roster(upload, confirm, match_day):
+    kings = Team.objects.create(name="Nairobi Kings", tag="NBK")
+    _rostered(kings, NOOBZ_UIDS[:3], match_day.season)
+    batch = upload(all_files())
+    row = next(
+        t for t in batch["preview"]["matches"][0]["teams"] if t["in_game_name"] == "NOOBZ ESPORTS"
+    )
+    assert row["team"]["name"] == "Nairobi Kings"
+    assert row["matched_by"] == "roster: 3 of 4 players"
+    confirm(batch["id"], [{"game_match_id": str(MATCH_ID), "match_day": match_day.pk, "number": 1}])
+    assert TeamMatchResult.objects.get(placement=1).team == kings
+    assert not Team.objects.filter(name="NOOBZ ESPORTS").exists()  # no duplicate team
+    assert TeamAlias.resolve("NOOBZ ESPORTS", None) == kings
+    # The fourth player, never seen before, now plays for the team too.
+    assert Player.objects.get(game_uid=NOOBZ_UIDS[3]).current_team == kings
+    assert any("matched by roster" in w for w in ParseRun.objects.get().warnings)
+
+
+def test_two_rostered_players_are_not_enough(upload, confirm, match_day):
+    kings = Team.objects.create(name="Nairobi Kings", tag="NBK")
+    _rostered(kings, NOOBZ_UIDS[:2], match_day.season)
+    batch = upload(all_files())
+    confirm(batch["id"], [{"game_match_id": str(MATCH_ID), "match_day": match_day.pk, "number": 1}])
+    assert TeamMatchResult.objects.get(placement=1).team.name == "NOOBZ ESPORTS"
+
+
+def test_waiting_teams_are_not_matched(upload, match_day):
+    kings = Team.objects.create(name="Nairobi Kings", tag="NBK", status=Team.Status.PENDING)
+    _rostered(kings, NOOBZ_UIDS, match_day.season)
+    batch = upload(all_files())
+    row = next(
+        t for t in batch["preview"]["matches"][0]["teams"] if t["in_game_name"] == "NOOBZ ESPORTS"
+    )
+    assert row["team"] is None
+
+
+def test_known_name_with_another_teams_players_warns(upload, confirm, match_day):
+    noobz = Team.objects.create(name="NOOBZ ESPORTS")
+    kings = Team.objects.create(name="Nairobi Kings", tag="NBK")
+    _rostered(kings, NOOBZ_UIDS, match_day.season)
+    batch = upload(all_files())
+    match = batch["preview"]["matches"][0]
+    row = next(t for t in match["teams"] if t["in_game_name"] == "NOOBZ ESPORTS")
+    assert row["team"]["name"] == "NOOBZ ESPORTS" and row["matched_by"] == "name"
+    assert any("Nairobi Kings's roster" in w for w in match["warnings"])
+    confirm(batch["id"], [{"game_match_id": str(MATCH_ID), "match_day": match_day.pk, "number": 1}])
+    # The name still decides; staff are warned to check.
+    assert TeamMatchResult.objects.get(placement=1).team == noobz
+    assert any("Check the team" in w for w in ParseRun.objects.get().warnings)

@@ -132,8 +132,13 @@ def test_every_suggested_price_expects_to_lose_coins(league):
 
 def test_booyah_favours_the_stronger_team(league):
     result = suggest(league, C.BOOYAH, teams=ids(league, 1, 6, 12))
-    best, middle, worst = (Decimal(result["odds"][f"team:{t}"]) for t in ids(league, 1, 6, 12))
-    assert best < middle < worst
+    keys = [f"team:{t}" for t in ids(league, 1, 6, 12)]
+    best, middle, worst = (Decimal(result["odds"][k]) for k in keys)
+    # Weak teams can both reach the 25 cap (the simulation's seed includes team ids, which
+    # depend on what other tests made), so the strict order is checked on the chances.
+    assert best < middle <= worst
+    chances = [result["chances"][k] for k in keys]
+    assert chances[0] > chances[1] > chances[2]
     assert result["lobby"] == 12 and result["matches"] == 1
     assert sum(result["chances"].values()) < 1
     assert any("aren't listed" in n for n in result["notes"])

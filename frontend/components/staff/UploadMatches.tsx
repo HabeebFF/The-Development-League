@@ -948,6 +948,13 @@ export default function UploadMatches() {
                                 ? ` · Already on the site: it will be updated and filed under this match day`
                                 : ""}
                             </p>
+                            {m.teams
+                              .filter((t) => t.team && t.matched_by?.startsWith("roster"))
+                              .map((t) => (
+                                <p key={t.in_game_name} className="mt-0.5 text-xs text-ok">
+                                  {t.in_game_name} is {t.team?.name} ({t.matched_by})
+                                </p>
+                              ))}
                             {m.warnings.map((w) => (
                               <p
                                 key={w}

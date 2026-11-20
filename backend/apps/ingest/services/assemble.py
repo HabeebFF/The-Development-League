@@ -39,6 +39,7 @@ from ..parsers.filenames import FileKind
 from ..parsers.names import clean
 from . import storage
 from .grouping import log_time
+from .roster_match import team_of_players
 from .time_align import Timeline, align
 
 PS = UploadedFile.ParseStatus
@@ -238,7 +239,7 @@ def _build(match: Match, assignment: Assignment, run: ParseRun) -> tuple[dict[st
         warnings.append(f"Timeline estimated from {timeline.method.replace('_', ' ')}.")
 
     # -- teams and players -------------------------------------------------------------------
-    teams = _resolve_teams(mr, assignment, season)
+    teams = _resolve_teams(mr, assignment, season, warnings)
 
     entity_uid: dict[int, int] = {}
     if replay:
@@ -481,7 +482,7 @@ def _resolve_zero_uids(mr, replay, entity_uid: dict[int, int]) -> tuple[dict[int
     return uid_of, unresolved
 
 
-def _resolve_teams(mr, assignment: Assignment, season) -> dict[str, Team]:
+def _resolve_teams(mr, assignment: Assignment, season, warnings: list[str]) -> dict[str, Team]:
     chosen = {name: tid for name, tid in assignment.team_ids.items()}
     teams_by_id = Team.objects.in_bulk(list(chosen.values()))
     resolved: dict[str, Team] = {}
@@ -497,6 +498,23 @@ def _resolve_teams(mr, assignment: Assignment, season) -> dict[str, Team]:
             )
         else:
             team = TeamAlias.resolve(name, season)
+            uids = [p.uid for p in team_row.players]
+            if team is None:
+                # A lobby name we haven't seen: the squad's players tell us who it is.
+                found = team_of_players(uids, season)
+                if found is not None:
+                    team = found.team
+                    TeamAlias.objects.get_or_create(
+                        in_game_name=name, season=None, defaults={"team": team}
+                    )
+                    warnings.append(f"New lobby name '{name}' linked to {found.describe()}.")
+            else:
+                found = team_of_players(uids, season)
+                if found is not None and found.team.pk != team.pk:
+                    warnings.append(
+                        f"'{name}' is {team.name}, but {found.matching} of its players are on "
+                        f"{found.team.name}'s roster. Check the team before publishing."
+                    )
         if team is None and assignment.create_missing_teams:
             team, _ = Team.objects.get_or_create(name=team_row.name or name)
             TeamAlias.objects.get_or_create(in_game_name=name, season=None, defaults={"team": team})
