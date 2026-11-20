@@ -53,7 +53,12 @@ export type TeamNight = Nights & {
 
 export type StaffNight = Night & { scrim_night: boolean };
 
-export type StaffTeam = TeamRef & { suspended: Suspended | null };
+export type StaffTeam = TeamRef & {
+  suspended: Suspended | null;
+  /** Approved and not suspended: on the allowed list, so it can sign up. */
+  allowed?: boolean;
+  status?: "PENDING" | "APPROVED" | "REJECTED";
+};
 
 export type ScrimSettings = {
   weekdays: number[];

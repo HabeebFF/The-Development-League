@@ -17,7 +17,18 @@ const ago = (iso: string) => {
 /** Players asking to join: a team's waiting requests for its managers (``slug``), or, for
  * staff (no slug), the ones on teams nobody manages. ``compact`` is the "N asked to join"
  * line on My team. */
-export default function JoinRequests({ slug, compact = false, onAnswered }: { slug?: string; compact?: boolean; onAnswered?: () => void }) {
+export default function JoinRequests({
+  slug,
+  compact = false,
+  onAnswered,
+  staff = !slug,
+}: {
+  slug?: string;
+  compact?: boolean;
+  onAnswered?: () => void;
+  /** League staff: only they answer requests to manage a team. */
+  staff?: boolean;
+}) {
   const [list, setList] = useState<JoinRequest[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -67,7 +78,7 @@ export default function JoinRequests({ slug, compact = false, onAnswered }: { sl
         <h2 className="font-display text-xl uppercase">Join requests</h2>
         <span className="chip chip-gold">{list.length} waiting</span>
       </div>
-      {!slug && <p className="mt-1 text-xs text-muted">Teams with no manager: league staff answer these.</p>}
+      {!slug && <p className="mt-1 text-xs text-muted">Teams with no manager, and anyone asking to manage a team: league staff answer these.</p>}
       {error && <p className="mt-2 text-xs text-bad">{error}</p>}
       <ul className="mt-3 space-y-2">
         {list.map((r) => {
@@ -77,12 +88,16 @@ export default function JoinRequests({ slug, compact = false, onAnswered }: { sl
             <li key={r.id} className="flex flex-wrap items-center justify-between gap-3 bg-panel-2 p-3">
               <div className="min-w-0">
                 <p className="font-display text-lg">
+                  {r.role === "MANAGER" && <span className="chip chip-gold mr-2 align-middle text-xs">Wants to manage</span>}
                   {r.user_name || r.email} {p && <span className="text-sm text-muted">plays as</span>} {p?.name}
                   {!slug && <span className="text-sm text-muted"> · for {r.team.name}</span>}
                 </p>
                 <p className="text-xs text-muted">
+                  {r.role === "MANAGER" && `${r.email} · `}
                   {p ? `UID ${p.game_uid} · ` : ""}
-                  {played > 0 ? (
+                  {r.role === "MANAGER" && !p ? (
+                    "no UID linked"
+                  ) : played > 0 ? (
                     `${played} match${played === 1 ? "" : "es"} for ${r.team.name}`
                   ) : p?.current_team?.slug === r.team.slug ? (
                     `${r.team.name} is their team in the match logs`
@@ -95,6 +110,9 @@ export default function JoinRequests({ slug, compact = false, onAnswered }: { sl
                   {r.note ? ` · "${r.note}"` : ""} · {ago(r.created_at)}
                 </p>
               </div>
+              {r.role === "MANAGER" && !staff ? (
+                <p className="text-xs text-muted">TDL staff answer this one.</p>
+              ) : (
               <div className="flex shrink-0 gap-2">
                 <button type="button" className="btn btn-primary px-4 py-1.5 text-xs" disabled={busy} onClick={() => answer(r, "accept")}>
                   Accept
@@ -103,6 +121,7 @@ export default function JoinRequests({ slug, compact = false, onAnswered }: { sl
                   Reject
                 </button>
               </div>
+              )}
             </li>
           );
         })}

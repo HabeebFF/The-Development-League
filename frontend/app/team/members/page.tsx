@@ -31,7 +31,7 @@ export default function TeamMembers() {
       <h1 className="mt-2 font-display text-5xl leading-none font-extrabold uppercase">{membership.team.name}</h1>
       <div className="mt-6">
         <Squad slug={membership.team.slug} canManage={membership.role === "MANAGER" || staff} />
-        {(membership.role === "MANAGER" || staff) && <JoinRequests slug={membership.team.slug} onAnswered={() => setAnswered((n) => n + 1)} />}
+        {(membership.role === "MANAGER" || staff) && <JoinRequests slug={membership.team.slug} staff={staff} onAnswered={() => setAnswered((n) => n + 1)} />}
         <TeamPeople
           key={answered}
           slug={membership.team.slug}

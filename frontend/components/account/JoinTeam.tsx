@@ -16,6 +16,7 @@ export default function JoinTeam({ onJoined }: { onJoined?: () => void }) {
   const [data, setData] = useState<MyJoin | null>(null);
   const [team, setTeam] = useState("");
   const [note, setNote] = useState("");
+  const [role, setRole] = useState<"PLAYER" | "MANAGER">("PLAYER");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [version, setVersion] = useState(0);
@@ -60,17 +61,25 @@ export default function JoinTeam({ onJoined }: { onJoined?: () => void }) {
           </Link>{" "}
           has its coach, matches, rotations and team cards.
         </p>
+        {data.on_team.role === "PLAYER" &&
+          (data.request?.status === "PENDING" && data.request.role === "MANAGER" ? (
+            <p className="mt-2 text-xs text-muted">You asked to manage {data.on_team.name}. TDL staff will answer.</p>
+          ) : (
+            <button
+              type="button"
+              className="btn mt-3 px-4 py-1.5 text-xs"
+              disabled={busy}
+              onClick={() => run(() => api("/me/join-team", { method: "POST", body: { team: data.on_team!.slug, role: "MANAGER" } }))}
+            >
+              Ask to manage {data.on_team.name}
+            </button>
+          ))}
+        {error && <p className="mt-2 text-xs text-bad">{error}</p>}
       </div>
     );
   }
-  if (!data.player) {
-    return (
-      <div className="card p-4 text-sm">
-        <p className="font-display text-lg uppercase">Join your team</p>
-        <p className="mt-1 text-muted">Link your Free Fire UID first, so your manager can see who&apos;s asking.</p>
-      </div>
-    );
-  }
+  // Without a linked UID you can only ask to manage a team (managers don't have to play).
+  const asRole = data.player ? role : "MANAGER";
 
   const req = data.request;
   if (req?.status === "PENDING") {
@@ -78,10 +87,13 @@ export default function JoinTeam({ onJoined }: { onJoined?: () => void }) {
       <div className="card p-4 text-sm">
         <div className="flex flex-wrap items-center gap-2">
           <p className="font-display text-lg uppercase">{req.team.name}</p>
-          <span className="chip">Waiting for your manager</span>
+          <span className="chip">{req.role === "MANAGER" ? "Waiting for TDL staff" : "Waiting for your manager"}</span>
         </div>
         <p className="mt-1 text-muted">
-          You asked to join {req.team.name} {ago(req.created_at)}. Your manager sees it on their Members page. You can still use the site as normal.
+          {req.role === "MANAGER"
+            ? `You asked to manage ${req.team.name} ${ago(req.created_at)}. TDL staff check every request to manage a team.`
+            : `You asked to join ${req.team.name} ${ago(req.created_at)}. Your manager sees it on their Members page.`}{" "}
+          You can still use the site as normal.
         </p>
         {error && <p className="mt-2 text-xs text-bad">{error}</p>}
         <button type="button" className="btn mt-3 px-4 py-1.5 text-xs" disabled={busy} onClick={() => run(() => api("/me/join-team", { method: "DELETE" }))}>
@@ -95,16 +107,31 @@ export default function JoinTeam({ onJoined }: { onJoined?: () => void }) {
   return (
     <div className="card border-accent/40 p-4 text-sm">
       <p className="font-display text-xl uppercase">Join your team</p>
-      <p className="mt-1 text-muted">Being on your team opens its private pages: coach, matches, rotations and team cards. Your manager accepts or rejects.</p>
+      <p className="mt-1 text-muted">
+        Being on your team opens its private pages: coach, matches, rotations and team cards.{" "}
+        {asRole === "MANAGER" ? "TDL staff check every request to manage a team." : "Your manager accepts or rejects."}
+      </p>
+      <div className="mt-3 flex flex-wrap gap-4" role="radiogroup" aria-label="Join as">
+        <label className={`flex items-center gap-1.5 ${data.player ? "" : "opacity-50"}`}>
+          <input type="radio" name="join-role" checked={asRole === "PLAYER"} disabled={!data.player} onChange={() => setRole("PLAYER")} />
+          As a player
+        </label>
+        <label className="flex items-center gap-1.5">
+          <input type="radio" name="join-role" checked={asRole === "MANAGER"} onChange={() => setRole("MANAGER")} />
+          As the team manager
+        </label>
+      </div>
+      {!data.player && <p className="mt-1 text-xs text-muted">To join as a player, link your Free Fire UID first.</p>}
       {req?.status === "REJECTED" && (
         <p className="mt-3 border-l-[3px] border-bad bg-panel-2 px-3 py-2">
-          {req.team.name} turned down your last request. Check with your manager, or ask another team.
+          {req.role === "MANAGER" ? `TDL staff didn't approve your request to manage ${req.team.name}.` : `${req.team.name} turned down your last request.`} Check with
+          your manager or TDL staff, or ask another team.
         </p>
       )}
       <form
         onSubmit={(e) => {
           e.preventDefault();
-          run(() => api("/me/join-team", { method: "POST", body: { team, note } }));
+          run(() => api("/me/join-team", { method: "POST", body: { team, note, role: asRole } }));
         }}
       >
         <label className="mt-3 block">
@@ -126,12 +153,12 @@ export default function JoinTeam({ onJoined }: { onJoined?: () => void }) {
           </select>
         </label>
         <label className="mt-3 block">
-          <span className="text-muted">Note to the manager (optional)</span>
-          <input value={note} onChange={(e) => setNote(e.target.value)} maxLength={200} className="input mt-1" placeholder={`${data.player.name} here`} />
+          <span className="text-muted">{asRole === "MANAGER" ? "Note to TDL staff (optional)" : "Note to the manager (optional)"}</span>
+          <input value={note} onChange={(e) => setNote(e.target.value)} maxLength={200} className="input mt-1" placeholder={data.player ? `${data.player.name} here` : "Who you are, how to reach you"} />
         </label>
         {error && <p className="mt-2 text-xs text-bad">{error}</p>}
         <button type="submit" className="btn btn-primary mt-3 px-4 py-1.5 text-xs" disabled={busy || !team}>
-          {chosen ? `Ask to join ${chosen.name}` : "Ask to join"}
+          {asRole === "MANAGER" ? (chosen ? `Ask to manage ${chosen.name}` : "Ask to manage") : chosen ? `Ask to join ${chosen.name}` : "Ask to join"}
         </button>
       </form>
     </div>

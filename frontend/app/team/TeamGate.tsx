@@ -35,18 +35,8 @@ export default function TeamGate({ children }: { children: React.ReactNode }) {
   if (!membership && !me.staff_role) {
     return (
       <div className="mx-auto max-w-xl space-y-4 p-6">
-        <p>Your account isn&apos;t on a team yet. Ask to join below, or ask your team manager to send you an invite.</p>
-        {me.player ? (
-          <JoinTeam />
-        ) : (
-          <p className="text-sm text-muted">
-            First link your Free Fire UID on{" "}
-            <Link href="/account" className="text-accent">
-              My account
-            </Link>
-            , so your manager can see who&apos;s asking.
-          </p>
-        )}
+        <p>Your account isn&apos;t on a team yet. Ask to join below as a player or as the team manager, or ask your manager to send you an invite.</p>
+        <JoinTeam />
         <div className="card p-4 text-sm">
           <p className="font-display text-lg uppercase">Managing a new team?</p>
           <p className="mt-1 text-muted">Create it with its roster and UIDs. Once TDL staff approve it you can sign up for scrims.</p>

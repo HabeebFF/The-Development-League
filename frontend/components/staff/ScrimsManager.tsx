@@ -337,9 +337,29 @@ function Suspensions({ teams, run }: { teams: StaffTeam[]; run: Run }) {
   const [until, setUntil] = useState("");
   const held = teams.filter((t) => t.suspended);
   const others = teams.filter((t) => !t.suspended);
+  const allowed = teams.filter((t) => t.allowed);
+  const waiting = teams.filter((t) => t.status === "PENDING");
   return (
     <section>
-      <h2 className="font-display text-2xl uppercase">Suspended teams</h2>
+      <h2 className="font-display text-2xl uppercase">
+        Allowed to sign up{" "}
+        <span className="chip ml-1 align-middle">{allowed.length}</span>
+      </h2>
+      <p className="mt-1 text-sm text-muted">
+        Every approved team that isn&apos;t suspended. Suspend a team below to
+        take it off this list; unsuspend it to put it back.
+        {waiting.length > 0 &&
+          ` ${waiting.length} new team${waiting.length === 1 ? " is" : "s are"} waiting for approval in Staff > Teams.`}
+      </p>
+      <ul className="mt-3 flex flex-wrap gap-2">
+        {allowed.map((t) => (
+          <li key={t.id} className="chip">
+            {t.name}
+          </li>
+        ))}
+      </ul>
+
+      <h2 className="mt-8 font-display text-2xl uppercase">Suspended teams</h2>
       <p className="mt-1 text-sm text-muted">
         A suspended team can&apos;t sign up, and is taken out of any session
         that hasn&apos;t started. You can still add it to a session yourself.
@@ -406,7 +426,7 @@ function Suspensions({ teams, run }: { teams: StaffTeam[]; run: Run }) {
             onChange={(e) => setPick(e.target.value)}
           >
             <option value="">Pick a team</option>
-            {others.map((t) => (
+            {others.filter((t) => t.status !== "PENDING" && t.status !== "REJECTED").map((t) => (
               <option key={t.id} value={t.id}>
                 {t.name}
               </option>
