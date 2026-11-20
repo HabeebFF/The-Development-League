@@ -13,9 +13,14 @@ result" on the suggestion. Anything it can't be sure about is left for staff wit
 
 - the match day name doesn't say which session, or the match started outside the session;
 - the fixture is already linked to another match;
-- a team in the lobby didn't play while a team outside it did (a rename or duplicate team);
+- a team the upload made brand new played (maybe a signed-up team under a new name);
 - a session with fewer than 5 published matches (staff settle it by hand if that's all);
 - a result that changed after a re-upload: settled markets are never changed by themselves.
+
+Before settling, a session's lobby becomes the teams that actually played in it (no-shows
+drop out, substitutes come in; the lobby as it was is kept in ``Fixture.signed_up``). Bets on
+a team that didn't play are refunded, and a market won by a substitute (nobody could pick it)
+is refunded in full.
 
 A task runs this every 5 minutes as well, so nothing is missed. Settling uses the same
 ``settle`` / ``void`` as staff, so a repeat never pays twice.
@@ -28,6 +33,7 @@ import logging
 import re
 
 from django.conf import settings
+from django.db import transaction
 from django.db.models import Exists, F, Max, OuterRef, Q
 from django.utils import timezone
 
@@ -37,7 +43,7 @@ from apps.results.models import TeamMatchResult
 from . import auto
 from .markets import RANGE_MARKETS, SEASON_MARKETS, SESSION_MARKETS, MarketError
 from .models import AutoSettings, Fixture, Market
-from .settlement import settle, suggest, void
+from .settlement import session_fixture, settle, suggest, void
 
 log = logging.getLogger(__name__)
 
@@ -219,42 +225,72 @@ def _chase_missing(now) -> None:
 # -- settling ------------------------------------------------------------------------------------
 
 
-def _lobby_mismatch(market: Market) -> str | None:
-    """A lobby team didn't play while a team outside the lobby did: likely a renamed or
-    duplicate team, so the site doesn't refund or settle on its own."""
-    fixture = market.fixture
-    if fixture is None:
-        return None
-    whole = (
-        fixture
-        if fixture.match_number is None
-        else Fixture.objects.filter(
-            season_id=fixture.season_id,
-            date=fixture.date,
-            session=fixture.session,
-            match_number__isnull=True,
-        ).first()
+def _new_from_upload(team_ids, whole: Fixture) -> list[str]:
+    """Teams the upload itself made that night (a lobby name it had never seen and whose
+    players aren't on a roster): maybe a signed-up team under a new name."""
+    if not team_ids or whole.session not in auto.SESSIONS:
+        return []
+    teams = Team.objects.filter(
+        pk__in=team_ids,
+        created_by__isnull=True,  # not made on /create-team
+        reviewed_by__isnull=True,  # nor approved by staff
+        created_at__gte=auto.session_start(whole.date, whole.session) - EARLY,
     )
-    lobby = set(whole.teams.values_list("pk", flat=True)) if whole else set()
+    earlier = TeamMatchResult.objects.exclude(match__match_day=whole.match_day_id).filter(
+        team__in=teams
+    )
+    return sorted(teams.exclude(pk__in=earlier.values("team")).values_list("name", flat=True))
+
+
+def fix_lobby(whole: Fixture) -> str | None:
+    """Make a session's lobby the teams that played in its published matches: no-shows drop
+    out, substitutes come in. Returns why the night is held for staff instead, or None."""
+    if whole is None or whole.match_number is not None or whole.match_day_id is None:
+        return None
+    lobby = set(whole.teams.values_list("pk", flat=True))
     if not lobby:
-        return None
-    if fixture.match_number is not None:
-        results = TeamMatchResult.objects.filter(match=fixture.match_id)
-    else:
-        results = TeamMatchResult.objects.filter(
-            match__match_day=fixture.match_day_id, match__status=Match.Status.PUBLISHED
-        )
-    played = dict(results.values_list("team_id", "team__name"))
-    missing = lobby - set(played)
-    extra = set(played) - lobby
-    if not (missing and extra):
-        return None
-    gone = ", ".join(sorted(Team.objects.filter(pk__in=missing).values_list("name", flat=True)))
-    new = ", ".join(sorted(played[t] for t in extra))
-    return (
-        f"{gone} didn't play but {new} did (not signed up). If it's the same team, merge or "
-        "fix the team and re-upload; otherwise confirm the result by hand."
+        return None  # no lobby: every team counts, nothing to fix
+    played = set(
+        TeamMatchResult.objects.filter(
+            match__match_day=whole.match_day_id, match__status=Match.Status.PUBLISHED
+        ).values_list("team_id", flat=True)
     )
+    if not played or played == lobby:
+        return None
+    if new := _new_from_upload(played - lobby, whole):
+        names = ", ".join(new)
+        return (
+            f"{names} played but {'is' if len(new) == 1 else 'are'} new from this upload: maybe "
+            "a signed-up team under a new name. Merge it into the right team and re-upload, or "
+            "add it to this session's lobby if it's a real new team."
+        )
+    with transaction.atomic():
+        if whole.signed_up is None:
+            whole.signed_up = sorted(lobby)
+            whole.save(update_fields=["signed_up", "updated_at"])
+        whole.teams.set(sorted(played))
+    return None
+
+
+def fix_recent_lobbies(now=None) -> dict[int, str | None]:
+    """Fix the lobby of every recent session whose matches are uploaded. Returns, by session
+    fixture, why it's held for staff (or None)."""
+    now = now or timezone.now()
+    since = (now - LOOK_BACK).date()
+    wholes = Fixture.objects.filter(
+        date__gte=since, match_number__isnull=True, match_day__isnull=False
+    )
+    return {w.pk: fix_lobby(w) for w in wholes}
+
+
+def _held(market: Market, held: dict[int, str | None]) -> str | None:
+    """Why the market's night is held for staff (fixing its lobby first if not done)."""
+    whole = session_fixture(market.fixture)
+    if whole is None:
+        return None
+    if whole.pk not in held:
+        held[whole.pk] = fix_lobby(whole)
+    return held[whole.pk]
 
 
 def _session_ready(market: Market, now) -> str | None:
@@ -302,10 +338,12 @@ def _range_ready(market: Market, now) -> bool:
     return True
 
 
-def settle_market(market: Market, actor, now=None) -> str:
+def settle_market(market: Market, actor, now=None, held=None) -> str:
     """Settle one CLOSED market from the logs if nothing needs a person. Returns
-    "settled", "voided", "waiting" or "flagged"."""
+    "settled", "voided", "waiting" or "flagged". ``held``: notes by session fixture, from
+    ``fix_recent_lobbies`` (worked out here when missing)."""
     now = now or timezone.now()
+    held = {} if held is None else held
     if market.category in RANGE_MARKETS:
         if not _range_ready(market, now):
             return "waiting"
@@ -324,6 +362,9 @@ def settle_market(market: Market, actor, now=None) -> str:
             return "waiting"
     elif market.fixture.match_id is None:
         return "waiting"
+    if why := _held(market, held):
+        _flag(market, why)
+        return "flagged"
     try:
         suggestion = suggest(market)
     except MarketError as exc:
@@ -334,9 +375,6 @@ def settle_market(market: Market, actor, now=None) -> str:
     except Exception:  # noqa: BLE001 - one odd market must not stop the rest
         log.exception("Couldn't work out market %s", market.pk)
         _flag(market, "The site couldn't work out this result. Confirm it by hand.")
-        return "flagged"
-    if why := _lobby_mismatch(market):
-        _flag(market, why)
         return "flagged"
     try:
         if suggestion["kind"] == "VOID":
@@ -410,8 +448,9 @@ def check_settled(market: Market) -> bool:
     return True
 
 
-def settle_recent(now=None, actor=None) -> dict:
+def settle_recent(now=None, actor=None, held=None) -> dict:
     now = now or timezone.now()
+    held = fix_recent_lobbies(now) if held is None else held
     actor = actor or auto.system_user()
     since = (now - LOOK_BACK).date()
     counts = {"settled": 0, "voided": 0, "waiting": 0, "flagged": 0, "changed": 0}
@@ -422,7 +461,7 @@ def settle_recent(now=None, actor=None) -> dict:
     )
     closed = Market.objects.filter(recent, status=S.CLOSED).select_related("fixture")
     for market in closed.order_by("closes_at", "pk"):
-        counts[settle_market(market, actor, now)] += 1
+        counts[settle_market(market, actor, now, held)] += 1
     # Only markets whose match (or session) was rebuilt after the market last changed.
     rebuilt_day = Match.objects.filter(
         match_day=OuterRef("fixture__match_day"), updated_at__gt=OuterRef("updated_at")

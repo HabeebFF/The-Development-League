@@ -273,18 +273,6 @@ def test_two_match_days_for_one_session_are_left_for_staff(night, staff):
     assert f.match_id is None and "More than one 8PM match day" in f.attention
 
 
-def test_unsigned_team_playing_holds_the_market(night, staff, fans):
-    """Charlie signed up but 'Echo' played: maybe the same team renamed. Don't refund."""
-    m = market(night, staff)
-    b = bet(fans[0], m, night["teams"]["Charlie"])
-    close(m)
-    match = upload(night, 1, results=(*RESULTS[:2], ("Echo", 3, 5, 8)))
-    autosettle.run(match.pk)
-    assert fresh(m).status == S.CLOSED
-    assert "Charlie didn't play but Echo did" in m.attention
-    assert fresh(b).status == B.PENDING
-
-
 def test_staff_linking_by_hand_clears_the_note(night, staff):
     market(night, staff)
     match = upload(night, 1, title="TDL DAY 20")
@@ -380,3 +368,127 @@ def test_week_market_settles_once_the_week_is_uploaded(night, staff, fans):
     with mock.patch("django.utils.timezone.localdate", return_value=next_day):
         autosettle.settle_recent(now=night["start"] + dt.timedelta(hours=5))
     assert fresh(m).status == S.SETTLED and fresh(b).status == B.WON
+
+
+# -- the lobby follows the uploads ---------------------------------------------------------------
+
+
+ECHO_FOR_CHARLIE = (*RESULTS[:2], ("Echo", 3, 5, 8))
+ECHO_WINS = (("Echo", 1, 9, 24), ("Alpha", 2, 8, 17), ("Bravo", 3, 5, 8))
+
+
+def lobby(night) -> set[str]:
+    return set(fresh(night["whole"]).teams.values_list("name", flat=True))
+
+
+def test_substitute_replaces_a_no_show_and_markets_settle(night, staff, fans):
+    """Charlie signed up but Echo played instead: the lobby follows the logs."""
+    t = night["teams"]
+    m = market(night, staff)
+    win, refunded = bet(fans[0], m, t["Alpha"]), bet(fans[1], m, t["Charlie"])
+    close(m)
+    match = upload(night, 1, results=ECHO_FOR_CHARLIE)
+    autosettle.run(match.pk)
+
+    assert lobby(night) == {"Alpha", "Bravo", "Echo"}
+    signed_up = sorted(t[n].pk for n in ("Alpha", "Bravo", "Charlie"))
+    assert sorted(night["whole"].signed_up) == signed_up
+    assert fresh(m).status == S.SETTLED and m.attention == ""
+    assert fresh(win).status == B.WON
+    assert fresh(refunded).status == B.VOID and coins(fans[1]) == 1000
+
+
+def test_no_show_drops_out_of_the_lobby(night, staff):
+    m = market(night, staff)
+    close(m)
+    autosettle.run(upload(night, 1, results=RESULTS[:2]).pk)
+    assert lobby(night) == {"Alpha", "Bravo"}
+    assert fresh(m).status == S.SETTLED
+
+
+def test_substitute_winning_booyah_refunds_everyone(night, staff, fans):
+    t = night["teams"]
+    m = market(night, staff)
+    a, b = bet(fans[0], m, t["Alpha"]), bet(fans[1], m, t["Bravo"])
+    close(m)
+    autosettle.run(upload(night, 1, results=ECHO_WINS).pk)
+    assert fresh(m).status == S.VOID
+    assert "Echo" in m.settlements.get().reason
+    assert fresh(a).status == fresh(b).status == B.VOID
+    assert coins(fans[0]) == coins(fans[1]) == 1000
+
+
+def test_substitute_going_out_first_refunds_first_team_out(night, staff, fans):
+    t = night["teams"]
+    m = market(night, staff, C.FIRST_OUT)
+    b = bet(fans[0], m, t["Bravo"])
+    close(m)
+    autosettle.run(upload(night, 1, results=(*RESULTS, ("Echo", 4, 0, 0))).pk)
+    assert fresh(m).status == S.VOID and fresh(b).status == B.VOID
+
+
+def test_unlisted_lobby_team_winning_still_loses(night, staff, fans):
+    """A staff market on two of the lobby: Charlie was signed up (pickable elsewhere), so a
+    Charlie win is a normal result, not a substitute."""
+    t = night["teams"]
+    m = market(night, staff, C.FIRST_OUT, teams=("Alpha", "Bravo"))
+    b = bet(fans[0], m, t["Alpha"])
+    close(m)
+    autosettle.run(upload(night, 1).pk)
+    assert fresh(m).status == S.SETTLED and fresh(b).status == B.LOST
+
+
+def test_signed_up_team_that_misses_a_match_is_not_a_substitute(night, staff, fans):
+    t = night["teams"]
+    autosettle.run(upload(night, 1, results=RESULTS[:2]).pk)  # Charlie late for match 1
+    assert lobby(night) == {"Alpha", "Bravo"}
+    m = market(night, staff, number=2)
+    b = bet(fans[0], m, t["Alpha"])
+    close(m)
+    charlie_wins = (("Charlie", 1, 9, 24), ("Alpha", 2, 8, 17), ("Bravo", 3, 5, 8))
+    autosettle.run(upload(night, 2, results=charlie_wins).pk)
+    assert lobby(night) == {"Alpha", "Bravo", "Charlie"}
+    assert fresh(m).status == S.SETTLED and fresh(b).status == B.LOST
+
+
+def test_substitute_winning_the_session_refunds_it(night, staff, fans):
+    t = night["teams"]
+    m = market(night, staff, C.SESSION_WINNER, number=None)
+    b = bet(fans[0], m, t["Alpha"])
+    close(m)
+    for n in range(1, 6):
+        upload(night, n, results=ECHO_WINS)
+    rebuild_season(night["season"])
+    autosettle.run()
+    assert fresh(m).status == S.VOID and fresh(b).status == B.VOID
+
+
+def test_team_made_by_the_upload_holds_the_night(night, staff, fans):
+    """A name the site never saw, made by this upload: maybe Charlie renamed. Staff look."""
+    t = night["teams"]
+    Team.objects.filter(pk=t["Echo"].pk).update(created_at=night["start"])
+    m = market(night, staff)
+    b = bet(fans[0], m, t["Charlie"])
+    close(m)
+    autosettle.run(upload(night, 1, results=ECHO_FOR_CHARLIE).pk)
+    assert fresh(m).status == S.CLOSED
+    assert "Echo played but is new from this upload" in m.attention
+    assert fresh(b).status == B.PENDING
+    assert lobby(night) == {"Alpha", "Bravo", "Charlie"}
+
+    # Staff say it's a real new team: they add it to the lobby, and the night settles.
+    night["whole"].teams.add(t["Echo"])
+    autosettle.run()
+    assert fresh(m).status == S.SETTLED and m.attention == ""
+    assert lobby(night) == {"Alpha", "Bravo", "Echo"}
+    assert fresh(b).status == B.VOID
+
+
+def test_team_made_before_the_night_is_a_normal_substitute(night, staff):
+    Team.objects.filter(pk=night["teams"]["Echo"].pk).update(
+        created_at=night["start"] - dt.timedelta(days=1)
+    )
+    m = market(night, staff)
+    close(m)
+    autosettle.run(upload(night, 1, results=ECHO_FOR_CHARLIE).pk)
+    assert fresh(m).status == S.SETTLED

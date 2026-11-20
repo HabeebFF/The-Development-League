@@ -145,6 +145,11 @@ class Fixture(models.Model):
     attention = models.CharField(
         max_length=300, blank=True, help_text="Why the site couldn't link it by itself"
     )
+    # A session's lobby as it was before the uploads changed it to the teams that played
+    # (null: never changed). Teams playing now that aren't in it came in as substitutes.
+    signed_up = models.JSONField(
+        null=True, blank=True, help_text="The lobby before the uploads fixed it"
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

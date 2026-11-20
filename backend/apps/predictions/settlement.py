@@ -57,6 +57,39 @@ def linked_match(market: Market) -> Match:
     return match
 
 
+def session_fixture(fixture: Fixture | None) -> Fixture | None:
+    """The whole-session fixture a fixture belongs to (itself for a session fixture)."""
+    if fixture is None or fixture.match_number is None:
+        return fixture
+    return Fixture.objects.filter(
+        season_id=fixture.season_id,
+        date=fixture.date,
+        session=fixture.session,
+        match_number__isnull=True,
+    ).first()
+
+
+def substitutes(market: Market, played) -> set[int]:
+    """Teams among ``played`` that weren't in the night's lobby when predictions were made,
+    so nobody could pick them. Nothing when the night had no lobby (every team counted)."""
+    whole = session_fixture(market.fixture)
+    if whole is None:
+        return set()
+    lobby = (
+        set(whole.signed_up)
+        if whole.signed_up is not None
+        else set(whole.teams.values_list("pk", flat=True))
+    )
+    return set(played) - lobby if lobby else set()
+
+
+def _sub_note(team: Team, what: str) -> str:
+    return (
+        f"{team.name} ({what}) played as a substitute, so nobody could pick them: "
+        "everyone is refunded."
+    )
+
+
 def suggest(market: Market) -> dict:
     """What the published results say the result is.
 
@@ -131,6 +164,8 @@ def _suggest_match(market: Market) -> dict:
         absent = [o for o in outcomes if o.team_id not in rows]
         first = next((r for r in rows.values() if r.placement == 1), None)
         winners = [by_team(first.team_id)] if first and first.team_id in _teams(market) else []
+        if first and not winners and first.team_id in substitutes(market, rows):
+            return void(_sub_note(first.team, "the Booyah team"))
         note = "" if winners else "The Booyah team isn't one of the choices: every bet loses."
         if absent:
             note = (note + " " if note else "") + "Teams that didn't play are refunded."
@@ -194,6 +229,8 @@ def _suggest_match(market: Market) -> dict:
         out = next(r for r in rows.values() if r.placement == last)
         absent = [o for o in outcomes if o.team_id not in rows]
         winners = [by_team(out.team_id)] if out.team_id in _teams(market) else []
+        if not winners and out.team_id in substitutes(market, rows):
+            return void(_sub_note(out.team, "first team out"))
         notes = [f"{out.team.name} went out first (#{last})."]
         if not winners:
             notes.append("That team isn't one of the choices: every bet loses.")
@@ -217,6 +254,8 @@ def _suggest_match(market: Market) -> dict:
         evidence["first_blood"] = {"team": first.actor_team_id, "at_s": first.game_time_s}
         absent = [o for o in outcomes if o.team_id not in rows]
         winners = [by_team(first.actor_team_id)] if first.actor_team_id in _teams(market) else []
+        if not winners and first.actor_team_id in substitutes(market, rows):
+            return void(_sub_note(first.actor_team, "first blood"))
         notes = [f"{first.actor_team.name} got the first kill at {first.game_time_s:.0f}s."]
         if not winners:
             notes.append("That team isn't one of the choices: every bet loses.")
@@ -351,6 +390,9 @@ def _team_winners(market, rows, tied: set[int], what: str, evidence: dict) -> di
     choices = _by_team(market)
     winners = [choices[t] for t in tied if t in choices]
     voids = [o for t, o in choices.items() if t not in rows]
+    if not winners and (subs := substitutes(market, tied)):
+        team = rows[min(subs)].team
+        return _void(_sub_note(team, f"the {what}"), evidence)
     notes = []
     if not winners:
         notes.append(f"The {what} isn't one of the choices: every bet loses.")
