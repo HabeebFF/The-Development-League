@@ -333,7 +333,16 @@ class StaffTeamsView(APIView):
         held = {s.team_id: s for s in sv.active_suspensions()}
         teams = Team.objects.order_by("name")
         return Response(
-            [{**_team(t, request), "suspended": suspension_data(held.get(t.pk))} for t in teams]
+            [
+                {
+                    **_team(t, request),
+                    "suspended": suspension_data(held.get(t.pk)),
+                    "status": t.status,
+                    # The allowed list: approved teams that aren't suspended can sign up.
+                    "allowed": t.status == Team.Status.APPROVED and t.pk not in held,
+                }
+                for t in teams
+            ]
         )
 
 

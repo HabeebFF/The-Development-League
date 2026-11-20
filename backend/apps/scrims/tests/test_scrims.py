@@ -359,3 +359,15 @@ def test_team_waiting_for_staff_cant_register(clock, teams, manager):
     Team.objects.filter(pk=teams[0].pk).update(status=Team.Status.APPROVED)
     teams[0].refresh_from_db()
     assert sv.register(eight(), teams[0], manager).status == R.REGISTERED
+
+
+def test_staff_see_the_allowed_list(teams, staff):
+    Team.objects.filter(pk=teams[1].pk).update(status=Team.Status.PENDING)
+    sv.suspend(teams[2], staff, "No-show")
+    rows = {t["slug"]: t for t in client_for(staff).get("/api/v1/admin/scrims/teams").data}
+    assert rows["team-01"]["allowed"] is True
+    assert rows["team-02"]["allowed"] is False and rows["team-02"]["status"] == "PENDING"
+    assert rows["team-03"]["allowed"] is False and rows["team-03"]["suspended"]
+    sv.unsuspend(teams[2], staff)
+    rows = {t["slug"]: t for t in client_for(staff).get("/api/v1/admin/scrims/teams").data}
+    assert rows["team-03"]["allowed"] is True
