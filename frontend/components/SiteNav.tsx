@@ -189,9 +189,19 @@ const TAB_ON = "absolute inset-x-4 top-0 h-[3px] -skew-x-[18deg] bg-accent shado
 function SectionTabs({ section: s, path, player }: { section: Section; path: string; player: boolean }) {
   const current = activeLink(path, s);
   const links = s.links.filter((l) => !l.playersOnly || player);
+  const row = useRef<HTMLElement>(null);
+  // On narrow phones the row scrolls: bring the current tab into view.
+  useEffect(() => {
+    const el = row.current?.querySelector<HTMLElement>('[aria-current="page"]');
+    if (el && row.current) row.current.scrollLeft = el.offsetLeft - (row.current.clientWidth - el.offsetWidth) / 2;
+  }, [current]);
   return (
     <div className="border-b border-line bg-panel/60">
-      <nav className="mx-auto flex max-w-6xl items-center gap-1 overflow-x-auto px-4 [scrollbar-width:none]" aria-label={s.label}>
+      <nav
+        ref={row}
+        className="mx-auto flex max-w-6xl items-center gap-1 overflow-x-auto px-4 [mask-image:linear-gradient(90deg,#000_85%,transparent)] [scrollbar-width:none] sm:[mask-image:none]"
+        aria-label={s.label}
+      >
         <span className="mr-2 hidden shrink-0 items-center gap-1.5 text-[11px] font-bold tracking-[0.2em] text-muted uppercase sm:flex">
           <Icon d={s.icon} className="h-4 w-4 text-accent" />
           {s.label}

@@ -1,4 +1,4 @@
-// The site's sections, in plain words: used by the top bar, the phone menu, the home page and /players.
+// The site's sections, in plain words: used by the top bar, the phone bar, the footer, the home page and /players.
 
 export type NavLink = {
   href: string;
@@ -8,11 +8,6 @@ export type NavLink = {
   icon: string;
   /** Only shown when the server has this switch on. */
   flag?: "predictions";
-};
-
-export type NavGroup = NavLink & {
-  /** Pages inside the group; the group's own href is its first stop. */
-  items?: NavLink[];
 };
 
 const ICON = {
@@ -40,31 +35,6 @@ const ICON = {
 
 export const HOME: NavLink = { href: "/", label: "Home", blurb: "", icon: ICON.home };
 
-export const PLAYER_PAGES: NavLink[] = [
-  { href: "/kills", label: "Kill list", blurb: "Top fraggers for each session, week and month", icon: ICON.kills },
-  { href: "/maps", label: "Map leaders", blurb: "Top players, teams and weapons on each map", icon: ICON.map },
-  { href: "/ratings", label: "Player ratings", blurb: "Every player marked out of 10, like football", icon: ICON.ratings },
-  { href: "/cards", label: "Player cards", blurb: "FUT-style cards, new ones every Saturday", icon: ICON.cards },
-  { href: "/awards", label: "Awards", blurb: "Best player, rusher, sniper and grenader", icon: ICON.awards },
-];
-
-export const TEAM_PAGES: NavLink[] = [
-  { href: "/teams", label: "All teams", blurb: "Every team, its players and its rotations", icon: ICON.teams },
-  { href: "/protection-points", label: "Protection Points", blurb: "Points teams win or lose from scrim tasks", icon: ICON.pp },
-];
-
-export const GROUPS: NavGroup[] = [
-  { href: "/standings", label: "Standings", blurb: "Who is top of the table", icon: ICON.standings },
-  { href: "/results", label: "Results", blurb: "Every match day, map by map, with replays", icon: ICON.results },
-  { href: "/players", label: "Players", blurb: "Kills, ratings, cards and awards", icon: ICON.players, items: PLAYER_PAGES },
-  { href: "/teams", label: "Teams", blurb: "Teams and Protection Points", icon: ICON.teams, items: TEAM_PAGES },
-  { href: "/tournaments", label: "Tournaments", blurb: "Cups and finals, with prizes", icon: ICON.awards },
-  { href: "/predict", label: "Predict", blurb: "Bet free DC on matches, no real money", icon: ICON.predict, flag: "predictions" },
-  { href: "/shop", label: "Shop", blurb: "Buy card designs with your DC", icon: ICON.shop, flag: "predictions" },
-  { href: "/player-shop", label: "Player shop", blurb: "Card looks only league players can buy", icon: ICON.cards, flag: "predictions" },
-];
-
-export const MENU_ICON = ICON.menu;
 export const ME_ICON = ICON.me;
 
 // -- The simpler layout: three sections and "Me" ------------------------------------------
@@ -157,7 +127,7 @@ export function meLinks(me: { staff_role: string | null; memberships: unknown[];
   if (!me) return [];
   const out: NavLink[] = [{ href: "/account", label: "My account", blurb: "Name, game UID, team requests", icon: ICON.me }];
   if (me.memberships.length > 0) out.push({ href: "/team", label: "My team", blurb: "Scrims, coach, replays and members", icon: ICON.teams });
-  else out.push({ href: "/create-team", label: "Start a team", blurb: "Create a team or ask to join one", icon: ICON.teams });
+  else if (!me.staff_role) out.push({ href: "/create-team", label: "Start a team", blurb: "Create a team or ask to join one", icon: ICON.teams });
   if (me.player) out.push({ href: "/player-shop", label: "Player shop", blurb: "Looks only league players can buy", icon: ICON.cards });
   if (me.staff_role) out.push({ href: "/staff", label: "Staff", blurb: "Uploads, teams, predictions and settings", icon: ICON.staff });
   return out;
@@ -166,11 +136,6 @@ export function meLinks(me: { staff_role: string | null; memberships: unknown[];
 /** True when ``path`` is ``href`` or a page under it. */
 export function isActive(path: string, href: string): boolean {
   return href === "/" ? path === "/" : path === href || path.startsWith(`${href}/`);
-}
-
-/** True when ``path`` is the group's page or any page inside it. */
-export function groupActive(path: string, g: NavGroup): boolean {
-  return isActive(path, g.href) || !!g.items?.some((i) => isActive(path, i.href));
 }
 
 /** The league's social accounts, shown in the footer. Add one here and its icon appears. */

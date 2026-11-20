@@ -7,7 +7,7 @@ import { currentSeason, dayName, playedNewestFirst, rows, shortDate, type Season
 import { periodLabel, type Awards } from "@/lib/awards";
 import { podiumOrder, seasonWeek } from "@/lib/home";
 import { killsLabel, killsPath, type KillList } from "@/lib/kills";
-import { GROUPS, PLAYER_PAGES, TEAM_PAGES } from "@/lib/nav";
+import { SECTIONS } from "@/lib/nav";
 import type { DayRatings } from "@/lib/ratings";
 import { useApi } from "@/lib/useApi";
 import { useAuth } from "@/components/Auth";
@@ -261,8 +261,8 @@ export default function HomeView() {
   );
 }
 
-// Every page, in the order a new visitor needs them.
-const EXPLORE = [GROUPS[0], GROUPS[1], ...PLAYER_PAGES, { ...TEAM_PAGES[0], label: "Teams" }, TEAM_PAGES[1]];
+// The League and Players pages, with the same names as the menus.
+const EXPLORE = SECTIONS.filter((s) => s.key !== "predict").flatMap((s) => s.links);
 
 /** Spotlight: this week's top fragger, and the latest day's best-rated player. */
 function Stars() {
