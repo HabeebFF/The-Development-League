@@ -327,7 +327,12 @@ def _fixture(f: Fixture | None) -> dict | None:
         "match_number": f.match_number,
         "scheduled_at": f.scheduled_at,
         "match": f.match_id,
+        "map": _map(f.map),
     }
+
+
+def _map(m) -> dict | None:
+    return {"id": m.pk, "name": m.name, "slug": m.slug} if m is not None else None
 
 
 def shown_status(market: Market, now=None) -> str:
@@ -348,6 +353,8 @@ def market_data(market: Market, now=None) -> dict:
         "category_label": market.get_category_display(),
         "season": {"id": market.season_id, "name": market.season.name},
         "fixture": _fixture(market.fixture),
+        # The map its odds were priced for (match markets on nights with drawn maps).
+        "map": _map(market.map),
         # The most one single prediction can take here; null on a night with no cap.
         "max_stake": stake_cap(market),
         "status": shown_status(market, now),
@@ -390,7 +397,7 @@ def _count(model):
 
 def _markets():
     return (
-        Market.objects.select_related("season", "fixture")
+        Market.objects.select_related("season", "fixture__map", "map")
         .prefetch_related("outcomes__team", "outcomes__player__current_team")
         .annotate(taken=_count(Bet) + _count(Leg))
     )
@@ -490,7 +497,7 @@ def bet_data(bet: Bet) -> dict:
 
 
 def _bets():
-    return Bet.objects.select_related("market__fixture", "outcome")
+    return Bet.objects.select_related("market__fixture__map", "outcome")
 
 
 class BetsView(APIView):
@@ -585,7 +592,7 @@ def multiple_data(m: Multiple) -> dict:
 
 
 def _multiples():
-    return Multiple.objects.prefetch_related("legs__market__fixture", "legs__outcome")
+    return Multiple.objects.prefetch_related("legs__market__fixture__map", "legs__outcome")
 
 
 class MultiplesView(APIView):
@@ -682,9 +689,10 @@ class FixtureSerializer(serializers.ModelSerializer):
             "match",
             "match_day",
             "teams",
+            "map",
             "attention",
         ]
-        read_only_fields = ["attention"]
+        read_only_fields = ["attention", "map"]
         validators = []  # the unique check below gives a readable message
 
     def validate(self, attrs):

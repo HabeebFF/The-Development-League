@@ -45,7 +45,16 @@ TRANSITIONS: dict[str, set[str]] = {
 EDITABLE_ODDS = {S.DRAFT, S.OPEN, S.SUSPENDED}
 H2H = {C.H2H_PLACEMENT, C.H2H_KILLS, C.H2H_POINTS}
 HANDICAPS = {C.KILLS_HANDICAP, C.POINTS_HANDICAP}
-PLAYER_MARKETS = {C.PLAYER_KILLS, C.TOP_FRAGGER, C.PLAYER_H2H, C.FIRST_DEATH, C.PLAYER_DAMAGE}
+PLAYER_MARKETS = {
+    C.PLAYER_KILLS,
+    C.TOP_FRAGGER,
+    C.PLAYER_H2H,
+    C.FIRST_DEATH,
+    C.PLAYER_DAMAGE,
+    C.PLAYER_KNOCKS,
+}
+# One player over or under a line in one match: kills, damage dealt or knocks.
+PLAYER_LINES = {C.PLAYER_KILLS: "kills", C.PLAYER_DAMAGE: "damage", C.PLAYER_KNOCKS: "knocks"}
 # Markets over a range of dates (from and to, both included); like season markets, no fixture.
 RANGE_MARKETS = {C.RANGE_WINNER, C.RANGE_TOP_N, C.RANGE_FRAGGER}
 # Markets on players' kills added up over a session, a date range or the season.
@@ -69,6 +78,7 @@ SESSION_MARKETS = {
     C.SESSION_FRAGGER,
     C.SESSION_KILLS,
     C.SESSION_H2H,
+    C.SESSION_DEATHS,
 }
 SEASON_MARKETS = {C.OVERALL_WINNER, C.OVERALL_TOP_N, C.SEASON_FRAGGER, *RANGE_MARKETS}
 # Markets with one choice per team or player, where those level on the result share the win.
@@ -90,6 +100,8 @@ LINES = {
     C.POINTS_HANDICAP: (1, 100),
     C.PLAYER_KILLS: (1, 30),
     C.PLAYER_DAMAGE: (100, 20000),
+    C.PLAYER_KNOCKS: (1, 30),
+    C.SESSION_DEATHS: (1, 60),
     C.SESSION_KILLS: (1, 200),
 }
 # Finishing bands: code -> (best place, worst place).
@@ -158,7 +170,12 @@ def clean_params(category: str, params: dict) -> dict:
         lo, hi = LINES[category]
         value = params.get("line")
         if not isinstance(value, int) or isinstance(value, bool) or not lo <= value <= hi:
-            what = {C.PLAYER_DAMAGE: "damage line", **dict.fromkeys(HANDICAPS, "handicap")}
+            what = {
+                C.PLAYER_DAMAGE: "damage line",
+                C.PLAYER_KNOCKS: "knocks line",
+                C.SESSION_DEATHS: "deaths line",
+                **dict.fromkeys(HANDICAPS, "handicap"),
+            }
             name = what.get(category, "kills line")
             raise MarketError(f"The {name} must be a whole number from {lo} to {hi}.")
         return value
@@ -206,7 +223,7 @@ def clean_params(category: str, params: dict) -> dict:
         return {"team": one_team()}
     if category in (C.FIRST_OUT, C.FIRST_BLOOD):
         return {"teams": team_ids(params.get("teams"), at_least=2)}
-    if category in (C.PLAYER_KILLS, C.PLAYER_DAMAGE):
+    if category in PLAYER_LINES or category == C.SESSION_DEATHS:
         return {"player": one_player(), "line": line()}
     if category in (C.TOP_FRAGGER, C.FIRST_DEATH):
         return {"players": player_ids(params.get("players"), at_least=2)}
@@ -273,9 +290,9 @@ def outcome_specs(category: str, params: dict) -> list[dict]:
     if category == C.FINISH_BAND:
         name = Team.objects.get(pk=params["team"]).name
         return [{"code": c, "label": f"{name}: {BAND_LABELS[c]}", "team_id": None} for c in BANDS]
-    if category in (C.PLAYER_KILLS, C.PLAYER_DAMAGE):
+    if category in PLAYER_LINES or category == C.SESSION_DEATHS:
         player, line = Player.objects.get(pk=params["player"]), params["line"]
-        what = "kills" if category == C.PLAYER_KILLS else "damage"
+        what = PLAYER_LINES.get(category, "deaths")
         return [
             {"code": "yes", "label": f"{player.display_name}: over {line - 0.5:g} {what}",
              "team_id": None, "player_id": player.pk},
@@ -338,6 +355,9 @@ def create_market(*, actor, category: str, odds: dict, **fields) -> Market:
     codes = {s["code"] for s in specs}
     if set(odds or {}) != codes:
         raise MarketError(f"Give odds for exactly these outcomes: {sorted(codes)}.")
+    fixture = fields.get("fixture")
+    if "map" not in fields and fixture is not None and fixture.match_number is not None:
+        fields["map_id"] = fixture.map_id  # priced for this map; another map played refunds it
     market = Market.objects.create(
         category=category, params=params, created_by=actor, updated_by=actor, **fields
     )

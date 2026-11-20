@@ -5,8 +5,14 @@ From 10:00 Lagos time on a scrim day the hourly task makes tonight's fixtures (t
 
 - each match: Booyah, total kills over/under, first blood, first team out, top fragger,
   top 3 and finishing position for every team, kills over/under for the 4 teams and 5
-  players with the most kills lately, and 2 kills handicaps between close teams;
-- each session: winner, most Booyahs, top fragger and two head-to-heads;
+  players with the most kills lately, knocks and damage over/under for those 5 players,
+  and 2 kills handicaps between close teams;
+- each session: winner, most Booyahs, top fragger, two head-to-heads and deaths over/under
+  for the 5 players.
+
+Each match's map is drawn when the night's sign-up opens (``apps.scrims.maps``): match
+markets are named after it and priced for it, and staff changing the maps remakes the
+markets nobody predicted on.
 - Mondays: most points over the week (Monday to Sunday).
 
 On scrim nights with sign-up (``apps.scrims``), a session's teams (its lobby) are the teams
@@ -35,7 +41,9 @@ from django.utils import timezone
 
 from apps.accounts.models import User
 from apps.league.models import Match, MatchDay, Player, Season, Team
+from apps.maps.models import Map
 from apps.results.models import PlayerMatchResult, TeamMatchResult
+from apps.scrims import maps as scrim_maps
 from apps.scrims import services as scrims
 from apps.scrims.models import ScrimSession
 
@@ -264,6 +272,29 @@ def player_form(teams: list[int], n: int) -> dict[int, float]:
     return {p: avg[p] for p in sorted(avg, key=lambda p: (-avg[p], p))[:n]}
 
 
+def player_average(players, field: str) -> dict[int, float]:
+    """Each player's average ``field`` (knocks, damage_dealt, deaths) over their recent
+    published matches that have it (3 or more, else left out)."""
+    rows = (
+        PlayerMatchResult.objects.filter(
+            player_id__in=list(players), match__status=Match.Status.PUBLISHED
+        )
+        .exclude(**{f"{field}__isnull": True})
+        .order_by("-match__started_at", "-match_id")
+        .values_list("player_id", field)
+    )
+    seen: dict[int, list[int]] = defaultdict(list)
+    for player, value in rows:
+        if len(seen[player]) < RECENT:
+            seen[player].append(value)
+    return {p: sum(v) / len(v) for p, v in seen.items() if len(v) >= 3}
+
+
+def damage_line(avg: float) -> int:
+    """A damage line near the average, to the nearest 50 (at least 100)."""
+    return max(100, int(round(avg / 50)) * 50)
+
+
 def close_pairs(teams: list[int], form: dict[int, float], n: int = HEAD_TO_HEADS) -> list[list]:
     """``n`` head-to-heads between the closest-matched teams, no team twice."""
     order = sorted(teams, key=lambda t: (-form[t], t))
@@ -395,6 +426,8 @@ class Run:
             )[0]
             for n in range(1, matches_in(self.date, session) + 1)
         ]
+        set_fixture_maps(self.date, session, matches)
+        map_names = dict(Map.objects.values_list("pk", "name"))
         line = kills_line(self.season)
         names = dict(Team.objects.filter(pk__in=teams).values_list("pk", "name"))
         kills = team_form(teams, "kills")
@@ -403,9 +436,12 @@ class Run:
         stars = player_form(teams, STAR_PLAYERS)
         fraggers = top_players(teams)
         people = dict(Player.objects.filter(pk__in=stars).values_list("pk", "display_name"))
+        knocks = player_average(stars, "knocks")
+        damage = player_average(stars, "damage_dealt")
+        deaths = player_average(stars, "deaths")
         for f in matches:
             n, k = f.match_number, f"{session}:m{f.match_number}"
-            m = f"Match {n}"
+            m = f"Match {n}" + (f" · {map_names[f.map_id]}" if f.map_id in map_names else "")
             self.market(f"{k}:booyah", C.BOOYAH, f"Booyah · {m}", {"teams": teams}, closes, f)
             self.market(
                 f"{k}:kills", C.TOTAL_KILLS, f"Total kills · {m}", {"line": line}, closes, f
@@ -446,6 +482,16 @@ class Run:
                     f"{k}:player-kills:{p}", C.PLAYER_KILLS, f"{people[p]} kills · {m}",
                     {"player": p, "line": max(1, round(avg))}, closes, f,
                 )  # fmt: skip
+                if p in knocks:
+                    self.market(
+                        f"{k}:player-knocks:{p}", C.PLAYER_KNOCKS, f"{people[p]} knocks · {m}",
+                        {"player": p, "line": max(1, round(knocks[p]))}, closes, f,
+                    )  # fmt: skip
+                if p in damage:
+                    self.market(
+                        f"{k}:player-damage:{p}", C.PLAYER_DAMAGE, f"{people[p]} damage · {m}",
+                        {"player": p, "line": damage_line(damage[p])}, closes, f,
+                    )  # fmt: skip
         self.market(
             f"{session}:winner", C.SESSION_WINNER, f"{session} winner", {"teams": teams},
             closes, whole,
@@ -459,6 +505,13 @@ class Run:
                 f"{session}:fragger", C.SESSION_FRAGGER, f"{session} top fragger",
                 {"players": fraggers}, closes, whole,
             )  # fmt: skip
+        for p in stars:
+            if p in deaths:
+                self.market(
+                    f"{session}:deaths:{p}", C.SESSION_DEATHS, f"{people[p]} deaths ({session})",
+                    {"player": p, "line": max(1, round(deaths[p] * len(matches)))},
+                    closes, whole,
+                )  # fmt: skip
         for a, b in close_pairs(teams, team_form(teams)):
             self.market(
                 f"{session}:h2h:{a}-{b}", C.SESSION_H2H,
@@ -517,6 +570,35 @@ def run(date: dt.date | None = None, *, force: bool = False, actor=None) -> dict
             last_run_at=timezone.now(), last_report=report
         )
     return report
+
+
+def set_fixture_maps(date: dt.date, session: str, fixtures: list[Fixture]) -> None:
+    """Give each match fixture the map drawn for it (none on nights without sign-up)."""
+    scrim = ScrimSession.objects.filter(date=date, session=session).first()
+    maps = scrim_maps.ensure(scrim) if scrim is not None else []
+    for f in fixtures:
+        drawn = maps[f.match_number - 1] if f.match_number <= len(maps) else None
+        if f.map_id != drawn:
+            f.map_id = drawn
+            f.save(update_fields=["map", "updated_at"])
+
+
+def follow_maps(sender, scrim: ScrimSession, **kwargs) -> dict | None:
+    """Staff changed a session's maps: its match fixtures follow, and the markets nobody has
+    predicted on are made again, named and priced for the new maps. Markets with predictions
+    keep the map they were priced for, and are refunded if another map is played."""
+    if not settings.PREDICTIONS_ENABLED or scrim.session not in SESSIONS:
+        return None
+    fixtures = list(
+        Fixture.objects.filter(date=scrim.date, session=scrim.session, match_number__isnull=False)
+    )
+    set_fixture_maps(scrim.date, scrim.session, fixtures)
+    whole = Fixture.objects.filter(
+        date=scrim.date, session=scrim.session, match_number__isnull=True
+    ).first()
+    if whole is None or not whole.teams.exists():
+        return None  # no markets yet: they'll be made with these maps
+    return rebuild_session(whole, system_user())
 
 
 def rebuild_session(fixture: Fixture, actor) -> dict:

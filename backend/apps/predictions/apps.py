@@ -7,8 +7,10 @@ class PredictionsConfig(AppConfig):
     verbose_name = "Predictions (virtual coins)"
 
     def ready(self):
+        from apps.scrims.maps import maps_changed
         from apps.scrims.services import lobby_changed
 
-        from .auto import follow_registration
+        from .auto import follow_maps, follow_registration
 
         lobby_changed.connect(follow_registration, dispatch_uid="predictions-follow-registration")
+        maps_changed.connect(follow_maps, dispatch_uid="predictions-follow-maps")

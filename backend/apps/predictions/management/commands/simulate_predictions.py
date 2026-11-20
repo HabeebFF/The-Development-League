@@ -272,6 +272,10 @@ class Command(BaseCommand):
             params = {"player": rng.choice(players).pk, "line": rng.randint(1, 5)}
         elif kind == C.PLAYER_DAMAGE:
             params = {"player": rng.choice(players).pk, "line": rng.randint(4, 20) * 100}
+        elif kind == C.PLAYER_KNOCKS:
+            params = {"player": rng.choice(players).pk, "line": rng.randint(1, 4)}
+        elif kind == C.SESSION_DEATHS:
+            params = {"player": rng.choice(players).pk, "line": rng.randint(2, 6)}
         elif kind == C.PLAYER_H2H:
             params = {"players": [p.pk for p in rng.sample(players, 2)]}
         elif kind in (C.TOP_FRAGGER, C.FIRST_DEATH):

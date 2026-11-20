@@ -25,6 +25,7 @@ from .markets import (
     DEAD_HEAT,
     H2H,
     HANDICAPS,
+    PLAYER_LINES,
     PLAYER_MARKETS,
     RANGE_MARKETS,
     SEASON_MARKETS,
@@ -150,6 +151,13 @@ def _suggest_match(market: Market) -> dict:
     }
     if not rows:
         raise MarketError("The match has no results.", "not_ready")
+    if market.map_id and match.map_id and market.map_id != match.map_id:
+        evidence["map"] = {"priced_for": market.map_id, "played": match.map_id}
+        return _void(
+            f"The odds were for {market.map.name} but {match.map.name} was played: "
+            "everyone is refunded.",
+            evidence,
+        )
 
     def by_team(team_id: int) -> Outcome:
         return next(o for o in outcomes if o.team_id == team_id)
@@ -286,6 +294,7 @@ def _suggest_player(market: Market, match: Match, outcomes, evidence: dict) -> d
             "team": r.team_id,
             "kills": r.kills,
             "damage": r.damage_dealt,
+            "knocks": r.knocks,
         }
         for pid, r in players.items()
         if pid in listed
@@ -311,15 +320,15 @@ def _suggest_player(market: Market, match: Match, outcomes, evidence: dict) -> d
             notes.append("Players who didn't play are refunded.")
         return _settle(winners, absent, " ".join(notes), evidence, len(winners_ids))
 
-    if market.category in (C.PLAYER_KILLS, C.PLAYER_DAMAGE):
+    if market.category in PLAYER_LINES:
         row = players.get(p["player"])
         if row is None:
             return _void("The player didn't play: everyone is refunded.", evidence)
-        if market.category == C.PLAYER_KILLS:
-            return yes_no(row.kills, "kills")
-        if row.damage_dealt is None:
-            return _void("This match has no damage figures: everyone is refunded.", evidence)
-        return yes_no(row.damage_dealt, "damage")
+        what = PLAYER_LINES[market.category]
+        value = {"kills": row.kills, "damage": row.damage_dealt, "knocks": row.knocks}[what]
+        if value is None:
+            return _void(f"This match has no {what} figures: everyone is refunded.", evidence)
+        return yes_no(value, what)
 
     if market.category == C.PLAYER_H2H:
         a, b = listed
@@ -443,6 +452,8 @@ def _suggest_session(market: Market) -> dict:
         return _team_winners(market, rows, tied, "session winner", evidence)
     if market.category == C.SESSION_FRAGGER:
         return _fragger(market, matches, evidence)
+    if market.category == C.SESSION_DEATHS:
+        return _session_deaths(market, matches, evidence)
     if market.category == C.SESSION_KILLS:
         row = rows.get(market.params["team"])
         if row is None:
@@ -571,6 +582,28 @@ def _suggest_range(market: Market) -> dict:
     code = "yes" if row.rank <= market.params["n"] else "no"
     winner = next(o for o in market.outcomes.all() if o.code == code)
     return _settle([winner], note=f"Ranked {row.rank}.", evidence=evidence)
+
+
+def _session_deaths(market: Market, matches: list[Match], evidence: dict) -> dict:
+    """A player's deaths added up over the session. Refunded when they missed a match (fewer
+    matches means fewer deaths) or a match has no death figures."""
+    player, line = market.params["player"], market.params["line"]
+    rows = list(
+        PlayerMatchResult.objects.filter(match__in=matches, player_id=player).values_list(
+            "match_id", "deaths"
+        )
+    )
+    evidence["deaths"] = {str(m): d for m, d in rows}
+    if not rows:
+        return _void("The player didn't play in this session: everyone is refunded.", evidence)
+    if len({m for m, _ in rows}) < len(matches):
+        return _void("The player missed a match of the session: everyone is refunded.", evidence)
+    if any(d is None for _, d in rows):
+        return _void("A match has no death figures: everyone is refunded.", evidence)
+    total = sum(d for _, d in rows)
+    code = "yes" if total >= line else "no"
+    winner = next(o for o in market.outcomes.all() if o.code == code)
+    return _settle([winner], note=f"{total} deaths in the session.", evidence=evidence)
 
 
 def _fragger(market: Market, matches: list[Match], evidence: dict) -> dict:

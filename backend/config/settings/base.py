@@ -257,6 +257,11 @@ CELERY_BEAT_SCHEDULE = {
         "task": "apps.scrims.tasks.wrap_scrims_task",
         "schedule": crontab(minute="*/5"),
     },
+    # Each match's map, drawn as a night's sign-up opens (8pm the day before).
+    "scrims-draw-maps": {
+        "task": "apps.scrims.tasks.draw_maps_task",
+        "schedule": crontab(minute="*/5"),
+    },
     "predictions-auto-markets": {
         "task": "apps.predictions.tasks.auto_markets_task",
         "schedule": crontab(minute="*/5"),

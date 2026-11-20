@@ -15,6 +15,7 @@ from apps.league.models import Team
 from apps.league.serializers import TeamRefSerializer
 from common.permissions import IsStaff, IsTeamMemberOrStaff, PublicRead
 
+from . import maps as mp
 from . import services as sv
 from .models import Registration, ScrimLog, ScrimSession, ScrimSettings, Suspension
 
@@ -55,6 +56,8 @@ def session_data(date: dt.date, session: str, request, *, staff=False, conf=None
     """One session as every page shows it; ``staff`` adds who signed each team up and when."""
     conf = conf or ScrimSettings.get()
     scrim = _find(date, session)
+    if scrim is None and sv.stage(date, session, conf) in mp.DRAWS_FROM:
+        scrim = sv.get_session(date, session)  # sign-up is open: its maps get drawn now
     rows = (
         list(scrim.registrations.select_related("team", "registered_by").order_by("created_at"))
         if scrim
@@ -82,6 +85,7 @@ def session_data(date: dt.date, session: str, request, *, staff=False, conf=None
         "playing": [entry(r) for r in rows if r.status == R.REGISTERED],
         "invited": [entry(r) for r in rows if r.status == R.INVITED],
         "waitlist": [entry(r) for r in rows if r.status == R.WAITLIST],
+        "maps": mp.names(mp.ensure(scrim)) if scrim else [],
     }
 
 
@@ -322,6 +326,37 @@ class StaffSessionView(APIView):
         except sv.ScrimError as exc:
             raise _fail(exc) from exc
         return self._reply(request, day, key)
+
+
+class StaffMapsView(APIView):
+    """POST {redraw: true} draws every map again; POST {maps: [ids]} sets them in match order."""
+
+    permission_classes = [IsStaff]
+
+    def get(self, request, date, session):
+        from apps.maps.models import Map
+
+        day, key = _date(date), _session(session)
+        maps = Map.objects.filter(is_active=True).order_by("name")
+        return Response(
+            {
+                "session": session_data(day, key, request, staff=True),
+                "pool": [{"id": m.pk, "name": m.name, "slug": m.slug} for m in maps],
+                "matches": mp.matches_in(sv.get_session(day, key)),
+            }
+        )
+
+    def post(self, request, date, session):
+        day, key = _date(date), _session(session)
+        scrim = sv.get_session(day, key)
+        try:
+            if request.data.get("redraw"):
+                mp.redraw(scrim, request.user)
+            else:
+                mp.set_maps(scrim, request.data.get("maps"), request.user)
+        except sv.ScrimError as exc:
+            raise _fail(exc) from exc
+        return Response(session_data(day, key, request, staff=True))
 
 
 class StaffTeamsView(APIView):

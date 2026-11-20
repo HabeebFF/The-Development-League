@@ -37,6 +37,11 @@ urlpatterns = [
         name="admin-scrims-session",
     ),
     path(
+        f"admin/scrims/{SESSION}/maps",
+        views.StaffMapsView.as_view(),
+        name="admin-scrims-maps",
+    ),
+    path(
         f"admin/scrims/{SESSION}/add",
         views.StaffSessionView.as_view(action="add"),
         name="admin-scrims-add",
