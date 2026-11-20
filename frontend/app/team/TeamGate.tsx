@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { createContext, useContext, useEffect } from "react";
 
 import JoinTeam from "@/components/account/JoinTeam";
+import NewTeam from "@/components/account/NewTeam";
 import type { Me, Membership } from "@/lib/api";
 import { useMe } from "@/lib/useMe";
 
@@ -46,9 +47,29 @@ export default function TeamGate({ children }: { children: React.ReactNode }) {
             , so your manager can see who&apos;s asking.
           </p>
         )}
+        <div className="card p-4 text-sm">
+          <p className="font-display text-lg uppercase">Managing a new team?</p>
+          <p className="mt-1 text-muted">Create it with its roster and UIDs. Once TDL staff approve it you can sign up for scrims.</p>
+          <Link href="/create-team" className="btn btn-primary mt-3 px-4 py-1.5 text-xs">
+            Create your team
+          </Link>
+        </div>
         <Link href="/" className="mt-4 inline-block text-accent">
           Back home
         </Link>
+      </div>
+    );
+  }
+  // A team that created itself waits for staff before the team area opens.
+  if (membership && membership.team.status && membership.team.status !== "APPROVED") {
+    return (
+      <div className="mx-auto max-w-3xl space-y-4 px-4 py-10">
+        <p className="text-sm font-semibold tracking-[0.2em] text-accent uppercase">Team manager</p>
+        {membership.role === "MANAGER" ? (
+          <NewTeam />
+        ) : (
+          <p className="text-muted">{membership.team.name} is waiting for TDL staff to approve it.</p>
+        )}
       </div>
     );
   }

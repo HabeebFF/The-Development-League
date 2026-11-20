@@ -149,7 +149,8 @@ export type Role = "MANAGER" | "PLAYER";
 
 export type Membership = {
   id: number;
-  team: { id: number; name: string; tag: string; slug: string };
+  /** status: a team that created itself waits for staff ("PENDING") or was turned down. */
+  team: { id: number; name: string; tag: string; slug: string; status?: "PENDING" | "APPROVED" | "REJECTED" };
   role: Role;
   is_active: boolean;
   created_at: string;

@@ -5,6 +5,7 @@ Standings live in ``results`` (they are computed from match results).
 
 from __future__ import annotations
 
+from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils.text import slugify
@@ -129,6 +130,43 @@ class Team(TimeStampedModel):
         related_name="teams",
         help_text="League teams get the league_team plan automatically",
     )
+
+    # Teams that sign themselves up on the site wait for staff (NEW-TEAMS.md). Every team
+    # staff or the uploads made is APPROVED. A team only counts as a league team (and can
+    # sign up for scrims) once approved.
+    class Status(models.TextChoices):
+        PENDING = "PENDING", "Waiting for staff"
+        APPROVED = "APPROVED", "Approved"
+        REJECTED = "REJECTED", "Rejected"
+
+    status = models.CharField(max_length=10, choices=Status.choices, default=Status.APPROVED)
+    country = models.CharField(max_length=2, blank=True, help_text="ISO country code")
+    contact = models.CharField(
+        max_length=120, blank=True, help_text="WhatsApp or Discord, for staff only"
+    )
+    lobby_name = models.CharField(
+        max_length=80, blank=True, help_text="The team name as the game lobby shows it"
+    )
+    # While waiting: [{"uid": "123", "name": "...", "role": "RUSHER", "igl": false}, ...].
+    # On approval these become players on the team's roster.
+    pending_roster = models.JSONField(default=list, blank=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="teams_created",
+    )
+    reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="teams_reviewed",
+    )
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    review_note = models.CharField(max_length=200, blank=True)
+
     # Who calls for the team in game; the logs can't tell, so staff pick (Best IGL award).
     igl = models.ForeignKey(
         "league.Player",

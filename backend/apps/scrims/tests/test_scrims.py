@@ -348,3 +348,14 @@ def test_settings_api(clock, staff):
     assert bad.status_code == 400
     ok = c.patch("/api/v1/admin/scrims/settings", {"weekdays": [0, 1, 3, 4, 5]}, format="json")
     assert ok.status_code == 200 and sv.is_scrim_night(MONDAY + dt.timedelta(days=5))
+
+
+def test_team_waiting_for_staff_cant_register(clock, teams, manager):
+    clock(MONDAY, 13)
+    Team.objects.filter(pk=teams[0].pk).update(status=Team.Status.PENDING)
+    teams[0].refresh_from_db()
+    with pytest.raises(sv.ScrimError, match="waiting for TDL staff"):
+        sv.register(eight(), teams[0], manager)
+    Team.objects.filter(pk=teams[0].pk).update(status=Team.Status.APPROVED)
+    teams[0].refresh_from_db()
+    assert sv.register(eight(), teams[0], manager).status == R.REGISTERED

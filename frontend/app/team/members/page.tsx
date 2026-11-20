@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 
 import JoinRequests from "@/components/team/JoinRequests";
+import Squad from "@/components/team/Squad";
 import TeamPeople from "@/components/team/TeamPeople";
 
 import { useTeam } from "../TeamGate";
@@ -29,6 +30,7 @@ export default function TeamMembers() {
       </Link>
       <h1 className="mt-2 font-display text-5xl leading-none font-extrabold uppercase">{membership.team.name}</h1>
       <div className="mt-6">
+        <Squad slug={membership.team.slug} canManage={membership.role === "MANAGER" || staff} />
         {(membership.role === "MANAGER" || staff) && <JoinRequests slug={membership.team.slug} onAnswered={() => setAnswered((n) => n + 1)} />}
         <TeamPeople
           key={answered}
