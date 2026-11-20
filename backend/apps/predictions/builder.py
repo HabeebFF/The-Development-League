@@ -73,7 +73,7 @@ def describe(market: Market, outcome: Outcome) -> Pick:
         pick.teams.update(p.get("teams", []))
     elif cat == C.FIRST_BLOOD and (t := _team_of(code)) is not None:
         pick.teams.add(t)
-    elif cat in (C.PLAYER_KILLS, C.PLAYER_DAMAGE):
+    elif cat in (C.PLAYER_KILLS, C.PLAYER_DAMAGE, C.PLAYER_KNOCKS):
         pick.players.add(p["player"])
     elif cat in (C.TOP_FRAGGER, C.FIRST_DEATH) and outcome.player_id:
         pick.players.add(outcome.player_id)

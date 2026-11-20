@@ -63,6 +63,18 @@ class ScrimSession(models.Model):
     wrapped_at = models.DateTimeField(
         null=True, blank=True, help_text="Sign-up closed: invites dropped, waitlist refunded"
     )
+    maps = models.JSONField(
+        default=list, blank=True, help_text="Map ids in match order, drawn when sign-up opens"
+    )
+    maps_drawn_at = models.DateTimeField(null=True, blank=True)
+    maps_set_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+        help_text="Staff who last changed the maps (empty: the site drew them)",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

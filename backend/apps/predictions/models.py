@@ -142,6 +142,14 @@ class Fixture(models.Model):
         related_name="+",
         help_text="Teams in the lobby. Empty: the session's teams, else every league team",
     )
+    map = models.ForeignKey(
+        "maps.Map",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+        help_text="The map drawn for this match when sign-up opened",
+    )
     attention = models.CharField(
         max_length=300, blank=True, help_text="Why the site couldn't link it by itself"
     )
@@ -194,6 +202,8 @@ class Market(models.Model):
         PLAYER_H2H = "PLAYER_H2H", "Player head-to-head: more kills"
         FIRST_DEATH = "FIRST_DEATH", "First player to die"
         PLAYER_DAMAGE = "PLAYER_DAMAGE", "Player damage"
+        PLAYER_KNOCKS = "PLAYER_KNOCKS", "Player knocks"
+        SESSION_DEATHS = "SESSION_DEATHS", "Player deaths in the session"
         SESSION_FRAGGER = "SESSION_FRAGGER", "Session top fragger"
         SESSION_KILLS = "SESSION_KILLS", "Team kills in the session"
         SESSION_H2H = "SESSION_H2H", "Session head-to-head: more points"
@@ -218,6 +228,14 @@ class Market(models.Model):
         Fixture, on_delete=models.PROTECT, null=True, blank=True, related_name="markets"
     )
     params = models.JSONField(default=dict, blank=True, help_text="Teams, N, ...")
+    map = models.ForeignKey(
+        "maps.Map",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+        help_text="The map its odds were priced for; played on another map, it is refunded",
+    )
     status = models.CharField(max_length=10, choices=Status.choices, default=Status.DRAFT)
     opens_at = models.DateTimeField()
     closes_at = models.DateTimeField()

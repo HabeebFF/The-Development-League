@@ -13,6 +13,7 @@ import {
   weekdayList,
   type Entry,
   type LogRow,
+  type MapRef,
   type ScrimSession,
   type ScrimSettings,
   type StaffNight,
@@ -91,7 +92,13 @@ export default function ScrimsManager() {
 
       <div className="grid gap-6 lg:grid-cols-2">
         {night?.sessions.map((s) => (
-          <SessionPanel key={s.session} s={s} teams={teams} run={run} />
+          <SessionPanel
+            key={`${s.date}-${s.session}`}
+            s={s}
+            teams={teams}
+            pool={night.map_pool ?? []}
+            run={run}
+          />
         ))}
       </div>
 
@@ -130,10 +137,12 @@ type Run = (job: () => Promise<unknown>, done: string) => Promise<void>;
 function SessionPanel({
   s,
   teams,
+  pool,
   run,
 }: {
   s: ScrimSession;
   teams: StaffTeam[];
+  pool: MapRef[];
   run: Run;
 }) {
   const [pick, setPick] = useState("");
@@ -297,6 +306,14 @@ function SessionPanel({
         by close are dropped and the waitlist moves up.
       </p>
 
+      <MapsEditor
+        key={(s.maps ?? []).map((m) => m.id).join("-")}
+        s={s}
+        pool={pool}
+        base={base}
+        run={run}
+      />
+
       <form
         className="mt-3 flex items-end gap-2"
         onSubmit={(ev) => {
@@ -328,6 +345,103 @@ function SessionPanel({
         </button>
       </form>
     </section>
+  );
+}
+
+/** Each match's map: drawn when sign-up opens; staff can draw again or pick by hand until
+ * the session starts. Markets nobody predicted on are made again for the new maps. */
+function MapsEditor({
+  s,
+  pool,
+  base,
+  run,
+}: {
+  s: ScrimSession;
+  pool: MapRef[];
+  base: string;
+  run: Run;
+}) {
+  const count = s.match_count ?? s.maps?.length ?? 5;
+  const drawn = (s.maps ?? []).map((m) => String(m.id));
+  const [picked, setPicked] = useState<string[]>(
+    Array.from({ length: count }, (_, i) => drawn[i] ?? ""),
+  );
+  const fixed = s.stage === "started" || s.stage === "off";
+  const changed = picked.some((p, i) => p !== (drawn[i] ?? ""));
+  const complete = picked.every(Boolean);
+
+  return (
+    <div className="mt-5">
+      <h3 className="text-sm font-semibold text-muted uppercase">Maps</h3>
+      {drawn.length === 0 && (
+        <p className="mt-1 text-xs text-muted">
+          Drawn at random when sign-up opens. You can pick them now.
+        </p>
+      )}
+      <ol className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
+        {picked.map((value, i) => (
+          <li key={i} className="flex items-center gap-2">
+            <span className="num w-8 shrink-0 text-sm text-muted">
+              M{i + 1}
+            </span>
+            <select
+              className="input"
+              aria-label={`Match ${i + 1} map`}
+              value={value}
+              disabled={fixed}
+              onChange={(e) =>
+                setPicked(picked.map((p, j) => (j === i ? e.target.value : p)))
+              }
+            >
+              <option value="">Pick a map</option>
+              {pool.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.name}
+                </option>
+              ))}
+            </select>
+          </li>
+        ))}
+      </ol>
+      <div className="mt-2 flex flex-wrap gap-2">
+        <button
+          type="button"
+          className="btn btn-primary"
+          disabled={fixed || !changed || !complete}
+          onClick={() =>
+            run(
+              () =>
+                api(`${base}/maps`, {
+                  method: "POST",
+                  body: { maps: picked.map(Number) },
+                }),
+              `${s.session} maps saved.`,
+            )
+          }
+        >
+          Save maps
+        </button>
+        <button
+          type="button"
+          className="btn"
+          disabled={fixed}
+          onClick={() =>
+            run(
+              () =>
+                api(`${base}/maps`, { method: "POST", body: { redraw: true } }),
+              `${s.session} maps drawn again.`,
+            )
+          }
+        >
+          Draw again
+        </button>
+      </div>
+      <p className="mt-1 text-xs text-muted">
+        Everyone sees these on the lobby and on Predict, and match odds are
+        priced for them. Changing a map remakes the markets nobody has predicted
+        on; a match played on a different map is refunded.
+      </p>
+    </div>
   );
 }
 
@@ -426,11 +540,13 @@ function Suspensions({ teams, run }: { teams: StaffTeam[]; run: Run }) {
             onChange={(e) => setPick(e.target.value)}
           >
             <option value="">Pick a team</option>
-            {others.filter((t) => t.status !== "PENDING" && t.status !== "REJECTED").map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.name}
-              </option>
-            ))}
+            {others
+              .filter((t) => t.status !== "PENDING" && t.status !== "REJECTED")
+              .map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name}
+                </option>
+              ))}
           </select>
         </label>
         <label className="min-w-40 flex-[2] text-sm">

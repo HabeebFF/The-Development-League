@@ -14,6 +14,8 @@ export type Fixture = {
   match_number: number | null;
   scheduled_at: string;
   match: number | null;
+  /** The map drawn for this match when sign-up opened. */
+  map?: { id: number; name: string; slug: string } | null;
 };
 
 export type MarketStatus = "DRAFT" | "OPEN" | "SUSPENDED" | "CLOSED" | "SETTLED" | "VOID";
@@ -382,6 +384,8 @@ export type Category =
   | "PLAYER_H2H"
   | "FIRST_DEATH"
   | "PLAYER_DAMAGE"
+  | "PLAYER_KNOCKS"
+  | "SESSION_DEATHS"
   | "SESSION_WINNER"
   | "MOST_BOOYAHS"
   | "SESSION_KILLS"
@@ -465,6 +469,14 @@ export const CATEGORIES: CategorySpec[] = [
     line: { min: 100, max: 20000, label: "Damage line", start: 1000 },
     scope: "match",
   },
+  {
+    key: "PLAYER_KNOCKS",
+    label: "Player knocks (over/under)",
+    teams: NONE,
+    players: [1, 1],
+    line: { min: 1, max: 30, label: "Knocks line", start: 2 },
+    scope: "match",
+  },
   { key: "TOP_FRAGGER", label: "Top fragger (ties share)", teams: NONE, players: [2, null], line: null, scope: "match" },
   { key: "PLAYER_H2H", label: "Player head-to-head: more kills (tie refunds)", teams: NONE, players: [2, 2], line: null, scope: "match" },
   { key: "FIRST_DEATH", label: "First player to die (ties share)", teams: NONE, players: [2, null], line: null, scope: "match" },
@@ -476,6 +488,14 @@ export const CATEGORIES: CategorySpec[] = [
     teams: [1, 1],
     players: NONE,
     line: { min: 1, max: 200, label: "Kills line", start: 40 },
+    scope: "session",
+  },
+  {
+    key: "SESSION_DEATHS",
+    label: "Player deaths in the session (over/under)",
+    teams: NONE,
+    players: [1, 1],
+    line: { min: 1, max: 60, label: "Deaths line", start: 5 },
     scope: "session",
   },
   { key: "SESSION_H2H", label: "Session head-to-head: more points (tie refunds)", teams: [2, 2], players: NONE, line: null, scope: "session" },
@@ -517,6 +537,8 @@ export const RULES: Partial<Record<Category, string>> = {
   FIRST_BLOOD: "The team of the player who gets the first kill. Kills on a team-mate don't count.",
   PLAYER_KILLS: "Settled on the player's kills on the final scoreboard. Refunded if they don't play.",
   PLAYER_DAMAGE: "Settled on the damage the player deals to enemies. Refunded if they don't play or the match has no damage figures.",
+  PLAYER_KNOCKS: "Settled on how many enemies the player knocks down. Refunded if they don't play or the match has no knock figures.",
+  SESSION_DEATHS: "The player's deaths in every match of the session, added up. Refunded if they miss a match or a match has no death figures.",
   TOP_FRAGGER: "The player with the most kills in the match. A listed player who doesn't play is refunded.",
   PLAYER_H2H: "The player with more kills wins. A tie, or either player not playing, is refunded.",
   FIRST_DEATH: "The first player in the match to die, from any cause.",
@@ -584,8 +606,10 @@ export function outcomeCodes(category: Category, teams: Named[], n = 3, line = 1
         { code: "band:7", label: `${name}: 7th or lower` },
       ];
     case "PLAYER_KILLS":
-    case "PLAYER_DAMAGE": {
-      const what = category === "PLAYER_KILLS" ? "kills" : "damage";
+    case "PLAYER_DAMAGE":
+    case "PLAYER_KNOCKS":
+    case "SESSION_DEATHS": {
+      const what = LINE_WORD[category];
       if (!players[0]) return [];
       return [
         { code: "yes", label: `${who}: over ${half(line)} ${what}` },
@@ -603,6 +627,13 @@ export function outcomeCodes(category: Category, teams: Named[], n = 3, line = 1
       return teams.map((t) => ({ code: `team:${t.id}`, label: t.name }));
   }
 }
+
+const LINE_WORD: Record<string, string> = {
+  PLAYER_KILLS: "kills",
+  PLAYER_DAMAGE: "damage",
+  PLAYER_KNOCKS: "knocks",
+  SESSION_DEATHS: "deaths",
+};
 
 /** "19 Oct" for "2026-10-19" (the day as written, whatever the time zone). */
 export function shortDate(iso: string): string {
@@ -667,6 +698,10 @@ export function defaultTitle(
       return `${p ?? "Player"}: over/under ${half(line)} kills${where}`;
     case "PLAYER_DAMAGE":
       return `${p ?? "Player"}: over/under ${half(line)} damage${where}`;
+    case "PLAYER_KNOCKS":
+      return `${p ?? "Player"}: over/under ${half(line)} knocks${where}`;
+    case "SESSION_DEATHS":
+      return `${p ?? "Player"}: over/under ${half(line)} deaths in the session`;
     case "TOP_FRAGGER":
       return `Top fragger${where}`;
     case "PLAYER_H2H":

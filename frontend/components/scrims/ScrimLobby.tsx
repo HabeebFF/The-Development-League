@@ -4,6 +4,7 @@ import PriorityTeam from "@/components/dc/PriorityTeam";
 import SectionHeader from "@/components/ui/SectionHeader";
 import TeamBadge from "@/components/league/TeamBadge";
 import {
+  mapLine,
   nightName,
   places,
   stageText,
@@ -39,6 +40,7 @@ export function SessionLobby({
       >
         {stageText(s)}
       </p>
+      <SessionMaps s={s} />
       {s.invited.length > 0 && (
         <p className="mt-1 text-xs text-muted">
           {s.invited.length} invited team{s.invited.length === 1 ? "" : "s"}{" "}
@@ -67,6 +69,24 @@ export function SessionLobby({
         </p>
       )}
     </div>
+  );
+}
+
+/** The maps drawn for the session's matches, in order. */
+export function SessionMaps({ s }: { s: ScrimSession }) {
+  const maps = mapLine(s);
+  if (maps.length === 0) return null;
+  return (
+    <ul className="mt-3 flex flex-wrap gap-1.5" aria-label="Maps">
+      {maps.map((m) => (
+        <li
+          key={m}
+          className="border border-line px-2 py-0.5 text-xs tracking-wide uppercase"
+        >
+          {m}
+        </li>
+      ))}
+    </ul>
   );
 }
 

@@ -5,6 +5,12 @@ the market's match, session or rest of the season many times over. In each simul
 every team repeats one of its own recent published results, picked at random, and teams are
 placed in the order those results finished. A team with little history leans on the whole
 league's results instead. Odds are 1 / (chance x (1 + margin)), rounded down to a tidy step.
+
+When the map is known (drawn when scrim sign-up opens, ``apps.scrims.maps``), a team or
+player repeats a result from that map more often: the more they have played it, the more
+(``MAP_PRIOR`` matches' worth of their overall record is mixed in, so 1 or 2 games on a map
+don't swing the odds). Stand-ins and players with no history use the league's results on that
+map once there are enough of them. Session markets play each match on its own drawn map.
 """
 
 from __future__ import annotations
@@ -19,7 +25,9 @@ from django.conf import settings
 from django.db.models import Count, F, Sum
 
 from apps.league.models import Match, Player, Season, Team
+from apps.maps.models import Map
 from apps.results.models import MatchEvent, PlayerMatchResult, StandingRow, TeamMatchResult
+from apps.scrims.models import ScrimSession
 
 from .markets import (
     BANDS,
@@ -40,6 +48,8 @@ PRIOR = 5  # matches' worth of league-wide results blended into every team
 SIMS = 4000
 SEASON_SIMS = 1000
 FRAGGER_SIMS = 2000
+MAP_PRIOR = 8  # matches' worth of a team's overall record mixed into its record on a map
+MAP_POOL_MIN = 30  # league results on a map needed before stand-ins use them
 DEFAULT_LOBBY = 12
 DEFAULT_SESSION = 6
 DEFAULT_MATCHES_LEFT = 10
@@ -91,6 +101,13 @@ class Tally:
 class History:
     own: dict[int, list[Draw]] = field(default_factory=dict)
     pool: list[Draw] = field(default_factory=list)
+    on_map: dict[tuple[int, int], list[Draw]] = field(default_factory=dict)  # (team, map)
+    map_pool: dict[int, list[Draw]] = field(default_factory=dict)
+
+    def league(self, map_id: int | None) -> list[Draw]:
+        """The league's results to lean on: on this map, once there are enough."""
+        on = self.map_pool.get(map_id) if map_id else None
+        return on if on and len(on) >= MAP_POOL_MIN else self.pool
 
 
 def load_history() -> History:
@@ -99,31 +116,45 @@ def load_history() -> History:
     lobby = dict(published.values("match").annotate(n=Count("id")).values_list("match", "n"))
     rows = published.order_by(
         F("match__started_at").desc(nulls_last=True), "-match_id"
-    ).values_list("team_id", "match_id", "placement", "kills")
+    ).values_list("team_id", "match_id", "placement", "kills", "match__map_id")
     history = History()
-    for team, match, placement, kills in rows:
+    for team, match, placement, kills, map_id in rows:
         size = max(lobby[match], placement)
         draw = Draw((placement - 0.5) / size, kills)
         history.pool.append(draw)
         own = history.own.setdefault(team, [])
         if len(own) < HISTORY:
             own.append(draw)
+        if map_id:
+            history.map_pool.setdefault(map_id, []).append(draw)
+            on = history.on_map.setdefault((team, map_id), [])
+            if len(on) < HISTORY:
+                on.append(draw)
     return history
+
+
+def _pick(rng, own: list, on_map: list, league: list):
+    """One past result: from the player's or team's record on the map (weighted by how much
+    they've played it), else their overall record, else (little history) the league's."""
+    if on_map and rng.random() < len(on_map) / (len(on_map) + MAP_PRIOR):
+        return rng.choice(on_map)
+    if not own or rng.random() < PRIOR / (len(own) + PRIOR):
+        return rng.choice(league)
+    return rng.choice(own)
 
 
 class Simulator:
     def __init__(self, history: History, rng: random.Random):
         self.history, self.rng = history, rng
 
-    def draw(self, team: int) -> Draw:
-        own = self.history.own.get(team, [])
-        if not own or self.rng.random() < PRIOR / (len(own) + PRIOR):
-            return self.rng.choice(self.history.pool)
-        return self.rng.choice(own)
+    def draw(self, team: int, map_id: int | None = None) -> Draw:
+        h = self.history
+        on_map = h.on_map.get((team, map_id), []) if map_id else []
+        return _pick(self.rng, h.own.get(team, []), on_map, h.league(map_id))
 
-    def match(self, teams: list[int]) -> dict[int, tuple[int, int]]:
+    def match(self, teams: list[int], map_id: int | None = None) -> dict[int, tuple[int, int]]:
         """One simulated match: ``{team: (placement, kills)}``."""
-        draws = {t: self.draw(t) for t in teams}
+        draws = {t: self.draw(t, map_id) for t in teams}
         order = sorted(teams, key=lambda t: (draws[t].spot, self.rng.random()))
         return {t: (n, draws[t].kills) for n, t in enumerate(order, start=1)}
 
@@ -167,13 +198,13 @@ def _key(tally: Tally, tiebreakers: list[str]) -> tuple:
     return tuple(getattr(tally, tb) for tb in tiebreakers if hasattr(tally, tb))
 
 
-def _match_chances(category, params, sim, lobby, rule) -> dict[str, float]:
+def _match_chances(category, params, sim, lobby, rule, map_id=None) -> dict[str, float]:
     listed = params.get("teams") or ([params["team"]] if params.get("team") else [])
     teams = listed + [-n for n in range(1, max(lobby - len(listed), 0) + 1)]  # stand-ins
     wins: Counter = Counter()
     ties = 0
     for _ in range(SIMS):
-        result = sim.match(teams)
+        result = sim.match(teams, map_id)
         if category == C.BOOYAH:
             wins.update(f"team:{t}" for t in listed if result[t][0] == 1)
         elif category == C.TOP_N:
@@ -222,36 +253,73 @@ def _match_chances(category, params, sim, lobby, rule) -> dict[str, float]:
 # -- players --------------------------------------------------------------------------------------
 
 
+# What each player result holds, by position: (kills, damage dealt, knocks, deaths). Damage,
+# knocks and deaths are None on matches whose logs didn't have them.
+STAT = {"kills": 0, "damage": 1, "knocks": 2, "deaths": 3}
+LINE_STAT = {
+    C.PLAYER_KILLS: "kills",
+    C.PLAYER_DAMAGE: "damage",
+    C.PLAYER_KNOCKS: "knocks",
+    C.SESSION_DEATHS: "deaths",
+}
+
+
 @dataclass
 class PlayerHistory:
-    own: dict[int, list[tuple[int, int | None]]] = field(default_factory=dict)  # (kills, damage)
-    pool: list[tuple[int, int | None]] = field(default_factory=list)
+    own: dict[int, list[tuple]] = field(default_factory=dict)
+    pool: list[tuple] = field(default_factory=list)
+    on_map: dict[tuple[int, int], list[tuple]] = field(default_factory=dict)  # (player, map)
+    map_pool: dict[int, list[tuple]] = field(default_factory=dict)
     per_match: int = DEFAULT_LOBBY * 4
+
+    def records(self, player: int, map_id: int | None, stat: str = "kills"):
+        """(own, on this map, league) results that have ``stat``."""
+        i = STAT[stat]
+
+        def has(rows):
+            return [r for r in rows if r[i] is not None]
+
+        own = has(self.own.get(player, []))
+        on_map = has(self.on_map.get((player, map_id), [])) if map_id else []
+        league = has(self.map_pool.get(map_id, [])) if map_id else []
+        if len(league) < MAP_POOL_MIN:
+            league = has(self.pool)
+        return own, on_map, league
 
 
 def load_player_history() -> PlayerHistory:
-    """Every player's most recent published (kills, damage dealt), newest first."""
+    """Every player's most recent published (kills, damage, knocks, deaths), newest first."""
     published = PlayerMatchResult.objects.filter(match__status=Match.Status.PUBLISHED)
     rows = published.order_by(
         F("match__started_at").desc(nulls_last=True), "-match_id"
-    ).values_list("player_id", "kills", "damage_dealt")
+    ).values_list("player_id", "kills", "damage_dealt", "knocks", "deaths", "match__map_id")
     history = PlayerHistory()
-    for player, kills, damage in rows:
-        history.pool.append((kills, damage))
+    for player, kills, damage, knocks, deaths, map_id in rows:
+        row = (kills, damage, knocks, deaths)
+        history.pool.append(row)
         own = history.own.setdefault(player, [])
         if len(own) < HISTORY:
-            own.append((kills, damage))
+            own.append(row)
+        if map_id:
+            history.map_pool.setdefault(map_id, []).append(row)
+            on = history.on_map.setdefault((player, map_id), [])
+            if len(on) < HISTORY:
+                on.append(row)
     sizes = list(published.values("match").annotate(n=Count("id")).values_list("n", flat=True))
     if sizes:
         history.per_match = round(median(sizes))
     return history
 
 
-def _blended(own: list, pool: list, hit) -> float:
+def _blended(own: list, pool: list, hit, on_map: list | None = None) -> float:
     """The share of a player's (or team's) matches where ``hit`` is true, pulled towards the
-    league-wide share when they have played little."""
+    league-wide share when they have played little, and towards their share on the map when
+    they have played it."""
     league = sum(map(hit, pool)) / len(pool) if pool else 0.0
-    return (sum(map(hit, own)) + PRIOR * league) / (len(own) + PRIOR)
+    overall = (sum(map(hit, own)) + PRIOR * league) / (len(own) + PRIOR)
+    if not on_map:
+        return overall
+    return (sum(map(hit, on_map)) + MAP_PRIOR * overall) / (len(on_map) + MAP_PRIOR)
 
 
 def _first_rates(firsts: Counter, played: Counter, ids: list[int], field_size: int) -> list[float]:
@@ -260,17 +328,17 @@ def _first_rates(firsts: Counter, played: Counter, ids: list[int], field_size: i
     return [(firsts[i] + PRIOR / field_size) / (played[i] + PRIOR) for i in ids]
 
 
-def _player_chances(category, params, rng: random.Random) -> dict[str, float]:
+def _player_chances(category, params, rng: random.Random, map_id=None) -> dict[str, float]:
     history = load_player_history()
     if not history.pool:
         raise MarketError("There are no published player results to work from yet.", "no_history")
-    if category in (C.PLAYER_KILLS, C.PLAYER_DAMAGE):
-        index, line = (0 if category == C.PLAYER_KILLS else 1), params["line"]
-        own = [r for r in history.own.get(params["player"], []) if r[index] is not None]
-        pool = [r for r in history.pool if r[index] is not None]
+    if category in LINE_STAT:
+        stat, line = LINE_STAT[category], params["line"]
+        index = STAT[stat]
+        own, on_map, pool = history.records(params["player"], map_id, stat)
         if not pool:
-            raise MarketError("There are no damage figures to work from yet.", "no_history")
-        yes = _blended(own, pool, lambda r: r[index] >= line)
+            raise MarketError(f"There are no {stat} figures to work from yet.", "no_history")
+        yes = _blended(own, pool, lambda r: r[index] >= line, on_map)
         return {"yes": yes, "no": 1 - yes}
     players = params["players"]
     if category == C.FIRST_DEATH:
@@ -293,11 +361,9 @@ def _player_chances(category, params, rng: random.Random) -> dict[str, float]:
         return {f"player:{p}": r for p, r in zip(players, rates, strict=True)}
 
     def draw(player: int) -> int:
-        own = history.own.get(player, [])
-        if not own or rng.random() < PRIOR / (len(own) + PRIOR):
-            return rng.choice(history.pool)[0]
-        return rng.choice(own)[0]
+        return _pick(rng, *history.records(player, map_id))[0]
 
+    league = history.records(0, map_id)[2]
     shares: defaultdict = defaultdict(float)
     ties = 0
     others = max(history.per_match - len(players), 0)
@@ -310,7 +376,7 @@ def _player_chances(category, params, rng: random.Random) -> dict[str, float]:
             else:
                 shares[a if kills[a] > kills[b] else b] += 1
             continue
-        field_best = max((rng.choice(history.pool)[0] for _ in range(others)), default=0)
+        field_best = max((rng.choice(league)[0] for _ in range(others)), default=0)
         best = max(max(kills.values()), field_best)
         if best == 0:
             ties += 1  # nobody scores: the market is refunded
@@ -363,8 +429,13 @@ def _share_wins(shares: defaultdict, leaders: list[int], listed: list[int]) -> N
             shares[t] += 1 / len(leaders)
 
 
-def _session_chances(category, params, sim, lobby, matches, season) -> dict[str, float]:
-    """Session markets, and date-range team markets played as ``matches`` matches in a row."""
+def _map_of(maps: list | None, n: int) -> int | None:
+    return maps[n] if maps and n < len(maps) else None
+
+
+def _session_chances(category, params, sim, lobby, matches, season, maps=None) -> dict[str, float]:
+    """Session markets, and date-range team markets played as ``matches`` matches in a row
+    (each on its drawn map, when ``maps`` are known)."""
     listed = params.get("teams") or [params["team"]]
     teams = listed + [-n for n in range(1, max(lobby - len(listed), 0) + 1)]
     rule, tiebreakers = season.scoring_rule, season.tiebreakers
@@ -372,8 +443,8 @@ def _session_chances(category, params, sim, lobby, matches, season) -> dict[str,
     ties = 0
     for _ in range(SIMS):
         tallies = {t: Tally() for t in teams}
-        for _ in range(matches):
-            for t, (place, kills) in sim.match(teams).items():
+        for n in range(matches):
+            for t, (place, kills) in sim.match(teams, _map_of(maps, n)).items():
                 tallies[t].add(place, kills, rule)
         if category == C.SESSION_KILLS:
             shares["yes"] += tallies[params["team"]].kills >= params["line"]
@@ -405,9 +476,12 @@ def _session_chances(category, params, sim, lobby, matches, season) -> dict[str,
     return {f"team:{t}": shares[t] / decided for t in listed}
 
 
-def _fragger_chances(players, matches: int, sims: int, rng, start=None, field=None) -> dict:
+def _fragger_chances(
+    players, matches: int, sims: int, rng, start=None, field=None, maps=None
+) -> dict:
     """Most kills over ``matches`` matches: ``start`` kills already scored (the season so far)
-    and ``field``, the other players who could win (unnamed stand-ins when not given)."""
+    and ``field``, the other players who could win (unnamed stand-ins when not given). Each
+    match is played on its drawn map when ``maps`` are known."""
     history = load_player_history()
     if not history.pool:
         raise MarketError("There are no published player results to work from yet.", "no_history")
@@ -416,16 +490,13 @@ def _fragger_chances(players, matches: int, sims: int, rng, start=None, field=No
         field = [-n for n in range(1, max(history.per_match - len(players), 0) + 1)]
     everyone = list(players) + [p for p in field if p not in players]
 
-    def draw(player: int) -> int:
-        own = history.own.get(player, [])
-        if not own or rng.random() < PRIOR / (len(own) + PRIOR):
-            return rng.choice(history.pool)[0]
-        return rng.choice(own)[0]
+    def draw(player: int, n: int) -> int:
+        return _pick(rng, *history.records(player, _map_of(maps, n)))[0]
 
     shares: defaultdict = defaultdict(float)
     nobody = 0
     for _ in range(sims):
-        kills = {p: start.get(p, 0) + sum(draw(p) for _ in range(matches)) for p in everyone}
+        kills = {p: start.get(p, 0) + sum(draw(p, n) for n in range(matches)) for p in everyone}
         best = max(kills.values())
         if best == 0:
             nobody += 1  # nobody scores: the market is refunded
@@ -438,6 +509,22 @@ def _fragger_chances(players, matches: int, sims: int, rng, start=None, field=No
     if not decided:
         return {f"player:{p}": 1 / len(players) for p in players}
     return {f"player:{p}": shares[p] / decided for p in players}
+
+
+def _session_deaths_chances(params, matches: int, rng, maps=None) -> dict[str, float]:
+    """A player's deaths over the session: each match repeats one of their past matches (on
+    that match's map when it's known), added up."""
+    history = load_player_history()
+    i = STAT["deaths"]
+    player, line = params["player"], params["line"]
+    if not history.records(player, None, "deaths")[2]:
+        raise MarketError("There are no death figures to work from yet.", "no_history")
+    records = [history.records(player, _map_of(maps, n), "deaths") for n in range(matches)]
+    yes = 0
+    for _ in range(FRAGGER_SIMS):
+        total = sum(_pick(rng, *r)[i] for r in records)
+        yes += total >= line
+    return {"yes": yes / FRAGGER_SIMS, "no": 1 - yes / FRAGGER_SIMS}
 
 
 def _season_fragger_chances(params, matches_left, season, rng) -> dict:
@@ -489,6 +576,17 @@ def _season_chances(category, params, sim, lobby, matches_left, season) -> dict[
     return {"yes": yes, "no": 1 - yes}
 
 
+# -- maps -----------------------------------------------------------------------------------------
+
+
+def session_maps(fixture) -> list[int]:
+    """The maps of a whole-session fixture's matches, in order (empty when not drawn)."""
+    if fixture is None or fixture.match_number is not None:
+        return []
+    scrim = ScrimSession.objects.filter(date=fixture.date, session=fixture.session).first()
+    return list(scrim.maps) if scrim and scrim.maps else []
+
+
 # -- odds -----------------------------------------------------------------------------------------
 
 
@@ -514,6 +612,8 @@ def suggest_odds(
     rng = random.Random(f"{season.pk}:{category}:{sorted(params.items())}:{fixture and fixture.pk}")
     sim, lobby = Simulator(history, rng), lobby_size(season)
     info: dict = {"lobby": lobby}
+    map_id = fixture.map_id if fixture is not None and fixture.match_number else None
+    maps = session_maps(fixture)
     left = DEFAULT_MATCHES_LEFT if matches_left is None else matches_left
     if category == C.SEASON_FRAGGER:
         chances = _season_fragger_chances(params, left, season, rng)
@@ -528,22 +628,29 @@ def suggest_odds(
         chances = _season_chances(category, params, sim, lobby, left, season)
         info.update(matches_left=left, simulations=SEASON_SIMS)
     elif category == C.SESSION_FRAGGER:
-        matches = session_length(season, fixture)
-        chances = _fragger_chances(params["players"], matches, FRAGGER_SIMS, rng)
+        matches = len(maps) or session_length(season, fixture)
+        chances = _fragger_chances(params["players"], matches, FRAGGER_SIMS, rng, maps=maps)
+        info.update(matches=matches, simulations=FRAGGER_SIMS)
+    elif category == C.SESSION_DEATHS:
+        matches = len(maps) or session_length(season, fixture)
+        chances = _session_deaths_chances(params, matches, rng, maps)
         info.update(matches=matches, simulations=FRAGGER_SIMS)
     elif category in SESSION_MARKETS:
-        matches = session_length(season, fixture)
-        chances = _session_chances(category, params, sim, lobby, matches, season)
+        matches = len(maps) or session_length(season, fixture)
+        chances = _session_chances(category, params, sim, lobby, matches, season, maps)
         info.update(matches=matches, simulations=SIMS)
     elif category in PLAYER_MARKETS:
-        chances = _player_chances(category, params, rng)
+        chances = _player_chances(category, params, rng, map_id)
         info.update(matches=1, simulations=SIMS)
     elif category == C.FIRST_BLOOD:
         chances = _first_blood_chances(params)
         info.update(matches=1)
     else:
-        chances = _match_chances(category, params, sim, lobby, season.scoring_rule)
+        chances = _match_chances(category, params, sim, lobby, season.scoring_rule, map_id)
         info.update(matches=1, simulations=SIMS)
+    named = dict(Map.objects.filter(pk__in=[map_id, *maps]).values_list("pk", "name"))
+    info["map"] = named.get(map_id)
+    info["maps"] = [named.get(m) for m in maps]
 
     margin = settings.PREDICTIONS_ODDS_MARGIN
     if category in ONE_WINNER and sum(chances.values()) > 1:
