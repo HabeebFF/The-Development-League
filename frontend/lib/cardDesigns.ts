@@ -56,9 +56,44 @@ export const PALETTES: Record<string, [string, string, string, string, string]> 
   booyah: ["#3b2804", "#0b0702", "#fff4c8", "#ffd34d", "255 200 60"],
   phoenix: ["#5c1500", "#0c0200", "#fff5de", "#ffb02e", "255 140 30"],
   void: ["#16072b", "#020006", "#f5ecff", "#c084fc", "176 110 255"],
+  // Player shop: the 30 art designs (components/league/CardArt.tsx).
+  noir: ["#7a6248", "#1c1b1a", "#f6ecd8", "#e0c79a", "214 170 110"],
+  vice: ["#3a0f5e", "#0b0418", "#ffffff", "#3ef2e0", "255 79 154"],
+  wanted: ["#ecdcb0", "#b38b55", "#2a170a", "#5a3a1a", "214 176 112"],
+  comic: ["#ffe14d", "#ff8a2a", "#111111", "#111111", "255 210 60"],
+  anime: ["#1b2280", "#05051c", "#ffffff", "#7df9ff", "120 220 255"],
+  glitch: ["#160b33", "#03020a", "#f0fbff", "#ff2bd6", "255 43 214"],
+  vapor: ["#ffb0dd", "#8fd3f0", "#2a1342", "#ffffff", "255 160 225"],
+  graffiti: ["#6e3b2c", "#221310", "#ffffff", "#ffe14d", "255 90 190"],
+  dossier: ["#d8c592", "#9c8656", "#1c1a12", "#3b3a2a", "190 170 110"],
+  prism: ["#eef1ff", "#9aa3d6", "#11133a", "#ffffff", "200 190 255"],
+  blueprint: ["#2361ad", "#0b2b5a", "#ffffff", "#ffffff", "120 180 255"],
+  arcade: ["#0b0b33", "#000000", "#ffffff", "#39ff14", "57 255 20"],
+  afro: ["#3f0f66", "#0b0219", "#fff3d6", "#f5c542", "245 197 66"],
+  lagos: ["#22104a", "#05030d", "#ffffff", "#ffd400", "255 212 0"],
+  magma: ["#2b1c1c", "#050202", "#fff1e0", "#ff6a1a", "255 90 20"],
+  frost: ["#2f6c96", "#061a2c", "#f2fbff", "#d8f3ff", "170 225 255"],
+  chaser: ["#2b3050", "#06070f", "#ffffff", "#c9b8ff", "170 150 255"],
+  royal: ["#5c0f26", "#15030a", "#fff0c8", "#e6b84d", "230 184 77"],
+  ink: ["#f3ecdc", "#d3c4a2", "#141210", "#141210", "200 40 40"],
+  steam: ["#5e3d1e", "#1a0f06", "#fbe9c6", "#d79a4a", "215 154 74"],
+  station: ["#0b1830", "#010308", "#e8f6ff", "#5fd4ff", "95 212 255"],
+  toxic: ["#1e330b", "#040902", "#f2ffe0", "#b6ff1a", "160 255 30"],
+  mirage: ["#e7913f", "#3e1706", "#ffffff", "#ffe0a3", "255 170 80"],
+  ruins: ["#3a5233", "#0e1a0c", "#eef6e2", "#c4d39a", "150 200 110"],
+  racer: ["#2c2f36", "#08090b", "#ffffff", "#ff2a2a", "255 42 42"],
+  classic: ["#2a6fd6", "#0d2a63", "#ffffff", "#ffe066", "120 170 255"],
+  glass: ["#1d1433", "#07040f", "#ffffff", "#f4d27a", "150 120 255"],
+  assassin: ["#1a1220", "#000000", "#f3e9ee", "#ff1f3d", "255 31 61"],
+  dragon: ["#2c0b52", "#030016", "#ffffff", "#ff8bf0", "190 120 255"],
+  platinum: ["#d9dee6", "#6f7884", "#0b0e13", "#ffffff", "225 235 250"],
 };
 
 /** Tailwind-free CSS backgrounds, layered over the palette gradient. */
+/** A small SVG drawn as a repeating background tile. */
+const tile = (svg: string, size: string) =>
+  `url("data:image/svg+xml,${encodeURIComponent(`<svg xmlns='http://www.w3.org/2000/svg' ${svg}</svg>`)}") 0 0 / ${size}`;
+
 export const PATTERNS: Record<string, string> = {
   none: "none",
   carbon:
@@ -81,6 +116,42 @@ export const PATTERNS: Record<string, string> = {
     "radial-gradient(circle at 66% 26%, transparent 0 2.6em, rgb(92 255 143 / 0.28) 2.6em 2.68em, transparent 2.7em 3.9em, rgb(92 255 143 / 0.16) 3.9em 3.96em, transparent 4em), repeating-linear-gradient(0deg, rgb(92 255 143 / 0.05) 0 1px, transparent 1px 4px)",
   facets:
     "conic-gradient(from 30deg at 50% 38%, rgb(255 255 255 / 0.55), rgb(160 200 240 / 0.15) 15%, rgb(255 255 255 / 0.4) 30%, rgb(120 170 220 / 0.2) 45%, rgb(255 255 255 / 0.5) 60%, rgb(150 200 255 / 0.15) 75%, rgb(255 255 255 / 0.45) 90%, rgb(255 255 255 / 0.55))",
+  // Player shop art designs.
+  grain:
+    "radial-gradient(circle at 30% 40%, rgb(0 0 0 / 0.18) 0 1px, transparent 1.5px) 0 0 / 0.31em 0.37em, radial-gradient(circle at 70% 20%, rgb(255 255 255 / 0.08) 0 1px, transparent 1.5px) 0 0 / 0.43em 0.29em",
+  halftone:
+    "radial-gradient(circle, rgb(220 30 40 / 0.32) 30%, transparent 33%) 0 0 / 0.42em 0.42em, radial-gradient(circle, rgb(220 30 40 / 0.32) 30%, transparent 33%) 0.21em 0.21em / 0.42em 0.42em",
+  scanlines: "repeating-linear-gradient(0deg, rgb(0 0 0 / 0.32) 0 1px, transparent 1px 3px)",
+  bpgrid:
+    "linear-gradient(rgb(255 255 255 / 0.2) 1px, transparent 1px) 0 0 / 2.5em 2.5em, linear-gradient(90deg, rgb(255 255 255 / 0.2) 1px, transparent 1px) 0 0 / 2.5em 2.5em, linear-gradient(rgb(255 255 255 / 0.07) 1px, transparent 1px) 0 0 / 0.5em 0.5em, linear-gradient(90deg, rgb(255 255 255 / 0.07) 1px, transparent 1px) 0 0 / 0.5em 0.5em",
+  brick: tile(
+    "width='40' height='36'><g fill='rgba(0,0,0,0.38)'><rect y='16' width='40' height='2'/><rect y='34' width='40' height='2'/><rect x='38' width='2' height='16'/><rect x='18' y='18' width='2' height='16'/></g><g fill='rgba(255,255,255,0.07)'><rect width='38' height='2'/><rect y='18' width='18' height='2'/><rect x='20' y='18' width='18' height='2'/></g><g fill='rgba(0,0,0,0.12)'><rect x='4' y='6' width='9' height='5'/><rect x='26' y='24' width='7' height='4'/></g>",
+    "2.4em 2.16em",
+  ),
+  pixel:
+    "linear-gradient(rgb(255 255 255 / 0.04) 1px, transparent 1px) 0 0 / 0.3em 0.3em, linear-gradient(90deg, rgb(255 255 255 / 0.04) 1px, transparent 1px) 0 0 / 0.3em 0.3em",
+  velvet: tile(
+    "width='40' height='56'><g fill='none' stroke='rgba(0,0,0,0.28)' stroke-width='2'><path d='M20 6 C28 14 28 22 20 28 C12 22 12 14 20 6Z'/><path d='M20 28 C26 32 32 30 36 26 M20 28 C14 32 8 30 4 26'/><path d='M0 34 C8 42 8 50 0 56 M40 34 C32 42 32 50 40 56'/></g><circle cx='20' cy='44' r='2' fill='rgba(255,220,150,0.14)'/>",
+    "2em 2.8em",
+  ),
+  stone: tile(
+    "width='60' height='44'><g fill='none' stroke='rgba(0,0,0,0.35)' stroke-width='1.6'><path d='M0 14 H22 L26 0 M22 14 L20 30 H0 M20 30 H44 L46 14 H22 M46 14 H60 M44 30 L42 44 M26 0 M46 14 L48 0'/></g><g fill='none' stroke='rgba(255,255,255,0.08)' stroke-width='1'><path d='M1 16 H20 M24 32 H42 M48 16 H59'/></g>",
+    "3em 2.2em",
+  ),
+  ricepaper:
+    "repeating-linear-gradient(82deg, rgb(120 100 60 / 0.06) 0 1px, transparent 1px 7px), repeating-linear-gradient(-8deg, rgb(120 100 60 / 0.04) 0 1px, transparent 1px 11px), radial-gradient(ellipse at 50% 40%, transparent 55%, rgb(120 90 40 / 0.25))",
+  obsidian:
+    "conic-gradient(from 20deg at 30% 30%, rgb(255 255 255 / 0.07), transparent 12%, rgb(255 255 255 / 0.03) 30%, transparent 45%, rgb(255 255 255 / 0.06) 62%, transparent 78%, rgb(255 255 255 / 0.05) 90%, transparent), conic-gradient(from 200deg at 75% 70%, rgb(255 255 255 / 0.05), transparent 15%, rgb(255 255 255 / 0.04) 40%, transparent 60%)",
+  stars:
+    "radial-gradient(1px 1px at 12% 18%, #fff, transparent), radial-gradient(1px 1px at 63% 9%, #fff, transparent), radial-gradient(1.5px 1.5px at 81% 37%, #fff, transparent), radial-gradient(1px 1px at 33% 52%, rgb(255 255 255 / 0.8), transparent), radial-gradient(1px 1px at 91% 71%, #fff, transparent), radial-gradient(1.5px 1.5px at 22% 83%, rgb(255 255 255 / 0.9), transparent), radial-gradient(1px 1px at 52% 92%, #fff, transparent), radial-gradient(1px 1px at 72% 62%, rgb(255 255 255 / 0.7), transparent)",
+  frostbite:
+    "radial-gradient(circle at 15% 20%, rgb(255 255 255 / 0.25), transparent 30%), radial-gradient(circle at 85% 85%, rgb(255 255 255 / 0.2), transparent 30%), repeating-linear-gradient(60deg, rgb(255 255 255 / 0.04) 0 1px, transparent 1px 9px), repeating-linear-gradient(-60deg, rgb(255 255 255 / 0.04) 0 1px, transparent 1px 9px)",
+  dunes: "repeating-linear-gradient(172deg, rgb(255 255 255 / 0.05) 0 2px, transparent 2px 10px)",
+  scales: tile(
+    "width='20' height='14'><g fill='none' stroke='rgba(255,200,255,0.22)' stroke-width='1.2'><path d='M0 14 A10 10 0 0 1 20 14'/><path d='M-10 7 A10 10 0 0 1 10 7 M10 7 A10 10 0 0 1 30 7'/></g>",
+    "0.9em 0.63em",
+  ),
+  lead: "linear-gradient(rgb(0 0 0 / 0.25), rgb(0 0 0 / 0.25))",
 };
 
 export const RARITY_COLORS: Record<CardDesign["rarity"], string> = {

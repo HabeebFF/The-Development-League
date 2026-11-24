@@ -10,6 +10,7 @@ import {
 } from "@/lib/cards";
 import { copyText, designColors, designPerks, PALETTES, PATTERNS } from "@/lib/cardDesigns";
 
+import CardArt, { ART_EFFECTS } from "./CardArt";
 import CardFx, { CardFrame, FX_EFFECTS } from "./CardFx";
 import { CARD_SHAPE } from "./cardShape";
 
@@ -36,6 +37,7 @@ export default function PlayerCard({
   const pattern = look ? PATTERNS[card.design!.parts.pattern] : undefined;
   const copy = look ? copyText(card.design) : null;
   const fx = (FX_EFFECTS as readonly string[]).includes(effect);
+  const art = (ART_EFFECTS as readonly string[]).includes(effect);
   const perks = look ? designPerks(card.design) : designPerks(null);
   // Player shop extras never go on special cards.
   const shopExtras = plainTier ? card.extras : null;
@@ -49,6 +51,7 @@ export default function PlayerCard({
   const icon = card.tier === "icon";
   return (
     <div
+      data-fx={art ? effect : undefined}
       className={`holo-host relative aspect-[5/7] w-[15em] select-none ${perks.entrance ? "fx-enter" : ""}`}
       style={{
         fontSize: `${size * 16}px`,
@@ -68,7 +71,7 @@ export default function PlayerCard({
       }}
     >
       <div
-        className="absolute inset-0"
+        className="absolute inset-0 overflow-hidden"
         style={{
           clipPath: CARD_SHAPE,
           background: `linear-gradient(160deg, ${top}, ${bottom})`,
@@ -83,6 +86,7 @@ export default function PlayerCard({
           <span className="absolute inset-0 bg-[repeating-linear-gradient(60deg,rgb(255_255_255/0.05)_0_2px,transparent_2px_12px)]" />
         )}
         {fx && <CardFx effect={effect} />}
+        {art && <CardArt effect={effect} rating={card.overall} />}
         {effect === "glow" && <span aria-hidden className="design-glow absolute inset-0" />}
         {effect === "shine" && <span aria-hidden className="design-shine absolute inset-0" />}
         {effect === "flame" && <span aria-hidden className="design-flame absolute inset-0" />}

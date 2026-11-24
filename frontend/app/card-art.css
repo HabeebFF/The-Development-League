@@ -1,0 +1,378 @@
+/* The 30 Player shop art designs (components/league/CardArt.tsx). The card is 15em x 21em.
+   Motion uses transform and opacity; reduced motion turns it all off. */
+
+.art-layer { position: absolute; inset: 0; pointer-events: none; }
+.art-svg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
+.art-p { position: absolute; pointer-events: none; will-change: transform, opacity; }
+.art-plate {
+  position: absolute; left: 1em; right: 1em; top: 8.5em; height: 7.5em; pointer-events: none;
+  clip-path: polygon(0.5em 0, calc(100% - 0.5em) 0, 100% 0.5em, 100% calc(100% - 0.5em), calc(100% - 0.5em) 100%, 0.5em 100%, 0 calc(100% - 0.5em), 0 0.5em);
+}
+
+/* Text treatments per design: the card's numbers and name stay where they are. */
+[data-fx="noir"] .font-display { text-shadow: 0.05em 0.05em 0 #000, -0.03em -0.03em 0 #000, 0.03em -0.03em 0 #000, -0.03em 0.03em 0 #000; }
+[data-fx="vice"] .font-display { text-shadow: 0 0 0.25em rgb(255 79 154 / 0.9), 0 0 0.05em #000; }
+[data-fx="anime"] .font-display { text-shadow: 0 0 0.3em rgb(125 249 255 / 0.9), 0.04em 0.04em 0 #05051c; }
+[data-fx="glitch"] .font-display { text-shadow: 0.06em 0 rgb(255 43 214 / 0.85), -0.06em 0 rgb(0 240 255 / 0.85); }
+[data-fx="glitch"] p.font-display { animation: gx-jitter 3.2s steps(1) infinite; }
+[data-fx="graffiti"] .font-display, [data-fx="lagos"] .font-display, [data-fx="mirage"] .font-display,
+[data-fx="toxic"] .font-display, [data-fx="chaser"] .font-display, [data-fx="steam"] .font-display,
+[data-fx="lava"] .font-display, [data-fx="ruins"] .font-display, [data-fx="classic"] .font-display,
+[data-fx="glass"] .font-display, [data-fx="racer"] .font-display, [data-fx="frost"] .font-display,
+[data-fx="station"] .font-display, [data-fx="afro"] .font-display, [data-fx="royal"] .font-display,
+[data-fx="assassin"] .font-display, [data-fx="dragon"] .font-display, [data-fx="blueprint"] .font-display {
+  text-shadow: 0 0.06em 0.12em rgb(0 0 0 / 0.85);
+}
+[data-fx="comic"] .font-display { letter-spacing: 0.04em; }
+[data-fx="platinum"] .font-display { text-shadow: 0 0.04em 0 rgb(255 255 255 / 0.7), 0 -0.03em 0 rgb(0 0 0 / 0.35); }
+[data-fx="arcade"] .font-display { text-shadow: 0 0 0.3em rgb(57 255 20 / 0.8); }
+@keyframes gx-jitter { 0%, 88%, 100% { transform: none; } 90% { transform: translateX(0.08em); } 93% { transform: translateX(-0.1em) skewX(-6deg); } 96% { transform: translateX(0.04em); } }
+
+/* 1. Liberty Noir */
+.nx-smog { background: radial-gradient(ellipse 40% 18% at 30% 50%, rgb(210 205 195 / 0.22), transparent 70%), radial-gradient(ellipse 35% 14% at 75% 30%, rgb(210 205 195 / 0.18), transparent 70%); }
+.nx-smog-a { animation: nx-drift 14s ease-in-out infinite alternate; }
+.nx-smog-b { transform: scaleY(-1); animation: nx-drift-b 18s ease-in-out infinite alternate; }
+@keyframes nx-drift { from { transform: translateX(-12%); } to { transform: translateX(12%); } }
+@keyframes nx-drift-b { from { transform: scaleY(-1) translateX(10%); } to { transform: scaleY(-1) translateX(-10%); } }
+.nx-grain { background: radial-gradient(circle at 30% 40%, rgb(0 0 0 / 0.25) 0 1px, transparent 1.5px) 0 0 / 0.27em 0.33em, radial-gradient(circle at 60% 70%, rgb(255 240 210 / 0.1) 0 1px, transparent 1.5px) 0 0 / 0.41em 0.23em; mix-blend-mode: multiply; }
+
+/* 2. Neon Vice */
+.vx-sky { background: linear-gradient(180deg, #2b0f4c 0%, #7a1d6e 22%, #ff4f8a 36%, #ffa05c 42%, transparent 42.2%); }
+.vx-sun {
+  position: absolute; left: 4.6em; top: 1.6em; width: 7em; height: 7em; border-radius: 50%; pointer-events: none;
+  background: linear-gradient(180deg, #fff06b, #ff8a3d 55%, #ff3d9a);
+  -webkit-mask: linear-gradient(180deg, #000 52%, transparent 52% 56%, #000 56% 64%, transparent 64% 69%, #000 69% 76%, transparent 76% 83%, #000 83% 88%, transparent 88%);
+  mask: linear-gradient(180deg, #000 52%, transparent 52% 56%, #000 56% 64%, transparent 64% 69%, #000 69% 76%, transparent 76% 83%, #000 83% 88%, transparent 88%);
+  box-shadow: 0 0 2em rgb(255 120 120 / 0.6);
+}
+.vx-floor { position: absolute; left: 0; right: 0; top: 8.8em; bottom: 0; background: linear-gradient(180deg, #2a0b45, #0b0418); }
+.vx-grid {
+  position: absolute; left: -60%; right: -60%; top: 8.8em; height: 14em; pointer-events: none; transform-origin: top;
+  transform: perspective(5em) rotateX(58deg);
+  background: linear-gradient(90deg, rgb(62 242 224 / 0.55) 1px, transparent 1px) 0 0 / 1.6em 1.6em, linear-gradient(0deg, rgb(62 242 224 / 0.55) 1px, transparent 1px) 0 0 / 1.6em 1.6em;
+  animation: vx-run 1.6s linear infinite;
+}
+@keyframes vx-run { from { background-position: 0 0, 0 0; } to { background-position: 0 0, 0 1.6em; } }
+.vx-palms { color: #12051f; }
+.vx-neon { box-shadow: inset 0 0 0 0.12em rgb(62 242 224 / 0.9), inset 0 0 0.8em rgb(62 242 224 / 0.5); animation: vx-flicker 4s steps(1) infinite; }
+@keyframes vx-flicker { 0%, 100% { opacity: 1; } 47% { opacity: 0.4; } 49% { opacity: 1; } 51% { opacity: 0.6; } 53% { opacity: 1; } }
+
+/* 3. Wanted Poster */
+.wx-word { position: absolute; left: 0; right: 0; top: 16.15em; text-align: center; pointer-events: none; line-height: 1; }
+.wx-word > span { font-family: var(--font-display); font-weight: 900; font-size: 1.5em; letter-spacing: 0.2em; color: #3a1e08; }
+.wx-bounty { position: absolute; left: 0; right: 0; top: 17.75em; text-align: center; pointer-events: none; line-height: 1; }
+.wx-bounty > span { font-family: var(--font-display); font-weight: 800; font-size: 0.72em; letter-spacing: 0.22em; text-transform: uppercase; color: #6a1c10; }
+.wx-burn { box-shadow: inset 0 0 1.4em rgb(80 40 10 / 0.7), inset 0 0 0.3em rgb(40 20 5 / 0.8); }
+
+/* 4. Comic Splash */
+.cx-rays { background: repeating-conic-gradient(from 0deg at 68% 26%, rgb(255 255 255 / 0.35) 0 6deg, transparent 6deg 18deg); }
+.cx-burst { transform-box: fill-box; transform-origin: center; animation: cx-pop 1.8s ease-in-out infinite; }
+.cx-boom { transform-box: fill-box; transform-origin: center; animation: cx-pop 1.8s ease-in-out infinite reverse; }
+@keyframes cx-pop { 0%, 100% { transform: scale(1) rotate(0deg); } 50% { transform: scale(1.08) rotate(-4deg); } }
+.cx-boom-text { font-family: var(--font-display); font-weight: 900; font-size: 6.5px; fill: #fff; stroke: #111; stroke-width: 0.6px; paint-order: stroke; }
+[data-fx="comic"] > div:first-child { box-shadow: inset 0 0 0 0.22em #111 !important; }
+
+/* 5. Anime Ultimate */
+.ax-lines { background: repeating-conic-gradient(from 0deg at 68% 30%, rgb(255 255 255 / 0.22) 0 1.2deg, transparent 1.2deg 9deg); }
+.ax-lines-b { background: repeating-conic-gradient(from 4deg at 68% 30%, rgb(125 249 255 / 0.22) 0 0.8deg, transparent 0.8deg 7deg); }
+.ax-lines-a { animation: ax-flick 0.5s steps(2) infinite; }
+.ax-lines-b { animation: ax-flick 0.5s steps(2) infinite reverse; }
+@keyframes ax-flick { 0% { opacity: 1; } 100% { opacity: 0.2; } }
+.ax-aura path { transform-box: fill-box; transform-origin: 50% 100%; animation: ax-aura 0.9s ease-in-out infinite alternate; filter: blur(0.12em); }
+@keyframes ax-aura { from { transform: scale(0.96, 0.94); opacity: 0.7; } to { transform: scale(1.04, 1.08); opacity: 1; } }
+.ax-kanji { position: absolute; left: 0; right: 0; top: 8.6em; text-align: center; line-height: 1; pointer-events: none; }
+.ax-kanji > span { font-size: 6.4em; font-weight: 900; color: rgb(125 249 255 / 0.12); }
+.ax-tag { position: absolute; left: 1.6em; top: 16.1em; pointer-events: none; line-height: 1; }
+.ax-tag > span {
+  display: inline-block; font-size: 0.85em; font-weight: 900; color: #fff; background: #e8174a; padding: 0.2em 0.4em; letter-spacing: 0.15em;
+  box-shadow: 0.15em 0.15em 0 #05051c; transform: rotate(-6deg);
+}
+
+/* 6. Cyberpunk Glitch */
+.gx-glow { background: radial-gradient(circle at 70% 25%, rgb(255 43 214 / 0.35), transparent 55%), radial-gradient(circle at 20% 90%, rgb(0 240 255 / 0.3), transparent 55%); }
+.gx-slice { position: absolute; left: -5%; right: -5%; pointer-events: none; mix-blend-mode: screen; opacity: 0; }
+.gx-slice-a { top: 3em; height: 0.5em; background: linear-gradient(90deg, transparent, rgb(255 43 214 / 0.7) 30%, rgb(0 240 255 / 0.6) 70%, transparent); animation: gx-slice 2.8s steps(1) infinite; }
+.gx-slice-b { top: 12.6em; height: 0.3em; background: rgb(0 240 255 / 0.45); animation: gx-slice 3.4s steps(1) infinite 0.9s; }
+.gx-slice-c { top: 17em; height: 0.8em; background: repeating-linear-gradient(90deg, rgb(255 43 214 / 0.6) 0 0.4em, transparent 0.4em 0.7em); animation: gx-slice 2.2s steps(1) infinite 1.5s; }
+@keyframes gx-slice { 0%, 70%, 100% { opacity: 0; transform: none; } 72% { opacity: 1; transform: translateX(0.8em); } 76% { opacity: 0.8; transform: translateX(-1.2em); } 80% { opacity: 0; } }
+.gx-flicker { background: rgb(255 255 255 / 0.06); opacity: 0; animation: gx-flick 4.5s steps(1) infinite; }
+@keyframes gx-flick { 0%, 100% { opacity: 0; } 30% { opacity: 1; } 31% { opacity: 0; } 32% { opacity: 1; } 33% { opacity: 0; } }
+.gx-blocks { animation: ax-flick 0.8s steps(2) infinite; }
+.gx-code { font-family: ui-monospace, monospace; font-size: 4px; fill: #00f0ff; letter-spacing: 0.4px; }
+
+/* 7. Vaporwave */
+.vp-sun { position: absolute; left: 5em; top: 0.8em; width: 9em; height: 9em; border-radius: 50%; pointer-events: none; background: linear-gradient(180deg, #fff4a8, #ff8ccf 70%); opacity: 0.85; }
+.vp-grid {
+  position: absolute; left: -60%; right: -60%; top: 16em; height: 9em; transform-origin: top; pointer-events: none;
+  transform: perspective(4em) rotateX(55deg);
+  background: linear-gradient(90deg, rgb(255 80 200 / 0.7) 1px, transparent 1px) 0 0 / 1.4em 1.4em, linear-gradient(0deg, rgb(255 80 200 / 0.7) 1px, transparent 1px) 0 0 / 1.4em 1.4em, #b9a2f0;
+}
+
+/* 8. Graffiti Wall */
+.fx-mist { background: radial-gradient(circle at 20% 30%, rgb(255 79 191 / 0.25), transparent 30%), radial-gradient(circle at 80% 80%, rgb(255 225 77 / 0.2), transparent 30%), radial-gradient(circle at 85% 8%, rgb(34 227 255 / 0.2), transparent 25%); }
+.gw-tag { font-family: var(--font-display); font-weight: 900; font-size: 13px; fill: none; stroke: #22e3ff; stroke-width: 1.2px; letter-spacing: 1px; }
+
+/* 9. Military Dossier */
+.dx-camo {
+  position: absolute; inset: 0; pointer-events: none; padding: 0.7em;
+  background:
+    radial-gradient(ellipse 1.2em 0.7em at 20% 30%, #4b5320 60%, transparent 62%) 0 0 / 3em 3em,
+    radial-gradient(ellipse 1em 0.8em at 70% 60%, #6b5a3a 60%, transparent 62%) 0 0 / 3em 3em,
+    radial-gradient(ellipse 0.8em 1.1em at 40% 80%, #2d331a 60%, transparent 62%) 0 0 / 2.4em 2.4em,
+    #8a8a5c;
+  -webkit-mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+  mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+}
+.dx-file { font-family: ui-monospace, monospace; font-size: 3.2px; fill: #f4efe2; letter-spacing: 0.4px; font-weight: 700; }
+.dx-stamp {
+  position: absolute; left: 50%; top: 14.9em; transform: translateX(-50%) rotate(-10deg); pointer-events: none;
+  font-family: var(--font-display); font-weight: 900; font-size: 1.15em; letter-spacing: 0.2em; text-transform: uppercase;
+  color: rgb(200 16 46 / 0.85); border: 0.14em solid rgb(200 16 46 / 0.85); padding: 0 0.35em; line-height: 1.25;
+  -webkit-mask: radial-gradient(circle at 30% 40%, transparent 0 0.08em, #000 0.1em) 0 0 / 0.5em 0.5em;
+  mask: radial-gradient(circle at 30% 40%, transparent 0 0.08em, #000 0.1em) 0 0 / 0.5em 0.5em;
+}
+
+/* 10. Holographic Prism */
+.px-facets { mix-blend-mode: multiply; }
+.px-foil {
+  background: repeating-linear-gradient(115deg, #ff2e6a 0%, #ffcf4d 6%, #4dff9e 12%, #38c8ff 18%, #a855f7 24%, #ff2e6a 30%);
+  background-size: 300% 300%; background-position: calc(var(--fx-x, 0.5) * 100%) calc(var(--fx-y, 0.5) * 100%);
+  mix-blend-mode: color-dodge; opacity: 0.32; transition: background-position 0.6s ease-out;
+}
+[data-tilt="off"] .px-foil { animation: fx-foil 7s ease-in-out infinite alternate; }
+.px-glint { background: linear-gradient(115deg, transparent 38%, rgb(255 255 255 / 0.75) 48%, transparent 58%); background-size: 260% 100%; background-position: calc(var(--fx-x, 0.5) * 100%) 0; transition: background-position 0.6s ease-out; mix-blend-mode: soft-light; }
+[data-tilt="off"] .px-glint { animation: px-glint 5s ease-in-out infinite; }
+@keyframes px-glint { from { background-position: 100% 0; } to { background-position: 0% 0; } }
+
+/* 11. Blueprint */
+.bp-text { font-family: ui-monospace, monospace; font-size: 3px; fill: #fff; opacity: 0.9; letter-spacing: 0.2px; }
+.bp-lines { opacity: 0.75; }
+
+/* 12. Retro Arcade */
+.ar-text { font-family: ui-monospace, monospace; font-weight: 700; font-size: 5px; fill: #fff; letter-spacing: 0.6px; }
+.ar-blink { fill: #ffd43b; animation: ar-blink 1s steps(1) infinite; }
+@keyframes ar-blink { 50% { opacity: 0; } }
+.ar-coin { transform-box: fill-box; transform-origin: center; animation: ar-spin 1.2s steps(6) infinite; }
+@keyframes ar-spin { 0%, 100% { transform: scaleX(1); } 50% { transform: scaleX(0.15); } }
+.ar-star { animation: ar-blink 0.6s steps(1) infinite; }
+.ar-crt {
+  background: repeating-linear-gradient(0deg, rgb(0 0 0 / 0.35) 0 1px, transparent 1px 3px), radial-gradient(ellipse at 50% 45%, transparent 55%, rgb(0 0 0 / 0.65));
+  box-shadow: inset 0 0 2em rgb(57 255 20 / 0.18);
+  animation: ar-crt 0.15s steps(2) infinite;
+}
+@keyframes ar-crt { 50% { opacity: 0.9; } }
+
+/* 13. Afrofuturism */
+.af-nebula { background: radial-gradient(ellipse at 75% 20%, rgb(200 80 255 / 0.4), transparent 55%), radial-gradient(ellipse at 20% 70%, rgb(80 60 255 / 0.35), transparent 55%); }
+.af-stars { background: radial-gradient(1px 1px at 12% 18%, #fff, transparent), radial-gradient(1px 1px at 43% 9%, #fff, transparent), radial-gradient(1.5px 1.5px at 55% 37%, #ffe9a8, transparent), radial-gradient(1px 1px at 33% 52%, #fff, transparent), radial-gradient(1px 1px at 91% 61%, #fff, transparent), radial-gradient(1.5px 1.5px at 66% 48%, #ffe9a8, transparent); animation: fx-breathe 2.2s ease-in-out infinite alternate; }
+.af-rays {
+  position: absolute; left: 6.2em; top: 0.8em; width: 8em; height: 8em; margin: 0; border-radius: 50%; pointer-events: none;
+  background: repeating-conic-gradient(rgb(245 197 66 / 0.35) 0 5deg, transparent 5deg 15deg);
+  -webkit-mask: radial-gradient(circle, #000 30%, transparent 70%); mask: radial-gradient(circle, #000 30%, transparent 70%);
+  animation: fx-spin 40s linear infinite;
+}
+.af-orbit { transform-box: view-box; transform-origin: 68% 22.8%; animation: af-orbit 18s linear infinite; }
+.af-orbit-b { animation-duration: 26s; animation-direction: reverse; }
+@keyframes af-orbit { to { stroke-dashoffset: -80; } }
+.af-orbit ellipse { animation: af-dash 6s linear infinite; }
+@keyframes af-dash { to { stroke-dashoffset: -32; } }
+.af-planet { animation: fx-breathe 2s ease-in-out infinite alternate; }
+.af-kente { position: absolute; pointer-events: none; background: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='32' height='16'><rect width='32' height='16' fill='%23f5c542'/><rect x='8' width='4' height='16' fill='%230a7a3a'/><rect x='20' width='4' height='16' fill='%23c8102e'/><rect y='6' width='16' height='4' fill='%23111'/><rect x='16' width='16' height='3' fill='%230a7a3a'/><rect x='16' y='13' width='16' height='3' fill='%230a7a3a'/><rect x='26' y='6' width='4' height='4' fill='%23111'/><rect x='2' y='1' width='3' height='3' fill='%23111'/><rect x='2' y='12' width='3' height='3' fill='%23c8102e'/></svg>") 0 0 / 1.6em 0.8em; box-shadow: 0 0 0 0.05em rgb(0 0 0 / 0.6); }
+.af-kente-l { left: 0; top: 1.6em; width: 0.65em; height: 13em; }
+.af-kente-r { right: 0; top: 1.6em; width: 0.65em; height: 13em; }
+.af-kente-b { left: 0; right: 0; top: 16.2em; height: 1.2em; opacity: 0.9; }
+
+/* 14. Lagos Nights */
+.lg-sky { background: radial-gradient(ellipse 80% 40% at 50% 70%, rgb(255 61 154 / 0.35), transparent 70%), radial-gradient(ellipse 60% 30% at 30% 72%, rgb(255 212 0 / 0.18), transparent 70%); }
+.lg-stripe { position: absolute; left: 0; right: 0; top: 0; height: 0.55em; pointer-events: none; background: linear-gradient(180deg, #ffd400 0 40%, #111 40% 60%, #ffd400 60%); }
+.lg-windows rect { animation: ar-blink 3s steps(1) infinite; }
+.lg-windows rect:nth-child(2n) { animation-duration: 4.4s; }
+.lg-windows rect:nth-child(3n) { animation-duration: 2.3s; }
+.lg-neon { animation: vx-flicker 3s steps(1) infinite; filter: drop-shadow(0 0 1.5px #ff3d9a); }
+.lg-bus { animation: lg-drive 9s linear infinite; }
+@keyframes lg-drive { from { transform: translateX(-20px); } to { transform: translateX(160px); } }
+.lg-water {
+  position: absolute; left: 0; right: 0; top: 17.7em; bottom: 0; pointer-events: none;
+  background: repeating-linear-gradient(0deg, rgb(255 212 0 / 0.25) 0 1px, transparent 1px 4px), linear-gradient(180deg, rgb(255 61 154 / 0.25), rgb(10 6 30 / 0.9));
+  animation: lg-ripple 2s ease-in-out infinite alternate;
+}
+@keyframes lg-ripple { from { transform: translateX(-0.15em); opacity: 0.8; } to { transform: translateX(0.15em); opacity: 1; } }
+
+/* 15. Lava Core */
+.lv-pool { background: radial-gradient(ellipse 90% 30% at 50% 105%, rgb(255 90 20 / 0.75), transparent 70%); animation: fx-breathe 1.6s ease-in-out infinite alternate; }
+.lv-cracks path { fill: none; stroke-linejoin: round; stroke-linecap: round; }
+.lv-vein path { stroke: #ffb347; stroke-width: 1.2; filter: drop-shadow(0 0 1.5px #ff6a1a) drop-shadow(0 0 3px #ff3d00); }
+.lv-vein { animation: lv-pulse 2.4s ease-in-out infinite; }
+.lv-vein-b { animation-delay: -0.8s; }
+.lv-vein-c { animation-delay: -1.6s; }
+@keyframes lv-pulse { 0%, 100% { opacity: 0.45; } 50% { opacity: 1; } }
+.lv-ember { bottom: -0.4em; width: 0.2em; height: 0.2em; border-radius: 50%; background: #ffd08a; box-shadow: 0 0 0.3em 0.08em rgb(255 90 20 / 0.95); animation: fx-rise 4s linear infinite; }
+
+/* 16. Frostbite */
+.fr-fog { position: absolute; width: 9em; height: 5em; border-radius: 50%; pointer-events: none; background: radial-gradient(ellipse, rgb(255 255 255 / 0.4), transparent 65%); animation: fr-breath 6s ease-out infinite; }
+.fr-fog-a { left: -1em; top: 15em; }
+.fr-fog-b { left: 4em; top: 16em; animation-delay: -2s; }
+.fr-fog-c { left: 8em; top: 15.5em; animation-delay: -4s; }
+@keyframes fr-breath { 0% { transform: translateY(1em) scale(0.6); opacity: 0; } 30% { opacity: 1; } 100% { transform: translateY(-5em) scale(1.5); opacity: 0; } }
+.fr-snow { top: -0.4em; width: 0.18em; height: 0.18em; border-radius: 50%; background: #fff; box-shadow: 0 0 0.2em #fff; animation: fx-fall 5s linear infinite; }
+[data-fx="frost"] > div:first-child { box-shadow: inset 0 0 0.3em 0.12em rgb(220 245 255 / 0.9), inset 0 0 1.5em rgb(200 240 255 / 0.5) !important; }
+
+/* 17. Storm Chaser */
+.ch-cell {
+  position: absolute; left: 50%; top: -4em; width: 26em; height: 12em; margin-left: -13em; border-radius: 50%; pointer-events: none;
+  background: radial-gradient(ellipse at 50% 60%, rgb(120 110 170 / 0.6), rgb(40 40 70 / 0.5) 45%, transparent 70%), repeating-radial-gradient(ellipse at 50% 60%, transparent 0 0.8em, rgb(20 20 40 / 0.35) 0.8em 1.1em);
+  animation: fx-spin 30s linear infinite;
+}
+.ch-wind { background: repeating-linear-gradient(0deg, transparent 0 1.6em, rgb(200 200 255 / 0.12) 1.6em 1.65em); background-size: 200% 100%; animation: ch-wind 1.4s linear infinite; }
+@keyframes ch-wind { from { transform: translateX(-10%); } to { transform: translateX(10%); } }
+.ch-funnel { transform-box: fill-box; transform-origin: 50% 0; animation: ch-sway 2.6s ease-in-out infinite alternate; }
+@keyframes ch-sway { from { transform: skewX(-6deg); } to { transform: skewX(6deg); } }
+.art-bolt { opacity: 0; animation: fx-strike 3.6s linear infinite; }
+.art-bolt path { fill: none; stroke-linejoin: round; stroke-linecap: round; }
+.art-bolt-glow { stroke: rgb(var(--design-glow) / 0.55); stroke-width: 5; }
+.art-bolt-core { stroke: #fff; stroke-width: 1.1; }
+.ch-flash { background: radial-gradient(circle at 50% 30%, rgb(200 190 255 / 0.5), transparent 70%); opacity: 0; animation: fx-strike 4.2s linear infinite; }
+
+/* 18. Royal Gold */
+.ry-gold { filter: drop-shadow(0 0 1px rgb(255 220 130 / 0.8)); }
+.ry-sheen { background: linear-gradient(115deg, transparent 40%, rgb(255 230 160 / 0.28) 50%, transparent 60%); background-size: 300% 100%; animation: ry-sweep 5s ease-in-out infinite; }
+@keyframes ry-sweep { from { background-position: 100% 0; } to { background-position: 0% 0; } }
+.ry-twinkle { width: 0.3em; height: 0.3em; background: #fff0c8; clip-path: polygon(50% 0, 60% 40%, 100% 50%, 60% 60%, 50% 100%, 40% 60%, 0 50%, 40% 40%); animation: fx-twinkle 2.6s ease-in-out infinite; }
+
+/* 19. Samurai Ink */
+.ik-enso path { stroke-dasharray: 100; animation: ik-draw 7s ease-in-out infinite; }
+@keyframes ik-draw { 0% { stroke-dashoffset: 100; } 40%, 85% { stroke-dashoffset: 0; } 100% { stroke-dashoffset: 0; opacity: 0; } }
+.ik-mist { animation: ch-wind 9s ease-in-out infinite alternate; }
+.ik-seal { position: absolute; left: 11.9em; top: 16.4em; width: 1.4em; height: 1.4em; display: flex; align-items: center; justify-content: center; font-size: 1em; font-weight: 900; color: #fff3e6; pointer-events: none; }
+
+/* 20. Steampunk */
+.st-rivets {
+  position: absolute; inset: 0; pointer-events: none; padding: 0.45em;
+  background: radial-gradient(circle, #f0c27a 0 0.09em, #6a3d14 0.1em 0.13em, transparent 0.14em) 0 0 / 0.9em 0.9em, linear-gradient(#a0582a, #6a3d14);
+  -webkit-mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+  mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+}
+.st-gear { transform-box: fill-box; transform-origin: center; animation: fx-spin 10s linear infinite; }
+.st-gear-b { animation-direction: reverse; animation-duration: 5.5s; }
+.st-gear-c { animation-duration: 8s; animation-direction: reverse; }
+.st-gear-d { animation-duration: 4s; }
+.st-needle { animation: st-wobble 1.6s ease-in-out infinite alternate; }
+@keyframes st-wobble { from { transform: rotate(-40deg); } to { transform: rotate(55deg); } }
+.st-steam { position: absolute; width: 3em; height: 3em; border-radius: 50%; pointer-events: none; background: radial-gradient(circle, rgb(255 255 255 / 0.45), transparent 65%); animation: fr-breath 3.5s ease-out infinite; }
+.st-steam-a { left: 0.2em; top: 9em; }
+.st-steam-b { right: 0.2em; top: 10em; animation-delay: -1.7s; }
+
+/* 21. Space Station */
+.ss-stars { position: absolute; inset: -20% 0; pointer-events: none; background: radial-gradient(1px 1px at 12% 18%, #fff, transparent), radial-gradient(1px 1px at 63% 9%, #fff, transparent), radial-gradient(1.5px 1.5px at 81% 37%, #fff, transparent), radial-gradient(1px 1px at 33% 52%, #fff, transparent), radial-gradient(1px 1px at 91% 71%, #fff, transparent), radial-gradient(1.5px 1.5px at 22% 83%, #fff, transparent), radial-gradient(1px 1px at 52% 92%, #fff, transparent); }
+.ss-stars-a { animation: ss-drift 40s linear infinite; }
+.ss-stars-b { transform: scale(-1, 1); opacity: 0.6; animation: ss-drift-b 70s linear infinite; }
+@keyframes ss-drift { from { transform: translateY(-8%); } to { transform: translateY(8%); } }
+@keyframes ss-drift-b { from { transform: scale(-1, 1) translateY(8%); } to { transform: scale(-1, 1) translateY(-8%); } }
+.ss-planet {
+  position: absolute; left: 50%; top: 16.7em; width: 26em; height: 26em; margin-left: -13em; border-radius: 50%; pointer-events: none;
+  background: radial-gradient(circle at 50% 0%, #2d7bb8, #0b2b55 40%, #020814 70%), repeating-linear-gradient(0deg, transparent 0 0.6em, rgb(255 255 255 / 0.05) 0.6em 0.9em);
+  box-shadow: 0 -0.2em 0.6em rgb(95 212 255 / 0.9), 0 -1em 2em rgb(95 212 255 / 0.35);
+}
+.ss-ring { transform-box: fill-box; transform-origin: center; animation: fx-spin 24s linear infinite; }
+.ss-sweep { transform-origin: 0 0; animation: fx-spin 3s linear infinite; }
+.ss-blip { animation: ar-blink 1.5s steps(1) infinite; }
+.ss-blink { animation: ar-blink 1.2s steps(1) infinite; }
+.ss-hud { font-family: ui-monospace, monospace; font-size: 4px; fill: #5fd4ff; letter-spacing: 0.3px; }
+
+/* 22. Toxic Zone */
+.tx-glow { background: radial-gradient(ellipse 90% 45% at 50% 110%, rgb(160 255 30 / 0.55), transparent 70%); animation: fx-breathe 1.8s ease-in-out infinite alternate; }
+.tx-wall { position: absolute; inset: 0; pointer-events: none; box-shadow: inset 0 0 1.2em 0.4em rgb(160 255 30 / 0.55); animation: tx-close 4s ease-in-out infinite; }
+@keyframes tx-close { 0%, 100% { opacity: 0.4; } 50% { opacity: 1; } }
+.tx-tape { position: absolute; pointer-events: none; background: repeating-linear-gradient(45deg, #ffd400 0 0.45em, #111 0.45em 0.9em); }
+.tx-tape-top { left: 0; right: 0; top: 0; height: 0.6em; }
+.tx-tape-b { left: 8.8em; width: 9em; top: 16.6em; height: 0.75em; transform: rotate(-14deg); box-shadow: 0 0.1em 0.2em rgb(0 0 0 / 0.6); }
+.tx-trefoil { animation: tx-glow 2s ease-in-out infinite alternate; }
+@keyframes tx-glow { from { opacity: 0.7; } to { opacity: 1; } }
+.tx-bubble { bottom: -0.4em; width: 0.35em; height: 0.35em; border-radius: 50%; border: 0.05em solid rgb(200 255 120 / 0.9); background: rgb(160 255 30 / 0.15); animation: fx-rise 4s ease-in infinite; }
+
+/* 23. Desert Mirage */
+.mr-sun { position: absolute; left: 6em; top: 1em; width: 8.5em; height: 8.5em; border-radius: 50%; pointer-events: none; background: radial-gradient(circle, #fff4d0, #ffcf6b 45%, rgb(255 160 60 / 0) 70%); }
+.mr-haze { position: absolute; inset: 0; pointer-events: none; background: linear-gradient(180deg, rgb(255 210 140 / 0.35), transparent 50%); }
+.mr-shimmer {
+  position: absolute; left: -5%; right: -5%; top: 11.2em; height: 2.4em; pointer-events: none;
+  background: repeating-linear-gradient(0deg, rgb(255 240 200 / 0.22) 0 1px, transparent 1px 0.35em);
+  animation: mr-wave 1.3s ease-in-out infinite alternate;
+}
+@keyframes mr-wave { from { transform: scaleY(1) skewX(-4deg); opacity: 0.5; } to { transform: scaleY(1.4) skewX(4deg); opacity: 1; } }
+.mr-sand { width: 0.12em; height: 0.12em; border-radius: 50%; background: #ffe0a3; animation: mr-blow 4s linear infinite; }
+@keyframes mr-blow { 0% { transform: translateX(-3em); opacity: 0; } 20% { opacity: 0.9; } 100% { transform: translateX(6em) translateY(-0.6em); opacity: 0; } }
+
+/* 24. Jungle Ruins */
+.rn-moss { background: radial-gradient(ellipse 35% 20% at 0% 100%, rgb(80 140 50 / 0.55), transparent 70%), radial-gradient(ellipse 30% 15% at 100% 0%, rgb(80 140 50 / 0.45), transparent 70%), radial-gradient(ellipse 20% 25% at 100% 70%, rgb(80 140 50 / 0.35), transparent 70%); }
+
+/* 25. Street Racer */
+.rc-streaks { background: repeating-linear-gradient(0deg, transparent 0 2.2em, rgb(255 255 255 / 0.09) 2.2em 2.26em); animation: rc-zoom 0.6s linear infinite; }
+@keyframes rc-zoom { from { transform: translateX(10%); } to { transform: translateX(-10%); } }
+.rc-needle { transform: rotate(var(--a)); animation: rc-rev 2.4s ease-in-out infinite; }
+@keyframes rc-rev { 0%, 100% { transform: rotate(var(--a)); } 50% { transform: rotate(calc(var(--a) - 6deg)); } }
+.rc-unit { font-family: var(--font-display); font-weight: 800; font-size: 3.4px; fill: #fff; letter-spacing: 0.5px; }
+.rc-flag {
+  position: absolute; left: 2em; right: 2em; top: 16.5em; height: 1em; pointer-events: none;
+  background: conic-gradient(#fff 25%, #111 0 50%, #fff 0 75%, #111 0) 0 0 / 0.6em 0.6em;
+  transform: skewX(-20deg); opacity: 0.85;
+}
+.rc-tail { background: radial-gradient(ellipse 70% 20% at 50% 100%, rgb(255 42 42 / 0.5), transparent 70%); }
+
+/* 26. Trading Card Classic */
+.tc-burst { position: absolute; inset: 0; pointer-events: none; background: repeating-conic-gradient(from 0deg at 68% 26%, rgb(255 255 255 / 0.14) 0 8deg, transparent 8deg 16deg); }
+.tc-border {
+  position: absolute; inset: 0; pointer-events: none; padding: 0.55em;
+  background: linear-gradient(135deg, #e8e8f0, #9aa0b4 20%, #ffffff 35%, #b8c0d8 50%, #f0e6ff 65%, #9aa0b4 80%, #ffffff);
+  -webkit-mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+  mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+}
+.tc-num { font-family: var(--font-display); font-weight: 800; font-size: 3.4px; fill: #7a0e14; }
+.tc-num-big { font-size: 7px; }
+.tc-series { font-family: var(--font-display); font-weight: 800; font-size: 4.2px; fill: #ffe066; letter-spacing: 0.8px; }
+
+/* 27. Stained Glass */
+.sg-rays { background: linear-gradient(115deg, transparent 20%, rgb(255 240 200 / 0.14) 30%, transparent 40%, rgb(255 240 200 / 0.1) 55%, transparent 65%); mix-blend-mode: screen; }
+
+/* 28. Shadow Assassin */
+.sa-smoke { position: absolute; width: 14em; height: 9em; border-radius: 50%; pointer-events: none; background: radial-gradient(ellipse, rgb(120 110 130 / 0.32), transparent 65%); }
+.sa-smoke-a { left: -5em; top: 12em; animation: sa-wisp 9s ease-in-out infinite alternate; }
+.sa-smoke-b { right: -5em; top: 4em; animation: sa-wisp 12s ease-in-out infinite alternate-reverse; }
+.sa-smoke-c { left: 1em; top: 15em; animation: fr-breath 7s ease-out infinite; }
+@keyframes sa-wisp { from { transform: translate(-1em, 1em) scale(1); opacity: 0.6; } to { transform: translate(2em, -1.5em) scale(1.3); opacity: 1; } }
+.sa-eyes { filter: drop-shadow(0 0 1.2px #ff1f3d) drop-shadow(0 0 3px #ff1f3d); animation: sa-blink 4s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
+@keyframes sa-blink { 0%, 44%, 52%, 100% { transform: scaleY(1); } 48% { transform: scaleY(0.1); } }
+.sa-blade { position: absolute; inset: -30%; pointer-events: none; background: linear-gradient(125deg, transparent 48%, rgb(255 255 255 / 0.7) 50%, transparent 52%); opacity: 0; animation: sa-slash 5s ease-in infinite; }
+@keyframes sa-slash { 0%, 80% { opacity: 0; transform: translate(-30%, -30%); } 84% { opacity: 1; } 92%, 100% { opacity: 0; transform: translate(30%, 30%); } }
+.sa-red { background: radial-gradient(ellipse 80% 30% at 50% 105%, rgb(255 31 61 / 0.4), transparent 70%); }
+
+/* 29. Galaxy Dragon */
+.gd-nebula { position: absolute; inset: -20%; pointer-events: none; }
+.gd-nebula-a { background: radial-gradient(ellipse 40% 30% at 70% 30%, rgb(255 80 200 / 0.45), transparent 70%), radial-gradient(ellipse 35% 30% at 25% 65%, rgb(60 120 255 / 0.45), transparent 70%); animation: fx-spin 60s linear infinite; }
+.gd-nebula-b { background: radial-gradient(ellipse 30% 20% at 40% 25%, rgb(150 80 255 / 0.45), transparent 70%), radial-gradient(ellipse 30% 25% at 70% 80%, rgb(255 120 220 / 0.3), transparent 70%); animation: fx-spin 90s linear infinite reverse; }
+.gd-star { width: 0.14em; height: 0.14em; border-radius: 50%; background: #fff; box-shadow: 0 0 0.3em rgb(255 200 255); animation: fx-twinkle 3s ease-in-out infinite; }
+.gd-scales { animation: gd-scales 1.6s linear infinite; }
+@keyframes gd-scales { to { stroke-dashoffset: -9.2; } }
+.gd-eye { animation: fx-breathe 1s ease-in-out infinite alternate; filter: drop-shadow(0 0 2px #7df9ff); }
+.gd-sheen { position: absolute; inset: 0; pointer-events: none; background: linear-gradient(115deg, transparent 40%, rgb(255 200 255 / 0.22) 50%, transparent 60%); background-size: 300% 100%; animation: ry-sweep 4s ease-in-out infinite; }
+
+/* 30. Champion Platinum */
+.pt-plate { font-family: var(--font-display); font-weight: 800; font-size: 6px; letter-spacing: 1.6px; fill: rgb(30 36 46 / 0.85); }
+.pt-sweep { background: linear-gradient(115deg, transparent 38%, rgb(255 255 255 / 0.65) 48%, rgb(200 230 255 / 0.25) 52%, transparent 62%); background-size: 300% 100%; animation: ry-sweep 3.6s ease-in-out infinite; mix-blend-mode: overlay; }
+.pt-edge { box-shadow: inset 0 0 0 0.15em rgb(255 255 255 / 0.7), inset 0 0 0 0.3em rgb(60 70 85 / 0.35), inset 0 0 1.4em rgb(190 220 255 / 0.4); }
+.pt-sparkles path { transform-box: fill-box; transform-origin: center; animation: fx-twinkle 2.4s ease-in-out infinite; }
+.pt-sparkles path:nth-child(2) { animation-delay: -0.6s; }
+.pt-sparkles path:nth-child(3) { animation-delay: -1.2s; }
+.pt-sparkles path:nth-child(4) { animation-delay: -1.8s; }
+
+@media (prefers-reduced-motion: reduce) {
+  .art-layer, .art-p, .art-svg *, .vx-sun, .vx-grid, .gx-slice, .af-rays, .af-kente, .lg-water, .fr-fog, .ch-cell,
+  .st-steam, .ss-stars, .mr-shimmer, .sa-smoke, .sa-blade, .gd-nebula, .gd-sheen, [data-fx="glitch"] p.font-display {
+    animation: none !important;
+  }
+  .art-p, .gx-slice, .fr-fog, .st-steam, .sa-blade, .ch-flash, .gx-flicker { display: none; }
+  .art-bolt { opacity: 0.6; }
+  .ik-enso path { stroke-dashoffset: 0; }
+}
