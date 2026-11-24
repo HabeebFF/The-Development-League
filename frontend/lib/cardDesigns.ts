@@ -87,6 +87,11 @@ export const PALETTES: Record<string, [string, string, string, string, string]> 
   assassin: ["#1a1220", "#000000", "#f3e9ee", "#ff1f3d", "255 31 61"],
   dragon: ["#2c0b52", "#030016", "#ffffff", "#ff8bf0", "190 120 255"],
   platinum: ["#d9dee6", "#6f7884", "#0b0e13", "#ffffff", "225 235 250"],
+  // Earned TDL Cup designs (never sold).
+  cupgold: ["#3a2606", "#0b0702", "#fff4c8", "#f5c542", "245 197 66"],
+  cupsilver: ["#2b313c", "#07090d", "#f2f5fa", "#dfe5ee", "215 225 240"],
+  cupbronze: ["#3a1e0c", "#0b0502", "#ffeedd", "#e09a5a", "224 154 90"],
+  cupmvp: ["#4a0716", "#0b0104", "#fff0c8", "#f5c542", "245 197 66"],
 };
 
 /** Tailwind-free CSS backgrounds, layered over the palette gradient. */

@@ -43,7 +43,35 @@ export const ART_EFFECTS = [
   "assassin",
   "dragon",
   "platinum",
+  // Earned only, never sold: TDL Cup places and MVP.
+  "cupwin",
+  "cupsecond",
+  "cupthird",
+  "cupmvp",
 ] as const;
+
+/** The ribbon text and metal for each earned Cup design. */
+const CUP: Record<string, { label: string; metal: string; deep: string }> = {
+  cupwin: { label: "Champions", metal: "#f5c542", deep: "#7a4a06" },
+  cupsecond: { label: "Runners-up", metal: "#dfe5ee", deep: "#5d6573" },
+  cupthird: { label: "Third place", metal: "#e09a5a", deep: "#6a3510" },
+  cupmvp: { label: "Cup MVP", metal: "#f5c542", deep: "#7a0e24" },
+};
+
+/** An original two-handled cup on a stepped base, centred on (0, 0), about 24 tall. */
+function Trophy({ metal, deep }: { metal: string; deep: string }) {
+  return (
+    <g>
+      <path d="M-7 -10 Q-13 -10 -13 -5 Q-13 1 -6 2 M7 -10 Q13 -10 13 -5 Q13 1 6 2" fill="none" stroke={metal} strokeWidth="1.6" />
+      <path d="M-8 -12 H8 V-6 Q8 4 0 6 Q-8 4 -8 -6Z" fill={metal} stroke={deep} strokeWidth="0.6" />
+      <path d="M-5 -10 V-6 Q-5 1 -1 3" fill="none" stroke="#fff" strokeWidth="0.8" opacity="0.6" />
+      <rect x="-1.4" y="6" width="2.8" height="4" fill={metal} />
+      <path d="M-6 10 H6 L7 13 H-7Z" fill={metal} stroke={deep} strokeWidth="0.5" />
+      <rect x="-8" y="13" width="16" height="2.6" fill={deep} />
+      <path d={`M0 -9.5 L1 -7.3 L3.4 -7.1 L1.6 -5.6 L2.1 -3.3 L0 -4.5 L-2.1 -3.3 L-1.6 -5.6 L-3.4 -7.1 L-1 -7.3Z`} fill="#fff" opacity="0.9" />
+    </g>
+  );
+}
 
 // Fixed "random" spreads so the server and the browser draw the same thing.
 const SPREAD = [8, 83, 34, 61, 18, 72, 46, 92, 27, 55, 3, 66, 40, 88];
@@ -1051,6 +1079,52 @@ export default function CardArt({ effect, rating }: { effect: string; rating: nu
           <Layer className="pt-edge" />
         </>
       );
+
+    // Earned only: the TDL Cup winners, 2nd, 3rd and MVP. Staff award them on Confirm & pay.
+    case "cupwin":
+    case "cupsecond":
+    case "cupthird":
+    case "cupmvp": {
+      const c = CUP[effect];
+      return (
+        <>
+          <span aria-hidden className="cw-rays" style={{ ["--cw" as string]: c.metal }} />
+          <Particles cls={`cw-confetti ${effect === "cupwin" || effect === "cupmvp" ? "" : "cw-confetti-soft"}`} n={14} speed={1.2} />
+          <Svg>
+            <g transform="translate(75 9) scale(0.5)">
+              <Trophy metal={c.metal} deep={c.deep} />
+            </g>
+            {/* The ribbon along the base, with laurel sprigs. */}
+            <g transform="translate(75 172)">
+              <path d="M-48 -7 H48 L42 0 L48 7 H-48 L-42 0Z" fill={c.deep} stroke={c.metal} strokeWidth="0.9" />
+              <path d="M-38 -5.5 H38 V5.5 H-38Z" fill={c.metal} opacity="0.95" />
+              <text y="2.2" textAnchor="middle" className="cw-label" style={{ fill: c.deep }}>
+                {c.label}
+              </text>
+              <g fill={c.metal}>
+                {[0, 1, 2].map((i) => (
+                  <g key={i}>
+                    <ellipse cx={-52 - i * 3} cy={-6 + i * 5} rx="1.3" ry="3" transform={`rotate(${-30 + i * 20} ${-52 - i * 3} ${-6 + i * 5})`} />
+                    <ellipse cx={52 + i * 3} cy={-6 + i * 5} rx="1.3" ry="3" transform={`rotate(${30 - i * 20} ${52 + i * 3} ${-6 + i * 5})`} />
+                  </g>
+                ))}
+              </g>
+            </g>
+            <text x="75" y="186" textAnchor="middle" className="cw-cup" style={{ fill: c.metal }}>
+              TDL CUP 2026
+            </text>
+            <g fill={c.metal} className="pt-sparkles">
+              <path d={sparkle(22, 100, 2.6)} />
+              <path d={sparkle(130, 96, 2.2)} />
+              <path d={sparkle(60, 6, 1.8)} />
+              <path d={sparkle(92, 6, 1.8)} />
+            </g>
+          </Svg>
+          <Layer className="ry-sheen" />
+          <Plate color="rgb(0 0 0 / 0.38)" />
+        </>
+      );
+    }
 
     default:
       return null;

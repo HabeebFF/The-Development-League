@@ -63,6 +63,10 @@ PALETTES = {
     "assassin": "Shadow",
     "dragon": "Galaxy Dragon",
     "platinum": "Platinum",
+    "cupgold": "Cup gold",
+    "cupsilver": "Cup silver",
+    "cupbronze": "Cup bronze",
+    "cupmvp": "Cup MVP",
 }
 
 PATTERNS = {
@@ -143,6 +147,10 @@ EFFECTS = {
     "assassin": "Shadow assassin",
     "dragon": "Galaxy dragon",
     "platinum": "Platinum",
+    "cupwin": "Cup champions",
+    "cupsecond": "Cup runners-up",
+    "cupthird": "Cup third place",
+    "cupmvp": "Cup MVP",
 }
 
 PARTS = {"palette": PALETTES, "pattern": PATTERNS, "effect": EFFECTS}

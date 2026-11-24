@@ -169,6 +169,14 @@ def test_payout_pays_accounts_and_holds_the_rest(lg, cup):
 
     result = services.confirm(cup, staff)
     assert result["payouts"] > 0 and result["paid"] >= 1
+    # Winners with an account get the earned Cup Champions card straight away.
+    from apps.shop.models import OwnedDesign
+
+    def cup_cards(u):
+        return set(OwnedDesign.objects.filter(user=u).values_list("design__slug", flat=True))
+
+    assert "cup-champions" in cup_cards(p0.user)
+    assert "cup-runners-up" not in cup_cards(p0.user)
     paid = PrizePayout.objects.filter(player=p0, paid_at__isnull=False)
     assert paid.exists()
     assert wallet_for(p0.user).balance == 1000 + sum(p.amount for p in paid)
@@ -187,6 +195,7 @@ def test_payout_pays_accounts_and_holds_the_rest(lg, cup):
     services.pay_held(p1.pk)  # on_commit doesn't run inside the test transaction
     assert not PrizePayout.objects.filter(player=p1, paid_at__isnull=True).exists()
     assert wallet_for(p1.user).balance == 1000 + 150000
+    assert "cup-champions" in cup_cards(p1.user)  # given with the held prize
     assert LedgerEntry.objects.filter(idempotency_key__startswith="tournament-prize:").count() >= 2
 
 

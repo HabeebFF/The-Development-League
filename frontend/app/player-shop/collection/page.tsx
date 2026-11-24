@@ -3,6 +3,7 @@ import { Suspense } from "react";
 
 import PageHeader from "@/components/league/PageHeader";
 import CollectionView from "@/components/shop/CollectionView";
+import { ART_SERIES, COLLECTION, CUP_DESIGNS } from "@/lib/playerDesigns";
 
 export const metadata: Metadata = { title: "Player shop collection" };
 
@@ -14,7 +15,7 @@ export default function Page() {
       </PageHeader>
       <section className="mx-auto max-w-6xl px-4 py-8">
         <Suspense>
-          <CollectionView />
+          <CollectionView designs={[...COLLECTION, ...ART_SERIES, ...CUP_DESIGNS]} />
         </Suspense>
       </section>
     </>

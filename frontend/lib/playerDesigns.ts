@@ -10,6 +10,8 @@ export type CollectionDesign = CardDesign & {
   blurb: string;
   /** Free Fire themed. */
   ff?: boolean;
+  /** Earned only (never sold): how you get it. */
+  earned?: string;
 };
 
 const d = (
@@ -103,6 +105,15 @@ export const TIERS: { rarity: CardDesign["rarity"]; label: string; range: string
   { rarity: "EPIC", label: "Epic", range: "250k to 750k DC", perks: "Moving particles and holo foil" },
   { rarity: "LEGENDARY", label: "Legendary", range: "1M to 3M DC", perks: "Animated scenes, glowing frame, entrance animation" },
   { rarity: "MYTHIC", label: "Mythic", range: "5M to 10M DC", perks: "Numbered copies, unique animation, name aura across the site" },
+];
+
+// Earned only, never sold: given on the tournament's Confirm & pay, one numbered copy per player.
+const earned = (design: CollectionDesign, how: string): CollectionDesign => ({ ...design, earned: how, price: 0 });
+export const CUP_DESIGNS: CollectionDesign[] = [
+  earned(d(46, "cup-champions", "Cup Champions", "MYTHIC", 0, ["cupgold", "hex", "cupwin"], "Gold trophy, confetti and a Champions ribbon.", {}), "Win the TDL Cup"),
+  earned(d(47, "cup-runners-up", "Cup Runners-up", "LEGENDARY", 0, ["cupsilver", "hex", "cupsecond"], "Silver trophy and a Runners-up ribbon.", {}), "Finish 2nd in the TDL Cup"),
+  earned(d(48, "cup-third-place", "Cup Third Place", "LEGENDARY", 0, ["cupbronze", "hex", "cupthird"], "Bronze trophy and a Third place ribbon.", {}), "Finish 3rd in the TDL Cup"),
+  earned(d(49, "cup-mvp", "Cup MVP", "MYTHIC", 0, ["cupmvp", "hex", "cupmvp"], "Crimson and gold, for the Cup's best player.", {}), "Be the TDL Cup MVP"),
 ];
 
 /** What each tier gets in the art series. */

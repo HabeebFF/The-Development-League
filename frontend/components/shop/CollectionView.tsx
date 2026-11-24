@@ -50,12 +50,29 @@ export default function CollectionView({ designs = COLLECTION, tiers = TIERS, ph
               </p>
             </div>
             <ul className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
-              {designs.filter((d) => d.rarity === t.rarity).map((d) => (
+              {designs.filter((d) => d.rarity === t.rarity && !d.earned).map((d) => (
                 <Tile key={d.slug} design={d} photo={photo} active={picked.slug === d.slug} onHover={() => setPicked(d)} onOpen={() => open(d)} />
               ))}
             </ul>
           </section>
         ))}
+        {designs.some((d) => d.earned) && (
+          <section aria-labelledby="tier-earned">
+            <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-accent/50 pb-2">
+              <h2 id="tier-earned" className="font-display text-3xl text-accent uppercase">
+                Earned only
+              </h2>
+              <p className="text-xs text-muted">
+                <span className="font-bold text-white">Can&apos;t be bought</span> · Given to TDL Cup winners when staff confirm the results
+              </p>
+            </div>
+            <ul className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
+              {designs.filter((d) => d.earned).map((d) => (
+                <Tile key={d.slug} design={d} photo={photo} active={picked.slug === d.slug} onHover={() => setPicked(d)} onOpen={() => open(d)} />
+              ))}
+            </ul>
+          </section>
+        )}
       </div>
 
       {/* Desktop: a sticky preview that follows what you hover. */}
@@ -91,6 +108,12 @@ export default function CollectionView({ designs = COLLECTION, tiers = TIERS, ph
 
 function Limited({ design }: { design: CollectionDesign }) {
   if (!design.copies) return null;
+  if (design.earned)
+    return (
+      <span className="inline-flex items-center gap-1 border border-accent/60 bg-accent/15 px-1.5 py-0.5 text-[10px] font-bold tracking-wider text-accent uppercase">
+        Earned · numbered, one per player
+      </span>
+    );
   const left = design.copies - (design.copy_number ?? 0);
   return (
     <span className="inline-flex items-center gap-1 border border-bad/60 bg-bad/15 px-1.5 py-0.5 text-[10px] font-bold tracking-wider text-bad uppercase">
@@ -110,7 +133,7 @@ function Tile({ design: d, photo, active, onHover, onOpen }: { design: Collectio
         onClick={onOpen}
         className={`card group flex w-full flex-col items-center gap-2 p-3 text-left transition ${active ? "ring-2" : ""}`}
         style={{ borderColor: `color-mix(in srgb, ${color} 45%, transparent)`, ["--tw-ring-color" as string]: color }}
-        aria-label={`${d.name}, ${d.rarity.toLowerCase()}, ${d.price.toLocaleString("en-GB")} DC`}
+        aria-label={`${d.name}, ${d.rarity.toLowerCase()}, ${d.earned ? d.earned : `${d.price.toLocaleString("en-GB")} DC`}`}
       >
         <span className={`fx-mini ${active ? "" : "fx-paused"}`}>
           <PlayerCard card={cardFor(d, photo)} size={0.52} />
@@ -122,7 +145,7 @@ function Tile({ design: d, photo, active, onHover, onOpen }: { design: Collectio
               {d.rarity.toLowerCase()}
               {d.ff && <span className="ml-1 text-accent">· FF</span>}
             </span>
-            <span className="num text-sm text-accent-hot">{shortDc(d.price)} DC</span>
+            <span className="num text-sm text-accent-hot">{d.earned ? "Earned" : `${shortDc(d.price)} DC`}</span>
           </span>
           {d.copies && (
             <span className="mt-1 block">
@@ -149,7 +172,7 @@ function Preview({ design: d, photo, size = 1.12 }: { design: CollectionDesign; 
         </p>
         <h3 className="font-display text-3xl leading-none uppercase">{d.name}</h3>
         <p className="mt-1 text-sm text-muted">{d.blurb}</p>
-        <p className="num mt-2 text-2xl text-accent-hot">{d.price.toLocaleString("en-GB")} DC</p>
+        <p className="num mt-2 text-2xl text-accent-hot">{d.earned ?? `${d.price.toLocaleString("en-GB")} DC`}</p>
         {d.copies && (
           <p className="mt-1">
             <Limited design={d} />

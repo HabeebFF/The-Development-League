@@ -367,7 +367,22 @@
 .pt-sparkles path:nth-child(3) { animation-delay: -1.2s; }
 .pt-sparkles path:nth-child(4) { animation-delay: -1.8s; }
 
+/* Earned: TDL Cup places and MVP. */
+.cw-rays {
+  position: absolute; left: 50%; top: 4.6em; width: 30em; height: 30em; margin: -15em 0 0 -15em; border-radius: 50%; pointer-events: none;
+  background: repeating-conic-gradient(color-mix(in srgb, var(--cw) 30%, transparent) 0 6deg, transparent 6deg 18deg);
+  -webkit-mask: radial-gradient(circle, #000 10%, transparent 60%); mask: radial-gradient(circle, #000 10%, transparent 60%);
+  animation: fx-spin 30s linear infinite;
+}
+.cw-confetti { top: -0.5em; width: 0.22em; height: 0.36em; background: #f5c542; animation: fx-fall 4s linear infinite; }
+.cw-confetti:nth-child(3n) { background: #ff3d7f; }
+.cw-confetti:nth-child(3n+1) { background: #22e3ff; }
+.cw-confetti-soft { opacity: 0.45; }
+.cw-label { font-family: var(--font-display); font-weight: 900; font-size: 6px; letter-spacing: 1.4px; text-transform: uppercase; }
+.cw-cup { font-family: var(--font-display); font-weight: 800; font-size: 4px; letter-spacing: 1.6px; }
+
 @media (prefers-reduced-motion: reduce) {
+  .cw-rays { animation: none !important; }
   .art-layer, .art-p, .art-svg *, .vx-sun, .vx-grid, .gx-slice, .af-rays, .af-kente, .lg-water, .fr-fog, .ch-cell,
   .st-steam, .ss-stars, .mr-shimmer, .sa-smoke, .sa-blade, .gd-nebula, .gd-sheen, [data-fx="glitch"] p.font-display {
     animation: none !important;
