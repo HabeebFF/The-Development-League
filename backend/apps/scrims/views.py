@@ -81,6 +81,8 @@ def session_data(date: dt.date, session: str, request, *, staff=False, conf=None
         "starts_at": sv.starts_at(date, session),
         "max_teams": scrim.max_teams if scrim else conf.max_teams,
         "locked": bool(scrim and scrim.locked_at),
+        "called_off": bool(scrim and scrim.called_off_at),
+        "called_off_reason": scrim.called_off_reason if scrim else "",
         "fee": conf.fee,
         "playing": [entry(r) for r in rows if r.status == R.REGISTERED],
         "invited": [entry(r) for r in rows if r.status == R.INVITED],
@@ -328,6 +330,41 @@ class StaffSessionView(APIView):
         except sv.ScrimError as exc:
             raise _fail(exc) from exc
         return self._reply(request, day, key)
+
+
+class StaffCallOffView(APIView):
+    """Call off a night or one session. GET ?date=&session= shows what it would do;
+    POST {date, session (empty = the whole night), reason} does it; POST .../resume
+    {date, session} puts it back on. Replies with the night as Staff > Scrims shows it."""
+
+    permission_classes = [IsStaff]
+    action = "call_off"
+
+    @staticmethod
+    def _which(raw):
+        return [_session(raw)] if raw else None
+
+    def get(self, request):
+        day = _date(request.query_params.get("date"))
+        return Response(sv.call_off_plan(day, self._which(request.query_params.get("session"))))
+
+    def post(self, request):
+        day = _date(request.data.get("date"))
+        which = self._which(request.data.get("session"))
+        try:
+            if self.action == "resume":
+                sv.resume(day, request.user, which)
+                report = None
+            else:
+                reason = str(request.data.get("reason") or "")
+                report = sv.call_off(day, request.user, reason, which)
+        except sv.ScrimError as exc:
+            raise _fail(exc) from exc
+        data = night_data(day, request, staff=True)
+        data["scrim_night"] = sv.is_scrim_night(day)
+        data["map_pool"] = mp.pool_data()
+        data["report"] = report
+        return Response(data)
 
 
 class StaffMapsView(APIView):

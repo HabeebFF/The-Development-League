@@ -67,6 +67,13 @@ class ScrimSession(models.Model):
         default=list, blank=True, help_text="Map ids in match order, drawn when sign-up opens"
     )
     maps_drawn_at = models.DateTimeField(null=True, blank=True)
+    called_off_at = models.DateTimeField(
+        null=True, blank=True, help_text="Called off by staff: fees and predictions refunded"
+    )
+    called_off_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+    called_off_reason = models.CharField(max_length=300, blank=True, help_text="Shown to teams")
     maps_set_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
@@ -162,6 +169,7 @@ class ScrimLog(models.Model):
         INVITE_EXPIRED = "INVITE_EXPIRED", "Invite not confirmed in time"
         FILLED = "FILLED", "Session full: sign-up locked"
         REFUNDED = "REFUNDED", "Sign-up DC refunded"
+        CALLED_OFF = "CALLED_OFF", "Session called off"
 
     scrim = models.ForeignKey(
         ScrimSession, on_delete=models.CASCADE, null=True, blank=True, related_name="log"

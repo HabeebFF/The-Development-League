@@ -11,6 +11,7 @@ import {
   stageText,
   WEEKDAYS,
   weekdayList,
+  type CallOffPlan,
   type Entry,
   type LogRow,
   type MapRef,
@@ -87,6 +88,7 @@ export default function ScrimsManager() {
           </p>
         )}
       </div>
+      {night?.date && <CallOff date={night.date} run={run} />}
       {error && <p className="text-bad">{error}</p>}
       {notice && <p className="text-ok">{notice}</p>}
 
@@ -133,6 +135,101 @@ export default function ScrimsManager() {
 }
 
 type Run = (job: () => Promise<unknown>, done: string) => Promise<void>;
+
+/** Call off the night (or one session): refunds every sign-up fee and every open
+ * prediction, and stops sign-up and markets until it's put back on. Shows what it will
+ * do first. */
+function CallOff({ date, run }: { date: string; run: Run }) {
+  const [which, setWhich] = useState("");
+  const [reason, setReason] = useState("");
+  const [plan, setPlan] = useState<CallOffPlan | null>(null);
+  const [failed, setFailed] = useState<string | null>(null);
+
+  const check = async () => {
+    setFailed(null);
+    try {
+      setPlan(
+        await api<CallOffPlan>(
+          `/admin/scrims/call-off?date=${date}${which ? `&session=${which}` : ""}`,
+        ),
+      );
+    } catch (e) {
+      setFailed(e instanceof Error ? e.message : "Couldn't check.");
+    }
+  };
+  const go = () =>
+    run(
+      () =>
+        api("/admin/scrims/call-off", {
+          method: "POST",
+          body: { date, session: which || null, reason },
+        }),
+      `${which || "Night"} called off. Fees and predictions refunded.`,
+    ).then(() => setPlan(null));
+  const dc = plan?.sessions.reduce((n, s) => n + s.dc, 0) ?? 0;
+  const bets =
+    plan?.sessions.reduce((n, s) => n + s.bets + s.multiples, 0) ?? 0;
+
+  return (
+    <details className="card p-4 text-sm">
+      <summary className="cursor-pointer font-semibold">
+        Call off scrims · {nightName(date)}
+      </summary>
+      <div className="mt-3 flex flex-wrap items-end gap-2">
+        <label>
+          What
+          <select
+            className="input mt-1 w-auto"
+            value={which}
+            onChange={(e) => (setWhich(e.target.value), setPlan(null))}
+          >
+            <option value="">Whole night</option>
+            <option value="8PM">8PM only</option>
+            <option value="10PM">10PM only</option>
+          </select>
+        </label>
+        <label className="min-w-48 flex-1">
+          Reason (teams see it)
+          <input
+            className="input mt-1"
+            maxLength={300}
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            placeholder="Scrims are off this week"
+          />
+        </label>
+        <button type="button" className="btn px-3 py-2" onClick={check}>
+          Check
+        </button>
+      </div>
+      {failed && <p className="mt-2 text-bad">{failed}</p>}
+      {plan && (
+        <div className="mt-3 space-y-2">
+          <ul className="space-y-1">
+            {plan.sessions.map((s) => (
+              <li key={s.session}>
+                <b>{s.session}</b>: {s.teams} teams, {s.dc.toLocaleString()} DC
+                back to {s.fees} payers; {s.bets} predictions and {s.multiples}{" "}
+                multiples on {s.markets} open markets refunded
+                {s.settled ? ` (${s.settled} settled markets left alone)` : ""}
+                {s.started ? " · this session's time has passed" : ""}
+                {s.called_off ? " · already called off" : ""}
+              </li>
+            ))}
+          </ul>
+          <button
+            type="button"
+            className="btn btn-primary px-3 py-2"
+            onClick={go}
+          >
+            Call off and refund {dc.toLocaleString()} DC
+            {bets ? ` + ${bets} predictions` : ""}
+          </button>
+        </div>
+      )}
+    </details>
+  );
+}
 
 function SessionPanel({
   s,
@@ -213,7 +310,27 @@ function SessionPanel({
         </h2>
         <span className="num text-2xl leading-none">{taken}</span>
       </div>
-      <p className="mt-1 text-sm text-muted">{stageText(s)}</p>
+      <p className={`mt-1 text-sm ${s.called_off ? "text-bad" : "text-muted"}`}>
+        {stageText(s)}
+      </p>
+      {s.called_off && (
+        <button
+          type="button"
+          className="btn mt-2 px-3 py-1 text-sm"
+          onClick={() =>
+            run(
+              () =>
+                api("/admin/scrims/call-off/resume", {
+                  method: "POST",
+                  body: { date: s.date, session: s.session },
+                }),
+              `${s.session} is back on. Teams can sign up again.`,
+            )
+          }
+        >
+          Put {s.session} back on
+        </button>
+      )}
 
       <h3 className="mt-4 text-sm font-semibold text-muted uppercase">
         Playing

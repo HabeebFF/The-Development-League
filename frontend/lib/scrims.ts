@@ -28,6 +28,9 @@ export type ScrimSession = {
   max_teams: number;
   /** Full: playing teams can't withdraw, predictions are open. */
   locked: boolean;
+  /** Staff called it off: fees and predictions refunded, no sign-up. */
+  called_off?: boolean;
+  called_off_reason?: string;
   /** DC to sign up or confirm. */
   fee: number;
   playing: Entry[];
@@ -148,9 +151,13 @@ export function nightName(date: string, now: Date = new Date()): string {
 export function stageText(
   s: Pick<ScrimSession, "stage" | "opens_at" | "closes_at" | "starts_at"> & {
     locked?: boolean;
+    called_off?: boolean;
+    called_off_reason?: string;
   },
   now: Date = new Date(),
 ): string {
+  if (s.called_off)
+    return `Called off${s.called_off_reason ? ` · ${s.called_off_reason}` : ""}`;
   switch (s.stage) {
     case "soon":
       return `Sign-up opens ${dayClock(s.opens_at, now)}`;
@@ -266,3 +273,20 @@ export function weekdayList(days: number[]): string {
 export function mapLine(s: Pick<ScrimSession, "maps">): string[] {
   return (s.maps ?? []).map((m, i) => `M${i + 1} ${m.name}`);
 }
+
+/** What calling off a night (or one session) would do, per session. */
+export type CallOffPlan = {
+  date: string;
+  sessions: {
+    session: "8PM" | "10PM";
+    called_off: boolean;
+    teams: number;
+    fees: number;
+    dc: number;
+    started: boolean;
+    markets: number;
+    bets: number;
+    multiples: number;
+    settled: number;
+  }[];
+};
