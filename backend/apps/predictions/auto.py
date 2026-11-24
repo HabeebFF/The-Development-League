@@ -384,6 +384,11 @@ class Run:
         closes = session_close(self.date, session)
         if closes <= self.now:
             return
+        if ScrimSession.objects.filter(
+            date=self.date, session=session, called_off_at__isnull=False
+        ).exists():
+            self.notes.append(f"{session}: called off on Staff > Scrims, so no markets.")
+            return
         common = {"season": self.season, "date": self.date, "session": session}
         whole, _ = Fixture.objects.get_or_create(
             **common, match_number=None, defaults={"scheduled_at": starts}

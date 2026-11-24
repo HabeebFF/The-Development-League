@@ -18,6 +18,9 @@
   hasn't started.
 - Staff can add or remove a team for one session at any time, past the cap and for a
   suspended team.
+- Staff can call off a session or a whole night (``call_off``): every sign-up fee goes back,
+  every open prediction on it is refunded, and nobody can sign up for it until staff put it
+  back on (``resume``).
 
 Every change is logged (``ScrimLog``), and ``lobby_changed`` is sent after a session's
 playing teams change (or it locks) so predictions can follow.
@@ -358,7 +361,14 @@ def wrap_due() -> int:
 # -- teams -----------------------------------------------------------------------------------------
 
 
+def _check_on(scrim: ScrimSession) -> None:
+    if scrim.called_off_at:
+        why = f" {scrim.called_off_reason}" if scrim.called_off_reason else ""
+        raise ScrimError(f"This session was called off.{why}")
+
+
 def _check_open(scrim: ScrimSession, *, early_ok: bool = False) -> None:
+    _check_on(scrim)
     where = stage(scrim.date, scrim.session)
     if where == "off":
         raise ScrimError("There are no scrims that night.")
@@ -459,6 +469,7 @@ def staff_add(scrim: ScrimSession, team: Team, actor, note: str = "") -> Registr
     Free: staff decide."""
     with transaction.atomic():
         scrim = _locked(scrim)
+        _check_on(scrim)
         row = scrim.registrations.filter(team=team).first()
         if row and row.status == R.REGISTERED:
             raise ScrimError(f"{team.name} is already playing in this session.")
@@ -562,3 +573,107 @@ def unsuspend(team: Team, actor) -> Suspension:
     held.save(update_fields=["ended_at", "ended_by"])
     _log(None, team, A.UNSUSPENDED, actor)
     return held
+
+
+# -- calling scrims off ----------------------------------------------------------------------------
+
+
+def _sessions(sessions) -> list[str]:
+    keys = [str(k).upper() for k in (sessions or SESSIONS)]
+    if not keys or any(k not in SESSIONS for k in keys):
+        raise ScrimError("Sessions are 8PM and 10PM.")
+    return sorted(set(keys), key=list(SESSIONS).index)
+
+
+def _whole_fixtures(date: dt.date, session: str):
+    from apps.predictions.models import Fixture
+
+    return Fixture.objects.filter(date=date, session=session, match_number__isnull=True)
+
+
+def _night_off(date: dt.date, off: bool) -> None:
+    """Add the night to (or take it out of) the nights off for scrims and for predictions."""
+    from apps.predictions.models import AutoSettings
+
+    day = date.isoformat()
+    for conf in (ScrimSettings.get(), AutoSettings.get()):
+        dates = set(conf.skip_dates or [])
+        changed = (dates | {day}) if off else (dates - {day})
+        if changed != dates:
+            conf.skip_dates = sorted(changed)
+            conf.save(update_fields=["skip_dates"])
+
+
+def call_off_plan(date: dt.date, sessions=None) -> dict:
+    """What calling off ``sessions`` (default both) of a night would do. Changes nothing."""
+    from apps.predictions.settlement import session_refund_plan
+
+    out = {"date": date.isoformat(), "sessions": []}
+    for key in _sessions(sessions):
+        scrim = ScrimSession.objects.filter(date=date, session=key).first()
+        rows = list(scrim.registrations.all()) if scrim else []
+        bets = {"markets": 0, "bets": 0, "multiples": 0, "settled": 0}
+        for whole in _whole_fixtures(date, key):
+            plan = session_refund_plan(whole)
+            for k in bets:
+                bets[k] += plan[k]
+        out["sessions"].append(
+            {
+                "session": key,
+                "called_off": bool(scrim and scrim.called_off_at),
+                "teams": len(rows),
+                "fees": sum(1 for r in rows if r.fee_paid and r.paid_by_id),
+                "dc": sum(r.fee_paid for r in rows if r.fee_paid and r.paid_by_id),
+                "started": now() >= starts_at(date, key),
+                **bets,
+            }
+        )
+    return out
+
+
+def call_off(date: dt.date, actor, reason: str = "", sessions=None) -> dict:
+    """Staff call off one session or the whole night (both sessions, the default): every team
+    in it (playing, invited or waiting) is taken out and gets its sign-up fee back, every
+    prediction on markets that aren't settled yet is refunded, and nobody can sign up until
+    staff put it back on. Calling off the whole night also makes it a night off for scrims
+    and predictions, so no markets are made for it. Safe to repeat."""
+    from apps.predictions.settlement import refund_session
+
+    keys = _sessions(sessions)
+    why = reason.strip()[:300]
+    report = call_off_plan(date, keys)
+    for item in report["sessions"]:
+        key = item["session"]
+        with transaction.atomic():
+            scrim = _locked(get_session(date, key))
+            for row in scrim.registrations.select_related("team", "paid_by", "scrim"):
+                _drop(row, A.CALLED_OFF, actor, why, why="Session called off.")
+            if not scrim.called_off_at:
+                scrim.called_off_at, scrim.called_off_by = timezone.now(), actor
+            scrim.called_off_reason = why or scrim.called_off_reason
+            scrim.locked_at = None
+            scrim.save(update_fields=["called_off_at", "called_off_by", "called_off_reason",
+                                      "locked_at"])  # fmt: skip
+        voided = 0
+        for whole in _whole_fixtures(date, key):
+            done = refund_session(whole, actor=actor, reason=f"Scrims called off. {why}".strip())
+            voided += done["voided"]
+            whole.teams.clear()  # so markets aren't made again from the old lobby
+        item["voided"] = voided
+    if len(keys) == len(SESSIONS):
+        _night_off(date, True)
+    return report
+
+
+def resume(date: dt.date, actor, sessions=None) -> list[str]:
+    """Put called-off sessions back on: sign-up works again (teams sign up afresh; nothing
+    that was refunded is taken back) and the night is no longer a night off."""
+    keys = _sessions(sessions)
+    back = []
+    for scrim in ScrimSession.objects.filter(date=date, session__in=keys):
+        if scrim.called_off_at:
+            scrim.called_off_at, scrim.called_off_by, scrim.called_off_reason = None, None, ""
+            scrim.save(update_fields=["called_off_at", "called_off_by", "called_off_reason"])
+            back.append(scrim.session)
+    _night_off(date, False)
+    return back

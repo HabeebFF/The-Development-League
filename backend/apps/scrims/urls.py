@@ -20,6 +20,12 @@ urlpatterns = [
     path("admin/scrims/settings", views.StaffSettingsView.as_view(), name="admin-scrims-settings"),
     path("admin/scrims/night", views.StaffNightView.as_view(), name="admin-scrims-night"),
     path("admin/scrims/teams", views.StaffTeamsView.as_view(), name="admin-scrims-teams"),
+    path("admin/scrims/call-off", views.StaffCallOffView.as_view(), name="admin-scrims-call-off"),
+    path(
+        "admin/scrims/call-off/resume",
+        views.StaffCallOffView.as_view(action="resume"),
+        name="admin-scrims-resume",
+    ),
     path("admin/scrims/log", views.StaffLogView.as_view(), name="admin-scrims-log"),
     path(
         "admin/scrims/teams/<slug:slug>/suspend",
