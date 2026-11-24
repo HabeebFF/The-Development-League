@@ -4,9 +4,13 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
 import { api, ApiError, type Paged, type TeamRef } from "@/lib/api";
-import { dc, naira, type Paid, type Preview, type Tournament } from "@/lib/tournaments";
+import { dc, naira, regText, VIA_LABEL, type Entry, type Paid, type Preview, type Tournament } from "@/lib/tournaments";
 
-type Staff = Tournament & { match_days: { id: number; title: string; date: string | null; number: number }[] };
+type QualRow = { rank: number; team: { id: number; name: string; slug: string }; points: number; through: boolean };
+type Staff = Tournament & {
+  match_days: { id: number; title: string; date: string | null; number: number }[];
+  qualifier_table: QualRow[];
+};
 type LeagueDay = { id: number; title: string; date: string | null; suggested: boolean };
 type PrizeRow = { key: string; label: string; cash: number; dc: number };
 
@@ -167,8 +171,10 @@ function Manage({ slug, onChanged }: { slug: string; onChanged: () => void }) {
 
       <section className="card p-4">
         <div className="flex flex-wrap items-center gap-3">
-          <h3 className="section-title">Teams ({t.teams.length})</h3>
-          {!done && (
+          <h3 className="section-title">
+            {t.registration.qualifier ? `${t.registration.final.name} teams` : "Teams"} ({finalTeams(t).length})
+          </h3>
+          {!done && !t.registration.qualifier && (
             <>
               <button type="button" className="btn ml-auto px-3 py-1.5 text-sm" onClick={() => run(() => api(`${base}/invite-top`, { method: "POST", body: { n: 12 } }))}>
                 Invite the top 12 now
@@ -183,13 +189,31 @@ function Manage({ slug, onChanged }: { slug: string; onChanged: () => void }) {
               </button>
             </>
           )}
+          {!done && t.registration.qualifier && (
+            <>
+              <button
+                type="button"
+                className="btn ml-auto px-3 py-1.5 text-sm"
+                onClick={() => run(() => api(`${base}/invite-top`, { method: "POST", body: {} }))}
+              >
+                Invite the top {t.registration.invite_count} now
+              </button>
+              <button type="button" className="btn px-3 py-1.5 text-sm" onClick={() => run(() => api(`${base}/invite-next`, { method: "POST" }))}>
+                Invite the next team
+              </button>
+            </>
+          )}
         </div>
-        <TeamEditor t={t} base={base} run={run} locked={done} />
+        <TeamEditor t={t} base={base} run={run} locked={done || !!t.cancelled_at} />
         <p className="mt-2 text-xs text-muted">
-          &quot;Invite the top 12&quot; fills the list from the league standings as they are now. Add or remove teams by hand after that; to swap
-          one, remove it and add the other.
+          {t.registration.qualifier
+            ? `The top ${t.registration.invite_count} are invited when registration opens (the list is frozen then). If one declines, "Invite the next team" takes the best team in the standings that isn't in.`
+            : "\"Invite the top 12\" fills the list from the league standings as they are now."}{" "}
+          Add or remove teams by hand after that; to swap one, remove it and add the other.
         </p>
       </section>
+
+      <RegistrationSettings t={t} base={base} run={run} />
 
       <PrizeTable t={t} base={base} run={run} />
       <Days t={t} base={base} run={run} />
@@ -408,14 +432,15 @@ function TeamEditor({ t, base, run, locked }: { t: Staff; base: string; run: (fn
       .then((p) => setAll(p.results))
       .catch(() => setAll([]));
   }, [locked]);
-  const ids = t.teams.map((x) => x.id);
+  const shown = finalTeams(t);
+  const ids = shown.map((x) => x.id);
   const save = (next: number[]) => run(() => api(base, { method: "PATCH", body: { teams: next } }));
   const others = all.filter((x) => !ids.includes(x.id)).sort((a, b) => a.name.localeCompare(b.name));
   return (
     <>
-      {t.teams.length ? (
+      {shown.length ? (
         <ul className="mt-3 flex flex-wrap gap-2">
-          {t.teams.map((x) => (
+          {shown.map((x) => (
             <li key={x.id} className="chip gap-1.5">
               {x.name}
               {!locked && (
@@ -460,5 +485,273 @@ function TeamEditor({ t, base, run, locked }: { t: Staff; base: string; run: (fn
         </form>
       )}
     </>
+  );
+}
+
+/** The teams in the final stage (all the teams, for a tournament without a qualifier). */
+function finalTeams(t: Staff) {
+  if (!t.registration.qualifier) return t.teams;
+  return t.entries.filter((e) => e.stage === t.registration.final.id && e.status === "IN").map((e) => e.team);
+}
+
+function local(iso: string | null): string {
+  // A <input type="datetime-local"> value in the browser's time.
+  if (!iso) return "";
+  const d = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+/** Registration: a qualifier stage, the fee, places, dates, who registered (and their fees),
+ * sending the qualifier's top teams to the final, and cancelling with refunds. */
+function RegistrationSettings({ t, base, run }: { t: Staff; base: string; run: (fn: () => Promise<unknown>) => void }) {
+  const r = t.registration;
+  const done = !!t.confirmed_at || !!t.cancelled_at;
+  if (!r.qualifier)
+    return (
+      <section className="card p-4">
+        <h3 className="section-title">Registration with DC</h3>
+        <p className="mt-1 text-sm text-muted">
+          Add a qualifier to let teams register: the top teams are invited straight into the {r.final.name}, every other team pays DC to play the
+          qualifier, and its top teams go through.
+        </p>
+        {!done && (
+          <button type="button" className="btn mt-3 px-3 py-1.5 text-sm" onClick={() => run(() => api(`${base}/qualifier`, { method: "POST", body: {} }))}>
+            Add a qualifier
+          </button>
+        )}
+      </section>
+    );
+  const q = r.qualifier;
+  const inQ = t.entries.filter((e) => e.stage === q.id && (e.status === "IN" || e.status === "WAITLIST"));
+  const gone = t.entries.filter((e) => e.status === "WITHDRAWN" || e.status === "REMOVED");
+  const held = t.entries.reduce((n, e) => n + (e.fee_paid ?? 0), 0);
+  return (
+    <section className="card p-4">
+      <div className="flex flex-wrap items-center gap-3">
+        <h3 className="section-title">Registration · {q.name}</h3>
+        <span className={`chip ${r.state === "open" ? "chip-hot" : ""}`}>{r.state === "off" ? "Set the dates" : r.state}</span>
+        <span className="text-sm text-muted">
+          {r.taken}/{r.places} places · {r.waitlist} waiting · {dc(held)} in fees
+        </span>
+      </div>
+      {r.state !== "off" && <p className="mt-1 text-sm text-muted">{regText(r)}</p>}
+      <form
+        className="mt-3 grid gap-3 sm:grid-cols-3"
+        onSubmit={(e) => {
+          e.preventDefault();
+          const f = new FormData(e.currentTarget);
+          const at = (k: string) => (f.get(k) ? new Date(String(f.get(k))).toISOString() : null);
+          run(() =>
+            api(base, {
+              method: "PATCH",
+              body: {
+                reg_opens_at: at("reg_opens_at"),
+                reg_closes_at: at("reg_closes_at"),
+                entry_fee: Number(f.get("entry_fee")),
+                places: Number(f.get("places")),
+                invite_count: Number(f.get("invite_count")),
+                qualify_count: Number(f.get("qualify_count")),
+              },
+            }),
+          );
+        }}
+      >
+        <label className="text-sm">
+          <span className="text-muted">Opens</span>
+          <input name="reg_opens_at" type="datetime-local" defaultValue={local(r.opens_at)} className="input mt-1" disabled={done} />
+        </label>
+        <label className="text-sm">
+          <span className="text-muted">Closes</span>
+          <input name="reg_closes_at" type="datetime-local" defaultValue={local(r.closes_at)} className="input mt-1" disabled={done} />
+        </label>
+        <label className="text-sm">
+          <span className="text-muted">Entry fee (DC per team)</span>
+          <input name="entry_fee" type="number" min={0} defaultValue={r.fee} className="input mt-1" disabled={done} />
+        </label>
+        <label className="text-sm">
+          <span className="text-muted">{q.name} places</span>
+          <input name="places" type="number" min={2} defaultValue={r.places} className="input mt-1" disabled={done} />
+        </label>
+        <label className="text-sm">
+          <span className="text-muted">Top teams invited to the {r.final.name}</span>
+          <input name="invite_count" type="number" min={0} defaultValue={r.invite_count} className="input mt-1" disabled={done} />
+        </label>
+        <label className="text-sm">
+          <span className="text-muted">Go through from the {q.name}</span>
+          <input name="qualify_count" type="number" min={1} defaultValue={r.qualify_count} className="input mt-1" disabled={done} />
+        </label>
+        {!done && (
+          <div className="sm:col-span-3">
+            <button type="submit" className="btn px-3 py-1.5 text-sm">
+              Save registration
+            </button>
+            <span className="ml-3 text-xs text-muted">Times are in your browser&apos;s time zone. Fees are spent (they leave the game).</span>
+          </div>
+        )}
+      </form>
+
+      <h4 className="mt-5 font-display text-lg uppercase">{q.name} teams</h4>
+      <EntryRows rows={inQ} base={base} run={run} locked={done} />
+      {!done && <AddToStage t={t} stage={q.id} base={base} run={run} />}
+
+      <Advance t={t} base={base} run={run} locked={done} />
+
+      {gone.length > 0 && (
+        <details className="mt-4 text-sm">
+          <summary className="cursor-pointer text-muted">Withdrew or removed ({gone.length})</summary>
+          <EntryRows rows={gone} base={base} run={run} locked />
+        </details>
+      )}
+
+      {!done && (
+        <button
+          type="button"
+          className="btn btn-ghost mt-5 text-sm text-bad"
+          onClick={() => {
+            if (window.confirm(`Cancel ${t.name}? Every entry fee goes back to whoever paid it. This can't be undone.`))
+              run(() => api(`${base}/cancel`, { method: "POST" }));
+          }}
+        >
+          Cancel the tournament (refund every fee)
+        </button>
+      )}
+      {t.cancelled_at && <p className="mt-4 text-sm text-bad">Cancelled. Every entry fee was refunded.</p>}
+    </section>
+  );
+}
+
+function EntryRows({ rows, base, run, locked }: { rows: Entry[]; base: string; run: (fn: () => Promise<unknown>) => void; locked: boolean }) {
+  if (!rows.length) return <p className="mt-2 text-sm text-muted">None yet.</p>;
+  return (
+    <div className="mt-2 overflow-x-auto">
+      <table className="table">
+        <thead>
+          <tr>
+            <th className="text-left">Team</th>
+            <th className="text-left">How</th>
+            <th className="text-right">Fee held</th>
+            <th className="text-left">Paid by</th>
+            <th />
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((e) => (
+            <tr key={e.id} className="[&>td]:px-2 [&>td]:py-1.5">
+              <td>
+                {e.team.name} {e.status === "WAITLIST" && <span className="chip ml-1">Waitlist</span>}
+                {e.note && <span className="block text-xs text-muted">{e.note}</span>}
+              </td>
+              <td className="text-sm">{VIA_LABEL[e.via]}</td>
+              <td className="num text-right">
+                {e.fee_paid ? dc(e.fee_paid) : "–"}
+                {e.refunded ? <span className="block text-xs text-muted">{dc(e.refunded)} refunded</span> : null}
+              </td>
+              <td className="text-sm">
+                {e.paid_from === "POT" ? "Team pot" : e.paid_by ?? <span className="text-muted">–</span>}
+                {e.paid_from === "POT" && e.paid_by && <span className="text-xs text-muted"> ({e.paid_by})</span>}
+              </td>
+              <td className="text-right whitespace-nowrap">
+                {!locked && (
+                  <>
+                    <button
+                      type="button"
+                      className="btn btn-ghost px-2 py-1 text-xs"
+                      onClick={() => {
+                        if (window.confirm(`Take ${e.team.name} out and refund its fee?`)) run(() => api(`${base}/entries/${e.id}/remove`, { method: "POST", body: {} }));
+                      }}
+                    >
+                      Remove
+                    </button>
+                    {!!e.fee_paid && (
+                      <button
+                        type="button"
+                        className="btn btn-ghost px-2 py-1 text-xs text-bad"
+                        title="For a rule break: the team is out and the fee is not refunded"
+                        onClick={() => {
+                          if (window.confirm(`Take ${e.team.name} out and KEEP its ${dc(e.fee_paid ?? 0)} fee?`))
+                            run(() => api(`${base}/entries/${e.id}/remove`, { method: "POST", body: { keep_fee: true } }));
+                        }}
+                      >
+                        Remove, keep fee
+                      </button>
+                    )}
+                  </>
+                )}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function AddToStage({ t, stage, base, run }: { t: Staff; stage: number; base: string; run: (fn: () => Promise<unknown>) => void }) {
+  const [all, setAll] = useState<TeamRef[]>([]);
+  const [pick, setPick] = useState("");
+  useEffect(() => {
+    api<Paged<TeamRef>>("/teams?page_size=100")
+      .then((p) => setAll(p.results))
+      .catch(() => setAll([]));
+  }, []);
+  const busy = new Set(t.entries.filter((e) => e.status === "IN" || e.status === "WAITLIST").map((e) => e.team.id));
+  const others = all.filter((x) => !busy.has(x.id)).sort((a, b) => a.name.localeCompare(b.name));
+  return (
+    <form
+      className="mt-2 flex flex-wrap gap-2"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (!pick) return;
+        run(() => api(`${base}/entries`, { method: "POST", body: { team: Number(pick), stage } }));
+        setPick("");
+      }}
+    >
+      <select className="input max-w-xs" value={pick} onChange={(e) => setPick(e.target.value)} aria-label="Team to add for free">
+        <option value="">Add a team for free…</option>
+        {others.map((x) => (
+          <option key={x.id} value={x.id}>
+            {x.name}
+          </option>
+        ))}
+      </select>
+      <button type="submit" className="btn px-3 py-1.5 text-sm" disabled={!pick}>
+        Add
+      </button>
+    </form>
+  );
+}
+
+function Advance({ t, base, run, locked }: { t: Staff; base: string; run: (fn: () => Promise<unknown>) => void; locked: boolean }) {
+  const r = t.registration;
+  const through = t.qualifier_table.filter((x) => x.through);
+  return (
+    <div className="mt-5 border-t border-line pt-4">
+      <h4 className="font-display text-lg uppercase">Send to the {r.final.name}</h4>
+      {t.qualifier_table.length ? (
+        <ol className="mt-2 space-y-1 text-sm">
+          {t.qualifier_table.map((x) => (
+            <li key={x.team.id} className={x.through ? "font-semibold" : "text-muted"}>
+              #{x.rank} {x.team.name} · {x.points} pts {x.through && <span className="chip chip-gold ml-1">Through</span>}
+            </li>
+          ))}
+        </ol>
+      ) : (
+        <p className="mt-1 text-sm text-muted">The {r.qualifier?.name} table fills in as its matches are uploaded.</p>
+      )}
+      {r.advanced_at && <p className="mt-2 text-sm text-ok">Sent. New uploads now go to the {r.final.name}.</p>}
+      {!locked && through.length > 0 && (
+        <button
+          type="button"
+          className="btn btn-primary mt-3 px-3 py-1.5 text-sm"
+          onClick={() => {
+            if (window.confirm(`Send ${through.map((x) => x.team.name).join(", ")} to the ${r.final.name}?`)) run(() => api(`${base}/advance`, { method: "POST", body: {} }));
+          }}
+        >
+          {r.advanced_at ? "Send again" : `Send the top ${r.qualify_count} through`}
+        </button>
+      )}
+      <p className="mt-1 text-xs text-muted">Until you do, uploads for {t.name} go to the {r.qualifier?.name}.</p>
+    </div>
   );
 }

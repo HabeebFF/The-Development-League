@@ -374,7 +374,7 @@ export default function UploadMatches() {
     const today = localDate(new Date());
     // New match days go to the league season, or to a tournament when the room or session
     // name has its keyword ("TDL CUP DAY 1 10PM").
-    const cupStages = new Set(cups.map((c) => c.stage));
+    const cupStages = new Set(cups.flatMap((c) => c.stage_ids ?? [c.stage]));
     const league = stages.filter((st) => !cupStages.has(st.id));
     const leagueStage = league.length ? String(league[league.length - 1].id) : stages.length ? String(stages[stages.length - 1].id) : "";
     let next = Math.max(0, ...matchDays.map((d) => d.number));
@@ -489,8 +489,11 @@ export default function UploadMatches() {
   }
 
   const stageName = (id: number) => {
-    const cup = cups.find((c) => c.stage === id);
-    if (cup) return cup.name;
+    const cup = cups.find((c) => (c.stage_ids ?? [c.stage]).includes(id));
+    if (cup) {
+      const own = stages.find((x) => x.id === id);
+      return (cup.stage_ids ?? []).length > 1 && own ? `${cup.name} · ${own.name}` : cup.name;
+    }
     const s = stages.find((x) => x.id === id);
     return s ? `${s.season} · ${s.name}` : "";
   };
@@ -873,7 +876,7 @@ export default function UploadMatches() {
                               {stages.map((st) => (
                                 <option key={st.id} value={st.id}>
                                   {stageName(st.id)}
-                                  {cups.some((c) => c.stage === st.id) ? " (tournament)" : " (scrims)"}
+                                  {cups.some((c) => (c.stage_ids ?? [c.stage]).includes(st.id)) ? " (tournament)" : " (scrims)"}
                                 </option>
                               ))}
                             </select>

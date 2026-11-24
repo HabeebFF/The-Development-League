@@ -2,26 +2,34 @@
 
 from __future__ import annotations
 
+from django.db import transaction
 from django.db.models import Sum
 from django.shortcuts import get_object_or_404
 from rest_framework import serializers
-from rest_framework.exceptions import ValidationError
+from rest_framework.exceptions import NotAuthenticated, ValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.league.models import MatchDay, Player, Team
+from apps.league.models import MatchDay, Player, Stage, Team
 from apps.results.models import PlayerMatchResult
 from common.permissions import IsStaff, PublicRead
 
-from . import services
-from .models import PrizePayout, Tournament
+from . import entries, services
+from .models import Entry, PrizePayout, Tournament
 from .services import TournamentError
 
 
 def _team(t: Team | None) -> dict | None:
     if t is None:
         return None
-    return {"id": t.pk, "name": t.name, "slug": t.slug, "tag": t.tag}
+    return {
+        "id": t.pk,
+        "name": t.name,
+        "slug": t.slug,
+        "tag": t.tag,
+        "logo": t.logo.url if t.logo else None,
+        "primary_color": t.primary_color,
+    }
 
 
 def _prizes(t: Tournament) -> list[dict]:
@@ -77,7 +85,65 @@ def tournament_data(t: Tournament) -> dict:
         "total_dc": services.total_dc(t.prizes),
         "prizes": _prizes(t),
         "confirmed_at": t.confirmed_at,
+        "cancelled_at": t.cancelled_at,
+        "registration": registration_data(t),
+        "entries": entries_data(t),
     }
+
+
+def registration_data(t: Tournament) -> dict:
+    q = entries.qualifier_stage(t)
+    return {
+        "state": entries.reg_state(t),
+        "opens_at": t.reg_opens_at,
+        "closes_at": t.reg_closes_at,
+        "fee": t.entry_fee,
+        "places": t.places,
+        "taken": entries.taken(t, q) if q else 0,
+        "waitlist": Entry.objects.filter(
+            tournament=t, stage=q, status=Entry.Status.WAITLIST
+        ).count()
+        if q
+        else 0,
+        "invite_count": t.invite_count,
+        "qualify_count": t.qualify_count,
+        "invited_at": t.invited_at,
+        "advanced_at": t.advanced_at,
+        "qualifier": {"id": q.pk, "name": q.name} if q else None,
+        "final": {"id": services.final_stage(t).pk, "name": services.final_stage(t).name},
+    }
+
+
+def _entry(e: Entry, staff: bool = False) -> dict:
+    row = {
+        "id": e.pk,
+        "team": _team(e.team),
+        "stage": e.stage_id,
+        "via": e.via,
+        "status": e.status,
+        "note": e.note,
+    }
+    if staff:
+        row.update(
+            {
+                "fee_paid": e.fee_paid,
+                "refunded": e.refunded,
+                "paid_from": e.paid_from,
+                "paid_by": e.paid_by.display_name if e.paid_by else None,
+                "registered_by": e.registered_by.display_name if e.registered_by else None,
+                "created_at": e.created_at,
+            }
+        )
+    return row
+
+
+def entries_data(t: Tournament, staff: bool = False) -> list[dict]:
+    """Teams in (and waitlisted) per stage; staff also see who left and the fees."""
+    rows = Entry.objects.filter(tournament=t).select_related("team", "paid_by", "registered_by")
+    if not staff:
+        rows = rows.filter(status__in=[Entry.Status.IN, Entry.Status.WAITLIST])
+    rows = rows.order_by("stage__order", "status", "queued_at", "team__name")
+    return [_entry(e, staff) for e in rows]
 
 
 class TournamentListView(APIView):
@@ -94,8 +160,11 @@ class TournamentListView(APIView):
                     "ends_on": t.ends_on,
                     "status": services.status(t),
                     "keyword": t.keyword,
-                    "stage": services.final_stage(t).pk,
+                    # Where new uploads go: the qualifier until its teams are sent through.
+                    "stage": entries.current_stage(t).pk,
+                    "stage_ids": list(t.season.stages.values_list("pk", flat=True)),
                     "season": t.season.slug,
+                    "registration": entries.reg_state(t),
                 }
                 for t in items
             ]
@@ -159,14 +228,28 @@ class TournamentForm(serializers.Serializer):
     prizes = serializers.JSONField(required=False)
     teams = serializers.ListField(child=serializers.IntegerField(), required=False)
     cash_paid = serializers.ListField(child=serializers.CharField(), required=False)
+    reg_opens_at = serializers.DateTimeField(required=False, allow_null=True)
+    reg_closes_at = serializers.DateTimeField(required=False, allow_null=True)
+    entry_fee = serializers.IntegerField(min_value=0, max_value=100_000_000, required=False)
+    places = serializers.IntegerField(min_value=2, max_value=200, required=False)
+    invite_count = serializers.IntegerField(min_value=0, max_value=64, required=False)
+    qualify_count = serializers.IntegerField(min_value=1, max_value=64, required=False)
+
+    def validate(self, data):
+        opens, closes = data.get("reg_opens_at"), data.get("reg_closes_at")
+        if opens and closes and closes <= opens:
+            raise serializers.ValidationError({"reg_closes_at": "Close after it opens."})
+        return data
 
 
 def _err(exc: TournamentError):
     raise ValidationError({"detail": str(exc)}) from exc
 
 
-def _apply(t: Tournament, data: dict) -> Tournament:
-    for f in ("name", "starts_on", "ends_on", "keyword", "format_note", "planned_matches"):
+def _apply(t: Tournament, data: dict, actor=None) -> Tournament:
+    for f in ("name", "starts_on", "ends_on", "keyword", "format_note", "planned_matches",
+              "reg_opens_at", "reg_closes_at", "entry_fee", "places", "invite_count",
+              "qualify_count"):  # fmt: skip
         if f in data:
             setattr(t, f, data[f])
     if "prizes" in data:
@@ -184,12 +267,14 @@ def _apply(t: Tournament, data: dict) -> Tournament:
         t.season.name = t.name
         t.season.save(update_fields=["name", "updated_at"])
     if "teams" in data:
-        if t.confirmed_at:
-            raise ValidationError({"teams": "The prizes were already paid."})
-        teams = list(Team.objects.filter(pk__in=data["teams"]))
-        if len(teams) != len(set(data["teams"])):
-            raise ValidationError({"teams": "Some of those teams don't exist."})
-        t.teams.set(teams)
+        try:
+            entries.set_final_teams(t, data["teams"], actor)
+        except TournamentError as exc:
+            raise ValidationError({"teams": str(exc)}) from exc
+    if "places" in data:
+        with transaction.atomic():
+            entries.fill(Tournament.objects.select_for_update().get(pk=t.pk))
+            entries.sync_teams(t)
     return t
 
 
@@ -211,7 +296,7 @@ class StaffTournamentsView(APIView):
             )  # fmt: skip
         except TournamentError as exc:
             _err(exc)
-        _apply(t, {k: v for k, v in data.items() if k in ("prizes", "teams")})
+        _apply(t, {k: v for k, v in data.items() if k in ("prizes", "teams")}, request.user)
         return Response(tournament_data(t), status=201)
 
 
@@ -225,41 +310,209 @@ class StaffTournamentView(APIView):
             .order_by("date", "number")
             .values("id", "title", "date", "number")
         )
-        return Response({**tournament_data(t), "match_days": list(days)})
+        return Response(
+            {
+                **tournament_data(t),
+                "entries": entries_data(t, staff=True),
+                "qualifier_table": entries.qualifier_top(t),
+                "match_days": list(days),
+            }
+        )
 
     def patch(self, request, slug):
         t = get_object_or_404(Tournament, slug=slug)
         form = TournamentForm(data=request.data, partial=True)
         form.is_valid(raise_exception=True)
-        _apply(t, form.validated_data)
+        _apply(t, form.validated_data, request.user)
         return self.get(request, slug)
 
 
 class InviteTopView(APIView):
-    """Fill the teams with the top N of the league standings (default 12)."""
+    """Invite the top N of the league standings into the final (default: the tournament's
+    invite count with a qualifier, else 12), freezing the list."""
 
     permission_classes = [IsStaff]
 
     def post(self, request, slug):
         t = get_object_or_404(Tournament, slug=slug)
-        n = request.data.get("n", 12)
-        if not isinstance(n, int) or isinstance(n, bool) or not 2 <= n <= 64:
-            raise ValidationError({"n": "Invite between 2 and 64 teams."})
-        teams = services.top_teams(n)
-        if not teams:
-            raise ValidationError({"detail": "The league has no standings yet."})
-        if request.data.get("dc_wildcard"):
-            # The last place goes to the DC wildcard: the team outside the top whose players
-            # earned the most DC from matches in the 30 days before the Cup.
-            from apps.dc.ranks import wildcard
-            from apps.predictions.services import lagos_today
-
-            keep = teams[: n - 1]
-            pick = wildcard(t.starts_on or lagos_today(), {x.pk for x in keep})
-            if pick:
-                teams = keep + [Team.objects.get(pk=pick["team_id"])]
-        t.teams.set(teams)
+        n = request.data.get("n")
+        if n is not None and (not isinstance(n, int) or isinstance(n, bool) or not 1 <= n <= 64):
+            raise ValidationError({"n": "Invite between 1 and 64 teams."})
+        try:
+            entries.invite_top(t, n, dc_wildcard=bool(request.data.get("dc_wildcard")))
+        except TournamentError as exc:
+            _err(exc)
+        t.refresh_from_db()
         return Response(tournament_data(t))
+
+
+class InviteNextView(APIView):
+    """Invite the best team in the standings that isn't in yet (one declined)."""
+
+    permission_classes = [IsStaff]
+
+    def post(self, request, slug):
+        t = get_object_or_404(Tournament, slug=slug)
+        try:
+            entries.invite_next(t)
+        except TournamentError as exc:
+            _err(exc)
+        return Response(tournament_data(t))
+
+
+class QualifierView(APIView):
+    """Add a qualifier stage before the final, which turns registration on."""
+
+    permission_classes = [IsStaff]
+
+    def post(self, request, slug):
+        t = get_object_or_404(Tournament, slug=slug)
+        if t.confirmed_at or t.cancelled_at:
+            raise ValidationError({"detail": "The tournament is over."})
+        name = str(request.data.get("name") or "Qualifier").strip()[:80] or "Qualifier"
+        entries.add_qualifier(t, name)
+        return Response(tournament_data(t))
+
+
+class StaffEntriesView(APIView):
+    """POST {team, stage}: put a team in a stage for free."""
+
+    permission_classes = [IsStaff]
+
+    def post(self, request, slug):
+        t = get_object_or_404(Tournament, slug=slug)
+        team = get_object_or_404(Team, pk=request.data.get("team"))
+        stage = get_object_or_404(Stage, pk=request.data.get("stage"))
+        try:
+            entries.staff_add(t, team, stage, request.user, str(request.data.get("note", "")))
+        except TournamentError as exc:
+            _err(exc)
+        return Response(tournament_data(t))
+
+
+class StaffRemoveEntryView(APIView):
+    """POST {keep_fee}: take a team out, refunding its fee unless it's kept."""
+
+    permission_classes = [IsStaff]
+
+    def post(self, request, slug, pk):
+        t = get_object_or_404(Tournament, slug=slug)
+        entry = get_object_or_404(Entry, pk=pk, tournament=t)
+        try:
+            entries.staff_remove(
+                t, entry, request.user, keep_fee=bool(request.data.get("keep_fee")),
+                note=str(request.data.get("note", "")),
+            )  # fmt: skip
+        except TournamentError as exc:
+            _err(exc)
+        return Response(tournament_data(t))
+
+
+class AdvanceView(APIView):
+    """GET: the qualifier table and who goes through. POST {teams?}: send them to the final."""
+
+    permission_classes = [IsStaff]
+
+    def get(self, request, slug):
+        t = get_object_or_404(Tournament, slug=slug)
+        return Response({"qualify_count": t.qualify_count, "table": entries.qualifier_top(t)})
+
+    def post(self, request, slug):
+        t = get_object_or_404(Tournament, slug=slug)
+        ids = request.data.get("teams")
+        if ids is not None and (
+            not isinstance(ids, list) or not all(isinstance(i, int) for i in ids)
+        ):
+            raise ValidationError({"teams": "Pick the teams."})
+        try:
+            entries.advance(t, request.user, ids)
+        except TournamentError as exc:
+            _err(exc)
+        t.refresh_from_db()
+        return Response(tournament_data(t))
+
+
+class CancelView(APIView):
+    permission_classes = [IsStaff]
+
+    def post(self, request, slug):
+        t = get_object_or_404(Tournament, slug=slug)
+        try:
+            back = entries.cancel(t, request.user)
+        except TournamentError as exc:
+            _err(exc)
+        t.refresh_from_db()
+        return Response({**tournament_data(t), "refunded": back})
+
+
+# -- teams ---------------------------------------------------------------------------------------
+
+
+def _my_team(request) -> Team | None:
+    from apps.dc.perks import team_of
+
+    slug = request.data.get("team") if request.method == "POST" else request.GET.get("team")
+    if slug:
+        return Team.objects.filter(slug=slug).first()
+    return team_of(request.user) if request.user.is_authenticated else None
+
+
+def my_entry_data(t: Tournament, request) -> dict:
+    """The signed-in person's team in this tournament and what they can do."""
+    from apps.dc.perks import pot_for
+    from apps.predictions.services import wallet_for
+
+    user, team = request.user, _my_team(request)
+    out = {"registration": registration_data(t), "team": _team(team), "entry": None}
+    if team is None or not user.is_authenticated:
+        return {**out, "can_register": False, "can_use_pot": False}
+    if not entries.can_register(user, team):
+        live = entries.active_entry(t, team)
+        return {
+            **out,
+            "entry": {**_entry(live), "stage_name": live.stage.name} if live else None,
+            "can_register": False,
+            "can_use_pot": False,
+        }
+    live = entries.active_entry(t, team)
+    pays = entries._pays(user)
+    return {
+        **out,
+        "entry": {**_entry(live), "stage_name": live.stage.name} if live else None,
+        "can_register": entries.can_register(user, team),
+        "can_use_pot": entries.can_use_pot(user, team),
+        "pot": pot_for(team).balance,
+        "wallet": wallet_for(user).balance if pays else None,
+        "pays": pays,
+    }
+
+
+class MyEntryView(APIView):
+    """GET: my team's place. POST .../register {pay_from} or .../withdraw (also declines)."""
+
+    permission_classes = [PublicRead]
+    action = None
+
+    def get(self, request, slug):
+        t = get_object_or_404(Tournament.objects.select_related("season"), slug=slug)
+        return Response(my_entry_data(t, request))
+
+    def post(self, request, slug):
+        if not request.user.is_authenticated:
+            raise NotAuthenticated()
+        t = get_object_or_404(Tournament.objects.select_related("season"), slug=slug)
+        team = _my_team(request)
+        if team is None:
+            raise ValidationError({"detail": "You're not on a team."})
+        try:
+            if self.action == "register":
+                pay_from = str(request.data.get("pay_from") or Entry.PaidFrom.WALLET)
+                entries.register(t, team, request.user, pay_from)
+            else:
+                entries.withdraw(t, team, request.user)
+        except TournamentError as exc:
+            _err(exc)
+        return Response(my_entry_data(t, request))
 
 
 class MoveDaysView(APIView):

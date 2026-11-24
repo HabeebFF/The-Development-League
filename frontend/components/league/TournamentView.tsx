@@ -7,14 +7,16 @@ import SectionHeader from "@/components/ui/SectionHeader";
 import Tabs from "@/components/ui/Tabs";
 import type { MatchDay, Paged } from "@/lib/api";
 import { rows, type Standings } from "@/lib/league";
-import { dateSpan, dc, naira, type Prize, type Tournament } from "@/lib/tournaments";
+import { dateSpan, dc, naira, VIA_LABEL, type Entry, type Prize, type Tournament } from "@/lib/tournaments";
 import { useApi } from "@/lib/useApi";
 
 import Loading from "./Loading";
 import MatchDayCard from "./MatchDayCard";
 import StandingsTable from "./StandingsTable";
+import TeamBadge from "./TeamBadge";
+import TournamentRegister from "./TournamentRegister";
 
-type Tab = "table" | "prizes" | "matches" | "players";
+type Tab = "table" | "teams" | "prizes" | "matches" | "players";
 type Top = {
   kills: { player: string; team: string | null; kills: number }[];
   ratings: { player: string; team: string | null; rating: number; matches: number }[];
@@ -24,14 +26,19 @@ const STATUS: Record<Tournament["status"], { label: string; cls: string }> = {
   upcoming: { label: "Coming up", cls: "chip chip-gold" },
   live: { label: "● Live", cls: "chip chip-hot" },
   finished: { label: "Finished", cls: "chip" },
+  cancelled: { label: "Cancelled", cls: "chip" },
 };
 
 /** A tournament: prize pool, its own table, the prizes (winners once paid), matches, top players. */
 export default function TournamentView({ slug }: { slug: string }) {
-  const t = useApi<Tournament>(`/tournaments/${encodeURIComponent(slug)}`);
+  // Registering changes the places and team lists: fetch again (keeping the page shown).
+  const [version, setVersion] = useState(0);
+  const t = useApi<Tournament>(`/tournaments/${encodeURIComponent(slug)}${version ? `?v=${version}` : ""}`);
+  const [last, setLast] = useState<Tournament | null>(null);
+  if (t.data && t.data !== last) setLast(t.data);
   const [tab, setTab] = useState<Tab>("table");
-  if (!t.data) return <Loading error={t.error} count={6} />;
-  const d = t.data;
+  const d = t.data ?? last;
+  if (!d) return <Loading error={t.error} count={6} />;
   const status = STATUS[d.status];
   const left = Math.max(d.planned_matches - d.matches, 0);
   return (
@@ -65,6 +72,15 @@ export default function TournamentView({ slug }: { slug: string }) {
             <p className="text-xs text-muted">{d.status === "finished" ? "All played" : left ? `${left} to play` : "All uploaded"}</p>
           </div>
         </div>
+        {d.registration.state !== "off" && d.status !== "finished" && (
+          <div className="mt-5">
+            <TournamentRegister
+              slug={d.slug}
+              name={d.name}
+              onChanged={() => setVersion((v) => v + 1)}
+            />
+          </div>
+        )}
         <Tabs
           className="mt-6"
           label="Tournament"
@@ -72,6 +88,7 @@ export default function TournamentView({ slug }: { slug: string }) {
           onChange={setTab}
           tabs={[
             { key: "table", label: "Standings" },
+            { key: "teams", label: "Teams" },
             { key: "prizes", label: "Prizes" },
             { key: "matches", label: "Matches" },
             { key: "players", label: "Top players" },
@@ -79,7 +96,8 @@ export default function TournamentView({ slug }: { slug: string }) {
         />
       </section>
       <section className="mx-auto max-w-6xl px-4 py-6">
-        {tab === "table" && <Table season={d.season} />}
+        {tab === "table" && <Table season={d.season} stages={d.stages} />}
+        {tab === "teams" && <Teams t={d} />}
         {tab === "prizes" && <Prizes prizes={d.prizes} confirmed={!!d.confirmed_at} />}
         {tab === "matches" && <Matches season={d.season} />}
         {tab === "players" && <Players slug={d.slug} />}
@@ -88,18 +106,71 @@ export default function TournamentView({ slug }: { slug: string }) {
   );
 }
 
-function Table({ season }: { season: string }) {
-  const table = useApi<Standings>(`/seasons/${encodeURIComponent(season)}/standings`);
-  if (!table.data) return <Loading error={table.error} />;
+function Table({ season, stages }: { season: string; stages: Tournament["stages"] }) {
+  // A tournament with a qualifier has a table per stage; the final's is shown first.
+  const [stage, setStage] = useState<number | null>(stages.length > 1 ? stages[stages.length - 1].id : null);
+  const table = useApi<Standings>(`/seasons/${encodeURIComponent(season)}/standings${stage ? `?stage=${stage}` : ""}`);
   return (
     <>
       <SectionHeader title="Standings" />
-      {table.data.rows.length ? (
+      {stages.length > 1 && (
+        <div className="mb-3 flex flex-wrap gap-2">
+          {[...stages].reverse().map((s) => (
+            <button key={s.id} type="button" className={`btn px-3 py-1.5 text-sm ${stage === s.id ? "btn-primary" : ""}`} onClick={() => setStage(s.id)}>
+              {s.name}
+            </button>
+          ))}
+        </div>
+      )}
+      {!table.data ? (
+        <Loading error={table.error} />
+      ) : table.data.rows.length ? (
         <StandingsTable rows={table.data.rows} />
       ) : (
         <EmptyState title="No matches yet">The table fills in as the matches are uploaded.</EmptyState>
       )}
     </>
+  );
+}
+
+function Teams({ t }: { t: Tournament }) {
+  const stages = [...t.stages].reverse();
+  if (!t.entries.length) return <EmptyState title="No teams yet">Invited and registered teams show here.</EmptyState>;
+  return (
+    <div className="grid gap-6 md:grid-cols-2">
+      {stages.map((s) => {
+        const list = t.entries.filter((e) => e.stage === s.id);
+        const inn = list.filter((e) => e.status === "IN");
+        const waiting = list.filter((e) => e.status === "WAITLIST");
+        return (
+          <div key={s.id}>
+            <SectionHeader title={`${s.name} (${inn.length})`} as="h3" />
+            {inn.length ? <TeamList rows={inn} /> : <p className="text-sm text-muted">No teams yet.</p>}
+            {waiting.length > 0 && (
+              <>
+                <p className="mt-3 text-xs font-bold tracking-[0.14em] text-muted uppercase">Waitlist</p>
+                <TeamList rows={waiting} />
+              </>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function TeamList({ rows }: { rows: Entry[] }) {
+  return (
+    <ol className="card px-3 py-1">
+      {rows.map((e) => (
+        <li key={e.id} className="flex items-center gap-3 border-t border-line py-2 first:border-0">
+          <span className="min-w-0 flex-1">
+            <TeamBadge team={e.team} />
+          </span>
+          <span className={`chip ${e.via === "INVITED" || e.via === "QUALIFIED" ? "chip-gold" : ""}`}>{VIA_LABEL[e.via]}</span>
+        </li>
+      ))}
+    </ol>
   );
 }
 

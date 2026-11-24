@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import TeamScrims from "@/components/scrims/TeamScrims";
 import JoinRequests from "@/components/team/JoinRequests";
 import TeamIgl from "@/components/team/TeamIgl";
+import TeamTournaments from "@/components/team/TeamTournaments";
 import { api, type MatchDay, type Paged } from "@/lib/api";
 
 import { useTeam } from "./TeamGate";
@@ -50,6 +51,8 @@ export default function TeamHome() {
       {membership?.role === "MANAGER" && <JoinRequests slug={membership.team.slug} compact />}
 
       {membership && <TeamScrims slug={membership.team.slug} />}
+
+      {membership && <TeamTournaments slug={membership.team.slug} />}
 
       {membership && <TeamIgl slug={membership.team.slug} canPick={membership.role === "MANAGER" || !!me.staff_role} />}
 

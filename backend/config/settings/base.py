@@ -253,6 +253,11 @@ CELERY_BEAT_SCHEDULE = {
     # Every 5 minutes, so markets follow scrim sign-up closing quickly; it acts from 10:00 Lagos
     # time on scrim days and only fills in what's missing.
     # Scrim sign-up closing: drop unconfirmed invites, fill from the waitlist, refund the rest.
+    # Tournament registration opening: invite (and freeze) the top teams into the final.
+    "tournaments-open": {
+        "task": "apps.tournaments.tasks.open_registrations_task",
+        "schedule": crontab(minute="*/5"),
+    },
     "scrims-wrap": {
         "task": "apps.scrims.tasks.wrap_scrims_task",
         "schedule": crontab(minute="*/5"),

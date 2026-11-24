@@ -30,6 +30,8 @@ NOT_EARNED = [
     Kind.TEAM_POT,
     Kind.SCRIM_FEE,
     Kind.SCRIM_REFUND,
+    Kind.CUP_FEE,
+    Kind.CUP_REFUND,
 ]
 
 
