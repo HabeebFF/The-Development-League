@@ -311,7 +311,18 @@ def confirm(t: Tournament, actor, best_igl: Player | None = None) -> dict:
         t.confirmed_at, t.confirmed_by = timezone.now(), actor
         t.save(update_fields=["confirmed_at", "confirmed_by", "updated_at"])
     paid = sum(1 for p in made if _pay(p, actor))
+    _grant_cup_cards({p.player_id for p in made})
     return {"payouts": len(made), "paid": paid, "held": len(made) - paid}
+
+
+def _grant_cup_cards(player_ids: set[int]) -> None:
+    """Give the earned Cup card designs (winners, 2nd, 3rd, MVP) to players with an account.
+    Players without one get theirs when they link their UID and open the Player shop."""
+    from apps.shop import milestones
+
+    players = Player.objects.filter(pk__in=player_ids, user__isnull=False).select_related("user")
+    for player in players:
+        milestones.grant(player.user, player)
 
 
 def _pay(payout: PrizePayout, actor=None) -> bool:
@@ -340,9 +351,11 @@ def _pay(payout: PrizePayout, actor=None) -> bool:
 
 def pay_held(player_id: int) -> int:
     """Pay a player's held prizes (their game UID was just linked to an account)."""
-    return sum(
+    paid = sum(
         1 for p in PrizePayout.objects.filter(player_id=player_id, paid_at__isnull=True) if _pay(p)
     )
+    _grant_cup_cards({player_id})
+    return paid
 
 
 def status(t: Tournament, today=None) -> str:

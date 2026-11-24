@@ -267,7 +267,10 @@ def test_progress_counts_kills_booyahs_and_totw(pro, team):
     _played(player, team, 60, 1, 1)
     _played(player, team, 45, 3, 2)
     PlayerCard.objects.filter(player=player).update(totw=["MVP"])
-    assert milestones.progress(player) == {"kills": 105, "booyahs": 1, "totw": 1, "dcking": 0}
+    assert milestones.progress(player) == {
+        "kills": 105, "booyahs": 1, "totw": 1, "dcking": 0,
+        "cupwin": 0, "cupsecond": 0, "cupthird": 0, "cupmvp": 0,
+    }  # fmt: skip
 
 
 def test_opening_the_shop_hands_out_reached_milestones_once(pro, team):
@@ -314,9 +317,9 @@ def test_staff_add_a_player_title(staff):
 # -- the collection ----------------------------------------------------------------------------
 
 
-def test_the_collection_has_15_designs_in_five_tiers():
+def test_the_collection_has_45_designs_in_five_tiers():
     frames = CardDesign.objects.filter(players_only=True, kind="FRAME", unlock="")
-    assert frames.count() == 15
+    assert frames.count() == 45  # the first 15 and the art series of 30
     tiers = {}
     for d in frames:
         tiers.setdefault(d.rarity, []).append(d.price)
@@ -328,6 +331,34 @@ def test_the_collection_has_15_designs_in_five_tiers():
         "MYTHIC": (5_000_000, 10_000_000),
     }
     assert all(d.copies for d in frames if d.rarity in ("LEGENDARY", "MYTHIC"))
+
+
+def test_the_art_series_has_something_at_every_level_and_3_numbered_mythics():
+    import importlib
+
+    art = importlib.import_module("apps.shop.migrations.0005_art_series").ITEMS
+    sold = [row for row in art if not row[6]]
+    assert len(sold) == 30
+    by_rarity = {}
+    for _slug, _name, rarity, price, _parts, copies, _unlock in sold:
+        by_rarity.setdefault(rarity, []).append((price, copies))
+    assert {k: len(v) for k, v in by_rarity.items()} == {
+        "COMMON": 8, "RARE": 8, "EPIC": 7, "LEGENDARY": 4, "MYTHIC": 3,
+    }  # fmt: skip
+    assert [c for _, c in by_rarity["MYTHIC"]] == [10, 5, 1]
+    platinum = CardDesign.objects.get(slug="champion-platinum")
+    assert (platinum.price, platinum.copies) == (10_000_000, 1)
+
+
+def test_cup_cards_are_earned_never_bought(pro):
+    from apps.shop import milestones
+
+    cups = {d.slug: d for d in CardDesign.objects.filter(slug__startswith="cup-")}
+    assert set(cups) == {"cup-champions", "cup-runners-up", "cup-third-place", "cup-mvp"}
+    assert all(d.unlock and d.price == 0 for d in cups.values())
+    assert milestones.label(cups["cup-champions"].unlock) == "Win the TDL Cup"
+    assert milestones.label(cups["cup-mvp"].unlock) == "Be the TDL Cup MVP"
+    assert buy(as_user(pro), "cup-champions").status_code == 400
 
 
 def test_parts_of_every_seeded_design_are_known():

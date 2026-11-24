@@ -10,17 +10,17 @@ import { designColors, RARITY_COLORS } from "@/lib/cardDesigns";
 import type { PlayerCard as Card } from "@/lib/cards";
 import { COLLECTION, SAMPLE_CARD as SAMPLE, shortDc, TIERS, type CollectionDesign } from "@/lib/playerDesigns";
 
-function cardFor(design: CollectionDesign): Card {
-  return { ...SAMPLE, design };
+function cardFor(design: CollectionDesign, photo?: string | null): Card {
+  return { ...SAMPLE, design, ...(photo ? { photo } : {}) };
 }
 
 /** The Player shop collection: every design by tier, a big tilting preview of the one
  *  you hover or tap, rarity colours and a Limited badge with copies left. */
-export default function CollectionView() {
+export default function CollectionView({ designs = COLLECTION, tiers = TIERS, photo }: { designs?: CollectionDesign[]; tiers?: typeof TIERS; photo?: string } = {}) {
   const params = useSearchParams();
   const router = useRouter();
-  const start = COLLECTION.find((d) => d.slug === params.get("d")) ?? null;
-  const [picked, setPicked] = useState<CollectionDesign>(start ?? COLLECTION[COLLECTION.length - 1]);
+  const start = designs.find((d) => d.slug === params.get("d")) ?? null;
+  const [picked, setPicked] = useState<CollectionDesign>(start ?? designs[designs.length - 1]);
   const [sheet, setSheet] = useState<boolean>(!!start);
 
   useEffect(() => {
@@ -39,7 +39,7 @@ export default function CollectionView() {
   return (
     <div className="grid gap-8 lg:grid-cols-[1fr_22rem]">
       <div className="space-y-10">
-        {TIERS.map((t) => (
+        {tiers.map((t) => (
           <section key={t.rarity} aria-labelledby={`tier-${t.rarity}`}>
             <div className="flex flex-wrap items-baseline justify-between gap-2 border-b pb-2" style={{ borderColor: `color-mix(in srgb, ${RARITY_COLORS[t.rarity]} 50%, transparent)` }}>
               <h2 id={`tier-${t.rarity}`} className="font-display text-3xl uppercase" style={{ color: RARITY_COLORS[t.rarity] }}>
@@ -50,18 +50,35 @@ export default function CollectionView() {
               </p>
             </div>
             <ul className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
-              {COLLECTION.filter((d) => d.rarity === t.rarity).map((d) => (
-                <Tile key={d.slug} design={d} active={picked.slug === d.slug} onHover={() => setPicked(d)} onOpen={() => open(d)} />
+              {designs.filter((d) => d.rarity === t.rarity && !d.earned).map((d) => (
+                <Tile key={d.slug} design={d} photo={photo} active={picked.slug === d.slug} onHover={() => setPicked(d)} onOpen={() => open(d)} />
               ))}
             </ul>
           </section>
         ))}
+        {designs.some((d) => d.earned) && (
+          <section aria-labelledby="tier-earned">
+            <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-accent/50 pb-2">
+              <h2 id="tier-earned" className="font-display text-3xl text-accent uppercase">
+                Earned only
+              </h2>
+              <p className="text-xs text-muted">
+                <span className="font-bold text-white">Can&apos;t be bought</span> · Given to TDL Cup winners when staff confirm the results
+              </p>
+            </div>
+            <ul className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
+              {designs.filter((d) => d.earned).map((d) => (
+                <Tile key={d.slug} design={d} photo={photo} active={picked.slug === d.slug} onHover={() => setPicked(d)} onOpen={() => open(d)} />
+              ))}
+            </ul>
+          </section>
+        )}
       </div>
 
       {/* Desktop: a sticky preview that follows what you hover. */}
       <aside className="hidden lg:block">
         <div className="sticky top-24">
-          <Preview key={picked.slug} design={picked} />
+          <Preview key={picked.slug} design={picked} photo={photo} />
         </div>
       </aside>
 
@@ -77,7 +94,7 @@ export default function CollectionView() {
           onClick={() => setSheet(false)}
         >
           <div className="card max-h-full w-full max-w-sm overflow-y-auto p-4" onClick={(e) => e.stopPropagation()}>
-            <Preview key={picked.slug} design={picked} size={0.95} />
+            <Preview key={picked.slug} design={picked} photo={photo} size={0.95} />
             <button type="button" className="btn mt-3 w-full" onClick={() => setSheet(false)}>
               Close
             </button>
@@ -91,15 +108,21 @@ export default function CollectionView() {
 
 function Limited({ design }: { design: CollectionDesign }) {
   if (!design.copies) return null;
+  if (design.earned)
+    return (
+      <span className="inline-flex items-center gap-1 border border-accent/60 bg-accent/15 px-1.5 py-0.5 text-[10px] font-bold tracking-wider text-accent uppercase">
+        Earned · numbered, one per player
+      </span>
+    );
   const left = design.copies - (design.copy_number ?? 0);
   return (
     <span className="inline-flex items-center gap-1 border border-bad/60 bg-bad/15 px-1.5 py-0.5 text-[10px] font-bold tracking-wider text-bad uppercase">
-      Limited · {left} of {design.copies} left
+      {design.copies === 1 ? "Limited · one of one" : `Limited · ${left} of ${design.copies} left`}
     </span>
   );
 }
 
-function Tile({ design: d, active, onHover, onOpen }: { design: CollectionDesign; active: boolean; onHover: () => void; onOpen: () => void }) {
+function Tile({ design: d, photo, active, onHover, onOpen }: { design: CollectionDesign; photo?: string; active: boolean; onHover: () => void; onOpen: () => void }) {
   const color = RARITY_COLORS[d.rarity];
   return (
     <li>
@@ -110,10 +133,10 @@ function Tile({ design: d, active, onHover, onOpen }: { design: CollectionDesign
         onClick={onOpen}
         className={`card group flex w-full flex-col items-center gap-2 p-3 text-left transition ${active ? "ring-2" : ""}`}
         style={{ borderColor: `color-mix(in srgb, ${color} 45%, transparent)`, ["--tw-ring-color" as string]: color }}
-        aria-label={`${d.name}, ${d.rarity.toLowerCase()}, ${d.price.toLocaleString("en-GB")} DC`}
+        aria-label={`${d.name}, ${d.rarity.toLowerCase()}, ${d.earned ? d.earned : `${d.price.toLocaleString("en-GB")} DC`}`}
       >
         <span className={`fx-mini ${active ? "" : "fx-paused"}`}>
-          <PlayerCard card={cardFor(d)} size={0.52} />
+          <PlayerCard card={cardFor(d, photo)} size={0.52} />
         </span>
         <span className="w-full">
           <span className="block truncate font-display text-lg leading-tight uppercase">{d.name}</span>
@@ -122,7 +145,7 @@ function Tile({ design: d, active, onHover, onOpen }: { design: CollectionDesign
               {d.rarity.toLowerCase()}
               {d.ff && <span className="ml-1 text-accent">· FF</span>}
             </span>
-            <span className="num text-sm text-accent-hot">{shortDc(d.price)} DC</span>
+            <span className="num text-sm text-accent-hot">{d.earned ? "Earned" : `${shortDc(d.price)} DC`}</span>
           </span>
           {d.copies && (
             <span className="mt-1 block">
@@ -135,12 +158,12 @@ function Tile({ design: d, active, onHover, onOpen }: { design: CollectionDesign
   );
 }
 
-function Preview({ design: d, size = 1.12 }: { design: CollectionDesign; size?: number }) {
+function Preview({ design: d, photo, size = 1.12 }: { design: CollectionDesign; photo?: string; size?: number }) {
   const color = RARITY_COLORS[d.rarity];
   return (
     <div className="flex flex-col items-center gap-3">
       <TiltCard>
-        <PlayerCard card={cardFor(d)} size={size} />
+        <PlayerCard card={cardFor(d, photo)} size={size} />
       </TiltCard>
       <div className="w-full text-center">
         <p className="text-[11px] font-bold tracking-[0.25em] uppercase" style={{ color }}>
@@ -149,7 +172,7 @@ function Preview({ design: d, size = 1.12 }: { design: CollectionDesign; size?: 
         </p>
         <h3 className="font-display text-3xl leading-none uppercase">{d.name}</h3>
         <p className="mt-1 text-sm text-muted">{d.blurb}</p>
-        <p className="num mt-2 text-2xl text-accent-hot">{d.price.toLocaleString("en-GB")} DC</p>
+        <p className="num mt-2 text-2xl text-accent-hot">{d.earned ?? `${d.price.toLocaleString("en-GB")} DC`}</p>
         {d.copies && (
           <p className="mt-1">
             <Limited design={d} />

@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 152 148">
+  <!-- A made-up player for design previews: hoodie, cap and headset. Original art. -->
+  <path d="M18 148 C20 112 42 100 62 96 L90 96 C110 100 132 112 134 148 Z" fill="#c81e3c"/>
+  <path d="M60 96 L76 120 L92 96 Z" fill="#8e1029"/>
+  <path d="M40 148 L46 118 M112 148 L106 118" stroke="#8e1029" stroke-width="3"/>
+  <rect x="66" y="80" width="20" height="20" rx="4" fill="#8a5a3c"/>
+  <ellipse cx="76" cy="60" rx="24" ry="28" fill="#a06a46"/>
+  <path d="M54 52 C54 30 98 30 98 52 L98 46 C98 24 54 24 54 46 Z" fill="#1b1d26"/>
+  <path d="M50 46 C52 24 100 24 102 46 L104 50 L48 50 Z" fill="#1b1d26"/>
+  <path d="M74 50 L118 52 L116 58 L74 54 Z" fill="#11131a"/>
+  <path d="M50 56 C46 36 106 36 102 56" fill="none" stroke="#2a2d3a" stroke-width="5"/>
+  <rect x="44" y="54" width="10" height="16" rx="4" fill="#2a2d3a"/>
+  <rect x="98" y="54" width="10" height="16" rx="4" fill="#2a2d3a"/>
+  <path d="M50 68 Q52 82 66 84" fill="none" stroke="#2a2d3a" stroke-width="2"/>
+  <circle cx="67" cy="84" r="2.5" fill="#2a2d3a"/>
+  <ellipse cx="67" cy="62" rx="3" ry="2.2" fill="#2a1a10"/>
+  <ellipse cx="86" cy="62" rx="3" ry="2.2" fill="#2a1a10"/>
+  <path d="M62 56 L71 55 M81 55 L90 56" stroke="#2a1a10" stroke-width="2" stroke-linecap="round"/>
+  <path d="M70 76 Q76 79 82 76" fill="none" stroke="#5a3422" stroke-width="2" stroke-linecap="round"/>
+</svg>

@@ -15,6 +15,20 @@ STATS = {
     "booyahs": "booyahs",
     "totw": "Team of the Week picks",
     "dcking": "months as DC King",
+    # TDL Cup places, from the prizes staff confirmed (Staff > Tournaments > Confirm & pay).
+    "cupwin": "Cup wins",
+    "cupsecond": "Cup 2nd places",
+    "cupthird": "Cup 3rd places",
+    "cupmvp": "Cup MVP awards",
+}
+
+# The prize row each Cup stat counts.
+CUP_PRIZES = {"cupwin": "place:1", "cupsecond": "place:2", "cupthird": "place:3", "cupmvp": "mvp"}
+CUP_LABELS = {
+    "cupwin": "Win the TDL Cup",
+    "cupsecond": "Finish 2nd in the TDL Cup",
+    "cupthird": "Finish 3rd in the TDL Cup",
+    "cupmvp": "Be the TDL Cup MVP",
 }
 
 
@@ -36,6 +50,8 @@ def label(unlock: str) -> str:
         return "Make the Team of the Week"
     if n == 1 and stat == "dcking":
         return "Be DC King of a month"
+    if n == 1 and stat in CUP_LABELS:
+        return CUP_LABELS[stat]
     return f"Reach {n:,} {name}"
 
 
@@ -53,7 +69,16 @@ def progress(player) -> dict[str, int]:
     from apps.dc.models import Spotlight
 
     dcking = Spotlight.objects.filter(player=player).count()
-    return {"kills": kills, "booyahs": booyahs, "totw": totw, "dcking": dcking}
+    from apps.tournaments.models import PrizePayout
+
+    cups = {
+        stat: PrizePayout.objects.filter(player=player, prize_key=key)
+        .values("tournament")
+        .distinct()
+        .count()
+        for stat, key in CUP_PRIZES.items()
+    }
+    return {"kills": kills, "booyahs": booyahs, "totw": totw, "dcking": dcking, **cups}
 
 
 def grant(user, player) -> list:
