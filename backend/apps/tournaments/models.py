@@ -61,6 +61,22 @@ class Tournament(TimeStampedModel):
     confirmed_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
     )
+    # Registration (only for a tournament with a qualifier stage before its final stage): the
+    # top teams are invited straight into the final, every other team pays DC to enter the
+    # qualifier, and the qualifier's top teams go through to the final.
+    reg_opens_at = models.DateTimeField(null=True, blank=True)
+    reg_closes_at = models.DateTimeField(null=True, blank=True)
+    entry_fee = models.PositiveIntegerField(default=10000, help_text="DC per team")
+    places = models.PositiveSmallIntegerField(default=24, help_text="Qualifier places")
+    invite_count = models.PositiveSmallIntegerField(
+        default=8, help_text="Top teams in the standings invited straight into the final"
+    )
+    qualify_count = models.PositiveSmallIntegerField(
+        default=4, help_text="Qualifier teams that go through to the final"
+    )
+    invited_at = models.DateTimeField(null=True, blank=True)
+    advanced_at = models.DateTimeField(null=True, blank=True)
+    cancelled_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         ordering = ["-starts_on", "-id"]
@@ -96,3 +112,57 @@ class PrizePayout(TimeStampedModel):
 
     def __str__(self) -> str:
         return f"{self.label}: {self.player} {self.amount} DC"
+
+
+class Entry(TimeStampedModel):
+    """A team's place in one stage of a tournament: invited, registered (paid DC), qualified
+    from the stage before, or added by staff. Rows are kept when a team leaves (status)."""
+
+    class Via(models.TextChoices):
+        INVITED = "INVITED", "Invited (top of the standings)"
+        REGISTERED = "REGISTERED", "Registered with DC"
+        QUALIFIED = "QUALIFIED", "Qualified"
+        STAFF = "STAFF", "Added by staff"
+
+    class Status(models.TextChoices):
+        IN = "IN", "In"
+        WAITLIST = "WAITLIST", "Waitlist"
+        WITHDRAWN = "WITHDRAWN", "Withdrew"
+        REMOVED = "REMOVED", "Removed"
+
+    class PaidFrom(models.TextChoices):
+        NONE = "", "Not paid"
+        WALLET = "WALLET", "Player's wallet"
+        POT = "POT", "Team pot"
+
+    tournament = models.ForeignKey(Tournament, on_delete=models.CASCADE, related_name="entries")
+    stage = models.ForeignKey("league.Stage", on_delete=models.CASCADE, related_name="+")
+    team = models.ForeignKey("league.Team", on_delete=models.CASCADE, related_name="+")
+    via = models.CharField(max_length=10, choices=Via.choices)
+    status = models.CharField(max_length=10, choices=Status.choices, default=Status.IN)
+    registered_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+    pay_from = models.CharField(
+        max_length=6, choices=PaidFrom.choices, blank=True, help_text="Chosen when registering"
+    )
+    fee_paid = models.PositiveIntegerField(default=0, help_text="DC held now (0 once refunded)")
+    paid_from = models.CharField(max_length=6, choices=PaidFrom.choices, blank=True)
+    paid_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+    fee_round = models.PositiveSmallIntegerField(default=0, help_text="Times a fee was taken")
+    refunded = models.PositiveIntegerField(default=0, help_text="DC given back in all")
+    queued_at = models.DateTimeField(null=True, blank=True, help_text="Waitlist order")
+    note = models.CharField(max_length=200, blank=True)
+
+    class Meta:
+        ordering = ["tournament", "stage", "created_at", "pk"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["tournament", "stage", "team"], name="one_entry_a_stage"
+            )
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.tournament} / {self.stage.name}: {self.team} ({self.status})"

@@ -167,9 +167,11 @@ def preview(t: Tournament) -> dict:
     from apps.results.ratings import board, points
 
     played_matches = matches(t)
+    # Prizes come from the final stage's table when there is a qualifier before it.
+    scope = f"stage:{final_stage(t).pk}" if t.season.stages.count() > 1 else "season"
     rows = {
         r.rank: r
-        for r in StandingRow.objects.filter(season=t.season, scope="season").select_related("team")
+        for r in StandingRow.objects.filter(season=t.season, scope=scope).select_related("team")
     }
     played: dict[int, Counter] = defaultdict(Counter)  # team -> player -> matches
     for r in PlayerMatchResult.objects.filter(match__in=played_matches).values("team", "player"):
@@ -361,6 +363,8 @@ def pay_held(player_id: int) -> int:
 def status(t: Tournament, today=None) -> str:
     """upcoming, live or finished (once the prizes are confirmed)."""
     today = today or timezone.localdate()
+    if t.cancelled_at:
+        return "cancelled"
     if t.confirmed_at:
         return "finished"
     if t.starts_on and today < t.starts_on:
